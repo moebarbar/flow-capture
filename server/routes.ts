@@ -10,8 +10,8 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { openai } from "./replit_integrations/image/client";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
-import { insertBlogPostSchema, users, steps, SUPPORTED_LANGUAGES } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { insertBlogPostSchema, users, steps, guideVersions, SUPPORTED_LANGUAGES } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import helmet from "helmet";
@@ -1257,7 +1257,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     
     try {
       const guideId = Number(req.params.id);
-      const userId = req.user!.id;
+      const userId = (req.user as any).claims.sub;
       
       // Verify user has access to the guide
       const guide = await storage.getGuide(guideId);
@@ -1304,7 +1304,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     
     try {
       const guideId = Number(req.params.id);
-      const userId = req.user!.id;
+      const userId = (req.user as any).claims.sub;
       
       const { captureService } = await import("./services/captureService");
       const session = await captureService.stopSession(guideId, userId);
@@ -1340,7 +1340,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       
       res.json({
         active: true,
-        token: session.userId === req.user!.id ? session.token : undefined,
+        token: session.userId === (req.user as any).claims.sub ? session.token : undefined,
         eventsReceived: session.eventsReceived,
         startedAt: session.startedAt,
         expiresAt: session.expiresAt,
@@ -3510,6 +3510,244 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       res.json({ data: events });
     } catch (error) {
       res.status(500).json({ message: 'Failed to get analytics' });
+    }
+  });
+
+  // === VERSION HISTORY ENDPOINTS ===
+
+  app.get('/api/guides/:guideId/versions', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const guideId = parseInt(req.params.guideId);
+    const user = req.user as any;
+
+    try {
+      const guide = await storage.getGuide(guideId);
+      if (!guide) return res.status(404).json({ message: "Guide not found" });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Access denied' });
+
+      const versions = await db.select().from(guideVersions)
+        .where(eq(guideVersions.guideId, guideId))
+        .orderBy(desc(guideVersions.versionNumber));
+      res.json(versions);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get versions' });
+    }
+  });
+
+  app.post('/api/guides/:guideId/versions', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const guideId = parseInt(req.params.guideId);
+    const user = req.user as any;
+    const { changeNotes } = req.body;
+
+    try {
+      const guide = await storage.getGuide(guideId);
+      if (!guide) return res.status(404).json({ message: "Guide not found" });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId);
+      if (!access.allowed || access.role === 'viewer') {
+        return res.status(403).json({ message: 'Edit access required' });
+      }
+
+      const stepsList = await storage.getStepsByGuide(guideId);
+      const existingVersions = await db.select().from(guideVersions)
+        .where(eq(guideVersions.guideId, guideId));
+      const nextVersion = existingVersions.length + 1;
+
+      const [version] = await db.insert(guideVersions).values({
+        guideId,
+        versionNumber: nextVersion,
+        title: guide.title,
+        description: guide.description,
+        stepsSnapshot: stepsList,
+        changeNotes: changeNotes || null,
+        createdById: user.claims.sub
+      }).returning();
+
+      res.json(version);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to save version' });
+    }
+  });
+
+  app.post('/api/guides/:guideId/versions/:versionId/restore', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const guideId = parseInt(req.params.guideId);
+    const versionId = parseInt(req.params.versionId);
+    const user = req.user as any;
+
+    try {
+      const guide = await storage.getGuide(guideId);
+      if (!guide) return res.status(404).json({ message: "Guide not found" });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId);
+      if (!access.allowed || access.role === 'viewer') {
+        return res.status(403).json({ message: 'Edit access required' });
+      }
+
+      const [version] = await db.select().from(guideVersions)
+        .where(eq(guideVersions.id, versionId));
+      if (!version || version.guideId !== guideId) {
+        return res.status(404).json({ message: "Version not found" });
+      }
+
+      await storage.updateGuide(guideId, {
+        title: version.title,
+        description: version.description
+      });
+
+      const currentSteps = await storage.getStepsByGuide(guideId);
+      for (const step of currentSteps) {
+        await storage.deleteStep(step.id);
+      }
+
+      const stepsSnapshot = version.stepsSnapshot as any[];
+      if (stepsSnapshot && Array.isArray(stepsSnapshot)) {
+        for (const stepData of stepsSnapshot) {
+          await storage.createStep({
+            guideId,
+            order: stepData.order,
+            title: stepData.title,
+            description: stepData.description,
+            actionType: stepData.actionType,
+            selector: stepData.selector,
+            url: stepData.url || stepData.pageUrl,
+            imageUrl: stepData.imageUrl
+          });
+        }
+      }
+
+      res.json({ success: true, restoredVersion: version.versionNumber });
+    } catch (error) {
+      console.error("Restore version error:", error);
+      res.status(500).json({ message: 'Failed to restore version' });
+    }
+  });
+
+  // === INTERACTIVE DEMO ENDPOINT ===
+
+  app.get('/api/share/:token/demo', async (req, res) => {
+    try {
+      const { token } = req.params;
+      const guideShare = await storage.getGuideShareByToken(token);
+      
+      if (!guideShare || !guideShare.enabled) {
+        return res.status(404).json({ message: "Demo not available" });
+      }
+
+      const guide = await storage.getGuide(guideShare.guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+
+      const stepsList = await storage.getStepsByGuide(guide.id);
+      res.json({
+        guide: {
+          id: guide.id,
+          title: guide.title,
+          description: guide.description
+        },
+        steps: stepsList.map((s: any) => ({
+          id: s.id,
+          order: s.order,
+          title: s.title,
+          description: s.description,
+          imageUrl: s.imageUrl,
+          actionType: s.actionType,
+          selector: s.selector
+        }))
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to load demo' });
+    }
+  });
+
+  // === WEBHOOKS ENDPOINTS ===
+
+  app.get('/api/webhooks', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.query.workspaceId as string);
+
+    if (!workspaceId) return res.status(400).json({ message: "workspaceId required" });
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Access denied' });
+
+      const webhooksList = await integrationsService.getWebhooksByWorkspace(workspaceId);
+      res.json(webhooksList);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get webhooks' });
+    }
+  });
+
+  app.post('/api/webhooks', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const { workspaceId, name, url, events } = req.body;
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const webhook = await integrationsService.createWebhook({
+        workspaceId,
+        name,
+        url,
+        events,
+        isActive: true,
+        createdById: user.claims.sub
+      });
+      res.json(webhook);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to create webhook' });
+    }
+  });
+
+  app.patch('/api/webhooks/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const webhookId = parseInt(req.params.id);
+
+    try {
+      const webhook = await integrationsService.getWebhook(webhookId);
+      if (!webhook) return res.status(404).json({ message: "Webhook not found" });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, webhook.workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const updated = await integrationsService.updateWebhook(webhookId, req.body);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update webhook' });
+    }
+  });
+
+  app.delete('/api/webhooks/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const webhookId = parseInt(req.params.id);
+
+    try {
+      const webhook = await integrationsService.getWebhook(webhookId);
+      if (!webhook) return res.status(404).json({ message: "Webhook not found" });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, webhook.workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      await integrationsService.deleteWebhook(webhookId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete webhook' });
     }
   });
 

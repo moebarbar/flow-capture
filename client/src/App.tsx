@@ -29,6 +29,8 @@ const ContentPage = lazy(() => import("@/pages/ContentPage"));
 const TeamDashboard = lazy(() => import("@/pages/TeamDashboard"));
 const IntegrationsPage = lazy(() => import("@/pages/IntegrationsPage"));
 const AcceptInvitation = lazy(() => import("@/pages/AcceptInvitation"));
+const InteractiveDemo = lazy(() => import("@/pages/InteractiveDemo"));
+const WebhooksSettings = lazy(() => import("@/pages/WebhooksSettings"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -131,6 +133,13 @@ function Router() {
           </Suspense>
         )}
       </Route>
+      <Route path="/demo/:token">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <InteractiveDemo />
+          </Suspense>
+        )}
+      </Route>
       
       {/* Protected Routes */}
       <Route path="/guides">
@@ -162,6 +171,9 @@ function Router() {
       </Route>
       <Route path="/integrations">
         {() => <ProtectedRoute component={IntegrationsPage} />}
+      </Route>
+      <Route path="/webhooks">
+        {() => <ProtectedRoute component={WebhooksSettings} />}
       </Route>
 
       <Route>

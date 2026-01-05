@@ -69,7 +69,7 @@ export default function InteractiveDemo() {
 
   const markStepComplete = useCallback(() => {
     if (currentStep) {
-      setCompletedSteps(prev => new Set([...prev, currentStep.id]));
+      setCompletedSteps(prev => new Set(Array.from(prev).concat(currentStep.id)));
     }
   }, [currentStep]);
 

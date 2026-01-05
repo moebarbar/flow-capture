@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRoute } from "wouter";
 import { useGuide, useUpdateGuide } from "@/hooks/use-guides";
 import { useSteps, useCreateStep, useUpdateStep, useReorderSteps, useDeleteStep } from "@/hooks/use-steps";
@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sidebar } from "@/components/Sidebar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
 import { 
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
-  GripVertical, Image as ImageIcon, CheckCircle, ExternalLink 
+  GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,6 +31,43 @@ export default function GuideEditor() {
   const { mutate: generateDesc, isPending: isGenerating } = useGenerateDescription();
 
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
+  const [beautifierOpen, setBeautifierOpen] = useState(false);
+  const [beautifierImageUrl, setBeautifierImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openBeautifier = (imageUrl: string) => {
+    setBeautifierImageUrl(imageUrl);
+    setBeautifierOpen(true);
+  };
+
+  const handleSaveBeautifiedImage = (canvas: HTMLCanvasElement) => {
+    if (!selectedStep) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    updateStep({ id: selectedStep.id, guideId, imageUrl: dataUrl });
+    setBeautifierOpen(false);
+  };
+
+  const handleAIAnalysis = (analysis: { title: string; description: string }) => {
+    if (!selectedStep) return;
+    updateStep({ 
+      id: selectedStep.id, 
+      guideId, 
+      title: analysis.title,
+      description: analysis.description 
+    });
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedStep) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      updateStep({ id: selectedStep.id, guideId, imageUrl: dataUrl });
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   // Auto-select first step on load
   useEffect(() => {
@@ -185,16 +224,52 @@ export default function GuideEditor() {
               transition={{ duration: 0.3 }}
               className="w-full max-w-4xl bg-card rounded-lg shadow-2xl border border-border overflow-hidden"
             >
-              <div className="aspect-video bg-gray-100 relative group">
+              <div className="aspect-video bg-gray-100 relative group/img">
                 {selectedStep.imageUrl ? (
-                   <img src={selectedStep.imageUrl} alt="Step preview" className="w-full h-full object-contain bg-gray-900" />
+                  <>
+                    <img src={selectedStep.imageUrl} alt="Step preview" className="w-full h-full object-contain bg-gray-900" />
+                    <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all flex items-center justify-center invisible group-hover/img:visible">
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openBeautifier(selectedStep.imageUrl!)}
+                          data-testid="button-beautify-screenshot"
+                        >
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Beautify
+                        </Button>
+                        <Button 
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          data-testid="button-replace-screenshot"
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Replace
+                        </Button>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
                     <ImageIcon className="h-16 w-16 mb-4 opacity-20" />
                     <p>No image captured</p>
-                    <Button variant="outline" className="mt-4">Upload Screenshot</Button>
+                    <Button variant="outline" className="mt-4" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Screenshot
+                    </Button>
                   </div>
                 )}
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  data-testid="input-upload-screenshot"
+                />
                 
                 {/* Simulated Annotation Overlay */}
                 {selectedStep.selector && (
@@ -288,6 +363,24 @@ export default function GuideEditor() {
           )}
         </div>
       </div>
+
+      <Dialog open={beautifierOpen} onOpenChange={setBeautifierOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Beautify Screenshot
+            </DialogTitle>
+          </DialogHeader>
+          {beautifierImageUrl && (
+            <ScreenshotBeautifier
+              imageUrl={beautifierImageUrl}
+              onSave={handleSaveBeautifiedImage}
+              onAIAnalysis={handleAIAnalysis}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

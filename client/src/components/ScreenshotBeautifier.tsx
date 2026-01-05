@@ -627,15 +627,31 @@ export function ScreenshotBeautifier({ imageUrl, onSave, onAIAnalysis, className
               <RotateCcw className="w-4 h-4 mr-2" />
               Reset
             </Button>
-            <Button 
-              size="sm" 
-              onClick={handleDownload}
-              className="flex-1"
-              data-testid="button-download"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Download
-            </Button>
+            {onSave ? (
+              <Button 
+                size="sm" 
+                onClick={() => {
+                  if (canvasRef.current) {
+                    onSave(canvasRef.current);
+                  }
+                }}
+                className="flex-1"
+                data-testid="button-apply"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Apply
+              </Button>
+            ) : (
+              <Button 
+                size="sm" 
+                onClick={handleDownload}
+                className="flex-1"
+                data-testid="button-download"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

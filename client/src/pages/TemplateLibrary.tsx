@@ -1,7 +1,8 @@
-import { Sidebar, useSidebarState } from "@/components/Sidebar";
+import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useLocation } from "wouter";
@@ -54,6 +55,7 @@ export default function TemplateLibrary() {
 
   const { data: templates, isLoading } = useQuery<Template[]>({
     queryKey: ['/api/templates'],
+    staleTime: 60000,
   });
 
   const createFromTemplate = useMutation({
@@ -95,35 +97,42 @@ export default function TemplateLibrary() {
     <div className="min-h-screen bg-background flex">
       <Sidebar />
       <main className={cn(
-        "flex-1 p-8 transition-all duration-200",
-        isCollapsed ? "ml-16" : "ml-64"
+        "flex-1 p-4 sm:p-6 lg:p-8 transition-all duration-200",
+        "lg:ml-64",
+        isCollapsed && "lg:ml-16"
       )}>
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold" data-testid="text-templates-title">Template Library</h1>
-            <p className="text-muted-foreground mt-1">
-              Start with a pre-built template to create guides faster
-            </p>
+          <div className="flex items-center gap-3 mb-6 sm:mb-8">
+            <MobileMenuTrigger />
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold" data-testid="text-templates-title">Template Library</h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                Start with a pre-built template to create guides faster
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-8">
-            {categories.map((cat) => (
-              <Badge 
-                key={cat.id} 
-                variant="outline" 
-                className="cursor-pointer hover-elevate px-3 py-1"
-                data-testid={`filter-category-${cat.id}`}
-              >
-                {cat.label}
-              </Badge>
-            ))}
-          </div>
+          <ScrollArea className="w-full whitespace-nowrap mb-6 sm:mb-8">
+            <div className="flex gap-2 pb-2">
+              {categories.map((cat) => (
+                <Badge 
+                  key={cat.id} 
+                  variant="outline" 
+                  className="cursor-pointer hover-elevate px-3 py-1.5 shrink-0 text-xs sm:text-sm"
+                  data-testid={`filter-category-${cat.id}`}
+                >
+                  {cat.label}
+                </Badge>
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
 
           {isLoading ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <Card key={i} className="overflow-hidden">
-                  <div className="h-32 bg-muted animate-pulse" />
+                  <div className="h-24 sm:h-32 bg-muted animate-pulse" />
                   <CardContent className="p-4">
                     <div className="h-5 bg-muted rounded animate-pulse mb-2" />
                     <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
@@ -132,7 +141,7 @@ export default function TemplateLibrary() {
               ))}
             </div>
           ) : templates && templates.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {templates.map((template) => {
                 const Icon = categoryIcons[template.category] || LayoutTemplate;
                 const colorClass = categoryColors[template.category] || categoryColors.custom;
@@ -143,23 +152,23 @@ export default function TemplateLibrary() {
                     className="overflow-hidden group hover:shadow-lg transition-shadow"
                     data-testid={`card-template-${template.id}`}
                   >
-                    <div className={`h-32 flex items-center justify-center ${colorClass.split(' ')[0]}`}>
-                      <Icon className={`h-16 w-16 ${colorClass.split(' ').slice(1).join(' ')} opacity-50`} />
+                    <div className={`h-24 sm:h-32 flex items-center justify-center ${colorClass.split(' ')[0]}`}>
+                      <Icon className={`h-12 w-12 sm:h-16 sm:w-16 ${colorClass.split(' ').slice(1).join(' ')} opacity-50`} />
                     </div>
-                    <CardHeader className="pb-2">
+                    <CardHeader className="pb-2 p-4">
                       <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-lg">{template.title}</CardTitle>
-                        <Badge variant="secondary" className={colorClass}>
+                        <CardTitle className="text-base sm:text-lg">{template.title}</CardTitle>
+                        <Badge variant="secondary" className={`${colorClass} text-xs shrink-0`}>
                           {template.category}
                         </Badge>
                       </div>
-                      <CardDescription className="line-clamp-2">
+                      <CardDescription className="line-clamp-2 text-xs sm:text-sm">
                         {template.description || "No description"}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <CardContent className="pt-0 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
                           <Eye className="h-3 w-3" />
                           {template.usageCount} uses
                         </span>
@@ -168,13 +177,15 @@ export default function TemplateLibrary() {
                           onClick={() => createFromTemplate.mutate(template.id)}
                           disabled={createFromTemplate.isPending || !activeWorkspace}
                           data-testid={`button-use-template-${template.id}`}
+                          className="text-xs sm:text-sm"
                         >
                           {createFromTemplate.isPending ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <>
-                              <Plus className="h-4 w-4 mr-1" />
-                              Use Template
+                              <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                              <span className="hidden sm:inline">Use Template</span>
+                              <span className="sm:hidden">Use</span>
                             </>
                           )}
                         </Button>
@@ -185,11 +196,11 @@ export default function TemplateLibrary() {
               })}
             </div>
           ) : (
-            <Card className="p-12">
+            <Card className="p-8 sm:p-12">
               <div className="text-center">
-                <LayoutTemplate className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <h3 className="text-xl font-semibold mb-2">No templates available yet</h3>
-                <p className="text-muted-foreground max-w-md mx-auto mb-6">
+                <LayoutTemplate className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <h3 className="text-lg sm:text-xl font-semibold mb-2">No templates available yet</h3>
+                <p className="text-muted-foreground max-w-md mx-auto mb-6 text-sm sm:text-base">
                   Templates will appear here once they're created. Start by creating a guide and saving it as a template.
                 </p>
                 <Button onClick={() => navigate("/guides")} data-testid="button-go-to-guides">

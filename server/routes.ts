@@ -33,11 +33,33 @@ export async function registerRoutes(
     crossOriginEmbedderPolicy: false,
   }));
 
-  // Rate limiting for auth endpoints
+  // Rate limiting for auth endpoints (strict)
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 10, // 10 requests per window
     message: { message: "Too many attempts, please try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // General API rate limiting (moderate)
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 100, // 100 requests per minute per IP
+    message: { message: "Too many requests, please slow down" },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => {
+      // Skip rate limiting for static assets and health checks
+      return req.path.startsWith('/assets') || req.path === '/api/health';
+    },
+  });
+
+  // AI/expensive operation rate limiting (strict)
+  const aiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 10, // 10 AI requests per minute
+    message: { message: "AI rate limit reached, please wait before trying again" },
     standardHeaders: true,
     legacyHeaders: false,
   });
@@ -47,6 +69,14 @@ export async function registerRoutes(
   app.use('/api/auth/register', authLimiter);
   app.use('/api/auth/forgot-password', authLimiter);
   app.use('/api/auth/reset-password', authLimiter);
+
+  // Apply general API rate limiting
+  app.use('/api', apiLimiter);
+
+  // Apply AI rate limiting to expensive operations
+  app.use('/api/ai', aiLimiter);
+  app.use('/api/chat', aiLimiter);
+  app.use('/api/image/generate', aiLimiter);
 
   // Setup Replit Auth
   await setupAuth(app);
@@ -123,14 +153,24 @@ export async function registerRoutes(
   app.get(api.guides.list.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     const workspaceId = req.query.workspaceId ? Number(req.query.workspaceId) : undefined;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
     
     if (!workspaceId) {
-       // Allow getting all guides for user across workspaces? For now, require workspaceId or return empty
-       return res.json([]);
+       return res.json({ data: [], total: 0, page, limit, hasMore: false });
     }
 
     const guides = await storage.getGuidesByWorkspace(workspaceId);
-    res.json(guides);
+    const paginatedGuides = guides.slice(offset, offset + limit);
+    
+    res.json({ 
+      data: paginatedGuides, 
+      total: guides.length,
+      page,
+      limit,
+      hasMore: offset + limit < guides.length
+    });
   });
 
   app.post(api.guides.create.path, async (req, res) => {

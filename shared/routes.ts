@@ -85,9 +85,17 @@ export const api = {
         workspaceId: z.coerce.number().optional(),
         folderId: z.coerce.number().optional(),
         status: z.enum(["draft", "published", "archived"]).optional(),
+        page: z.coerce.number().optional(),
+        limit: z.coerce.number().optional(),
       }).optional(),
       responses: {
-        200: z.array(z.custom<typeof guides.$inferSelect>()),
+        200: z.object({
+          data: z.array(z.custom<typeof guides.$inferSelect>()),
+          total: z.number(),
+          page: z.number(),
+          limit: z.number(),
+          hasMore: z.boolean(),
+        }),
         401: errorSchemas.unauthorized,
       },
     },

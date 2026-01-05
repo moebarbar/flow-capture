@@ -1,4 +1,4 @@
-import { Sidebar, useSidebarState } from "@/components/Sidebar";
+import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
@@ -35,6 +35,7 @@ export default function AnalyticsDashboard() {
   const { data: analytics, isLoading } = useQuery<AnalyticsData>({
     queryKey: ['/api/analytics', activeWorkspace?.id],
     enabled: !!activeWorkspace?.id,
+    staleTime: 60000,
   });
 
   const stats = [
@@ -69,32 +70,36 @@ export default function AnalyticsDashboard() {
     <div className="min-h-screen bg-background flex">
       <Sidebar />
       <main className={cn(
-        "flex-1 p-8 transition-all duration-200",
-        isCollapsed ? "ml-16" : "ml-64"
+        "flex-1 p-4 sm:p-6 lg:p-8 transition-all duration-200",
+        "lg:ml-64",
+        isCollapsed && "lg:ml-16"
       )}>
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold" data-testid="text-analytics-title">Analytics</h1>
-            <p className="text-muted-foreground mt-1">
-              Track how your guides are performing
-            </p>
+          <div className="flex items-center gap-3 mb-6 sm:mb-8">
+            <MobileMenuTrigger />
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold" data-testid="text-analytics-title">Analytics</h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                Track how your guides are performing
+              </p>
+            </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <div className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4 mb-6 sm:mb-8">
             {stats.map((stat, i) => (
               <Card key={i} data-testid={`card-stat-${i}`}>
-                <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2 space-y-0">
+                  <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
                     {stat.title}
                   </CardTitle>
-                  <stat.icon className="h-4 w-4 text-muted-foreground" />
+                  <stat.icon className="h-4 w-4 text-muted-foreground shrink-0" />
                 </CardHeader>
                 <CardContent>
                   {isLoading ? (
-                    <Skeleton className="h-8 w-24" />
+                    <Skeleton className="h-6 sm:h-8 w-16 sm:w-24" />
                   ) : (
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-bold" data-testid={`text-stat-value-${i}`}>
+                    <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
+                      <span className="text-lg sm:text-2xl font-bold" data-testid={`text-stat-value-${i}`}>
                         {stat.value}
                       </span>
                       {stat.trend !== undefined && stat.trend !== 0 && (
@@ -105,106 +110,84 @@ export default function AnalyticsDashboard() {
                       )}
                     </div>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1 hidden sm:block">{stat.description}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
             <Card data-testid="card-top-guides">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
+              <CardHeader className="pb-2 sm:pb-4">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                   Top Performing Guides
                 </CardTitle>
-                <CardDescription>Your most viewed guides this month</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">Your most viewed guides this month</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
                   <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="flex items-center justify-between gap-4">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
                     ))}
                   </div>
-                ) : analytics?.topGuides && analytics.topGuides.length > 0 ? (
-                  <div className="space-y-4">
+                ) : analytics?.topGuides?.length ? (
+                  <div className="space-y-3 sm:space-y-4">
                     {analytics.topGuides.map((guide, i) => (
-                      <div 
-                        key={guide.id} 
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                        data-testid={`row-top-guide-${guide.id}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg font-bold text-muted-foreground w-6">
-                            #{i + 1}
-                          </span>
-                          <div>
-                            <p className="font-medium">{guide.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {guide.completionRate}% completion rate
-                            </p>
-                          </div>
+                      <div key={guide.id} className="flex items-center justify-between gap-2 sm:gap-4" data-testid={`row-top-guide-${i}`}>
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                          <span className="text-xs sm:text-sm font-medium text-muted-foreground w-5 sm:w-6 shrink-0">#{i + 1}</span>
+                          <span className="text-xs sm:text-sm font-medium truncate">{guide.title}</span>
                         </div>
-                        <Badge variant="secondary">
-                          <Eye className="h-3 w-3 mr-1" />
-                          {guide.views}
-                        </Badge>
+                        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                          <span className="text-xs sm:text-sm text-muted-foreground">{guide.views} views</span>
+                          <Badge variant="secondary" className="text-xs hidden sm:inline-flex">{guide.completionRate}%</Badge>
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No guide views yet</p>
-                    <p className="text-sm">Create and share guides to see analytics</p>
-                  </div>
+                  <p className="text-sm text-muted-foreground text-center py-6 sm:py-8">No guide data yet</p>
                 )}
               </CardContent>
             </Card>
 
             <Card data-testid="card-recent-activity">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+              <CardHeader className="pb-2 sm:pb-4">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5" />
                   Recent Activity
                 </CardTitle>
-                <CardDescription>Latest viewer interactions</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">Latest viewer interactions</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
                   <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="flex items-center justify-between gap-4">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-4 w-20" />
+                      </div>
                     ))}
                   </div>
-                ) : analytics?.recentActivity && analytics.recentActivity.length > 0 ? (
-                  <div className="space-y-3">
+                ) : analytics?.recentActivity?.length ? (
+                  <div className="space-y-3 sm:space-y-4">
                     {analytics.recentActivity.map((activity, i) => (
-                      <div 
-                        key={i} 
-                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                        data-testid={`row-activity-${i}`}
-                      >
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Eye className="h-4 w-4 text-primary" />
+                      <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4" data-testid={`row-activity-${i}`}>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs sm:text-sm font-medium truncate block">{activity.guideTitle}</span>
+                          <span className="text-xs text-muted-foreground">{activity.action}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{activity.guideTitle}</p>
-                          <p className="text-sm text-muted-foreground">{activity.action}</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {new Date(activity.timestamp).toLocaleDateString()}
-                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">{new Date(activity.timestamp).toLocaleDateString()}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No recent activity</p>
-                    <p className="text-sm">Share your guides to see viewer activity</p>
-                  </div>
+                  <p className="text-sm text-muted-foreground text-center py-6 sm:py-8">No activity yet</p>
                 )}
               </CardContent>
             </Card>

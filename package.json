@@ -44,6 +44,7 @@
     "@radix-ui/react-tooltip": "^1.2.0",
     "@sendgrid/mail": "^8.1.6",
     "@tanstack/react-query": "^5.60.5",
+    "@tanstack/react-virtual": "^3.13.16",
     "@types/bcrypt": "^6.0.0",
     "@types/memoizee": "^0.4.12",
     "@types/sanitize-html": "^2.16.0",

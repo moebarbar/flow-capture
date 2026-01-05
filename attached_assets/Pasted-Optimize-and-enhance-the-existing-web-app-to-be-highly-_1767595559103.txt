@@ -1,0 +1,85 @@
+Optimize and enhance the existing web app to be highly scalable, high-performance, and production-ready. Focus on backend, frontend, AI services, multi-tenancy, and deployment. Implement the following features and improvements:
+
+1️⃣ Backend & Database
+
+Optimize database design for high concurrency with proper indexing and query optimization.
+
+Implement caching (Redis or similar) for frequently accessed data such as dashboards, user progress, and guide steps.
+
+Support horizontal scaling: prepare tables and queries for sharding/partitioning when data grows.
+
+Move heavy tasks (AI guide generation, screenshot processing, PDF exports, emails) to asynchronous job queues with retries and logging.
+
+2️⃣ API & Server
+
+Ensure all APIs are stateless so multiple server instances can run behind a load balancer.
+
+Implement rate limiting to prevent abuse or accidental overload.
+
+Implement pagination or streaming for large dashboards, guides, or reports.
+
+Ensure the server supports load balancing and can handle multiple instances.
+
+3️⃣ Frontend Optimization
+
+Implement lazy loading and code splitting for large dashboards or guide-heavy pages.
+
+Use virtualized lists for tables and dashboards with thousands of items.
+
+Optimize WebSocket connections for live dashboards, comments, and AI feedback.
+
+Cache static assets (images, scripts, styles) via CDN.
+
+4️⃣ AI Services
+
+Separate AI processing into a dedicated microservice to avoid overloading main servers.
+
+Support batching of AI requests and caching outputs to reduce latency and cost.
+
+Ensure AI service can scale horizontally with multiple workers.
+
+5️⃣ Multi-Tenancy & Workspaces
+
+Support isolated workspaces for teams, departments, or clients.
+
+Ensure queries and dashboards are tenant-aware, retrieving only relevant data.
+
+Optimize performance for large numbers of users and workspaces.
+
+6️⃣ Background Jobs & Queueing
+
+All heavy or long-running tasks (AI generation, screenshots, PDFs, emails) must be asynchronous.
+
+Implement retry logic, logging, and parallel workers.
+
+Ensure jobs can scale horizontally with increasing load.
+
+7️⃣ Logging, Monitoring & Auto-Scaling
+
+Add centralized logging for errors, slow queries, and performance issues.
+
+Add real-time performance monitoring to detect bottlenecks.
+
+Add auto-scaling triggers based on server load, job queue length, and traffic.
+
+8️⃣ Deployment & Infrastructure
+
+Make the platform cloud-ready: containerized (Docker/Kubernetes) deployment.
+
+Use CDN caching for static assets and guide media.
+
+Support horizontal scaling of servers behind load balancers.
+
+Implement failover and backup systems for high availability.
+
+9️⃣ Security & Reliability
+
+Implement connection pooling to handle thousands of concurrent users.
+
+Enforce role-based access control and tenant isolation.
+
+Protect endpoints with throttling, rate-limiting, and fail-safes.
+
+Ensure backups, failover, and disaster recovery are in place.
+
+✅ The goal is to make the web app capable of handling thousands of simultaneous users, guides, and AI tasks with fast response times, high reliability, and enterprise-grade security. Provide maintainable, modular, and production-ready code.

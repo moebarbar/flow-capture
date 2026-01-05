@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback } from "react";
+import { memo, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sidebar, useSidebarState } from "@/components/Sidebar";
+import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 import { 
@@ -62,13 +62,13 @@ const formatActionType = (actionType: string): string => {
 const StatusIcon = memo(function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'completed':
-      return <CheckCircle className="h-5 w-5 text-green-500" />;
+      return <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />;
     case 'in_progress':
-      return <Activity className="h-5 w-5 text-blue-500" />;
+      return <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />;
     case 'overdue':
-      return <AlertCircle className="h-5 w-5 text-red-500" />;
+      return <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />;
     default:
-      return <Clock className="h-5 w-5 text-amber-500" />;
+      return <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />;
   }
 });
 
@@ -101,11 +101,11 @@ const StatCard = memo(function StatCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-xs sm:text-sm font-medium">{title}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold" data-testid={testId}>{value}</div>
+        <div className="text-xl sm:text-2xl font-bold" data-testid={testId}>{value}</div>
         <p className="text-xs text-muted-foreground">{subtext}</p>
       </CardContent>
     </Card>
@@ -123,12 +123,12 @@ const ActivityItem = memo(function ActivityItem({
   );
   
   return (
-    <div className="flex items-start gap-3 text-sm">
-      <div className="rounded-full bg-muted p-1.5">
+    <div className="flex items-start gap-2 sm:gap-3 text-sm">
+      <div className="rounded-full bg-muted p-1 sm:p-1.5 shrink-0">
         <Activity className="h-3 w-3" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">
+        <p className="font-medium truncate text-xs sm:text-sm">
           {formatActionType(activity.actionType)}
         </p>
         <p className="text-xs text-muted-foreground">
@@ -158,19 +158,19 @@ const MemberCard = memo(function MemberCard({
 
   return (
     <div 
-      className="flex items-center justify-between gap-4 p-3 rounded-md border"
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 rounded-md border"
       data-testid={`card-member-${member.userId}`}
     >
       <div className="flex items-center gap-3">
-        <Avatar>
-          <AvatarFallback>{initials}</AvatarFallback>
+        <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
+          <AvatarFallback className="text-xs sm:text-sm">{initials}</AvatarFallback>
         </Avatar>
-        <div>
-          <p className="font-medium">{displayName}</p>
+        <div className="min-w-0">
+          <p className="font-medium text-sm sm:text-base truncate">{displayName}</p>
           <Badge variant="outline" className="text-xs">{member.role}</Badge>
         </div>
       </div>
-      <div className="flex items-center gap-6 text-sm">
+      <div className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm pl-11 sm:pl-0">
         <div className="text-center">
           <p className="font-semibold">{member.totalAssignments}</p>
           <p className="text-xs text-muted-foreground">Total</p>
@@ -200,26 +200,26 @@ const AssignmentCard = memo(function AssignmentCard({
 
   return (
     <div 
-      className="flex items-center justify-between gap-4 p-3 rounded-md border"
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 p-3 rounded-md border"
       data-testid={`card-assignment-${assignment.id}`}
     >
       <div className="flex items-center gap-3">
         <StatusIcon status={assignment.status} />
-        <div>
-          <p className="font-medium">Step #{assignment.stepId}</p>
+        <div className="min-w-0">
+          <p className="font-medium text-sm sm:text-base">Step #{assignment.stepId}</p>
           {assignment.notes && (
-            <p className="text-sm text-muted-foreground truncate max-w-xs">
+            <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-xs">
               {assignment.notes}
             </p>
           )}
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <Badge variant={getStatusVariant(assignment.status)}>
+      <div className="flex items-center gap-2 sm:gap-3 pl-7 sm:pl-0">
+        <Badge variant={getStatusVariant(assignment.status)} className="text-xs">
           {assignment.status}
         </Badge>
         {formattedDue && (
-          <span className="text-xs text-muted-foreground">Due {formattedDue}</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">Due {formattedDue}</span>
         )}
       </div>
     </div>
@@ -233,21 +233,21 @@ const ApprovalCard = memo(function ApprovalCard({
 }) {
   return (
     <div 
-      className="flex items-center justify-between gap-4 p-3 rounded-md border"
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 p-3 rounded-md border"
       data-testid={`card-approval-${approval.id}`}
     >
       <div className="flex items-center gap-3">
-        <AlertCircle className="h-5 w-5 text-amber-500" />
-        <div>
-          <p className="font-medium">Guide #{approval.guideId}</p>
+        <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500 shrink-0" />
+        <div className="min-w-0">
+          <p className="font-medium text-sm sm:text-base">Guide #{approval.guideId}</p>
           {approval.requestNotes && (
-            <p className="text-sm text-muted-foreground truncate max-w-xs">
+            <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-xs">
               {approval.requestNotes}
             </p>
           )}
         </div>
       </div>
-      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800 self-start sm:self-auto text-xs">
         Pending Review
       </Badge>
     </div>
@@ -293,32 +293,32 @@ export default function TeamDashboard() {
     return assignments?.data?.filter(a => a.status !== 'completed') || [];
   }, [assignments?.data]);
 
-  const mainClassName = useMemo(() => {
-    return cn(
-      "flex-1 p-8 overflow-y-auto transition-all duration-200",
-      isCollapsed ? "ml-16" : "ml-64"
-    );
-  }, [isCollapsed]);
-
   return (
     <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <main className={mainClassName}>
+      <main className={cn(
+        "flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto transition-all duration-200",
+        "lg:ml-64",
+        isCollapsed && "lg:ml-16"
+      )}>
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
         ) : (
-          <div className="max-w-6xl mx-auto space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Team Dashboard</h1>
-                <p className="text-muted-foreground">Track team progress and collaboration</p>
+          <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+            <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <MobileMenuTrigger />
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-dashboard-title">Team Dashboard</h1>
+                  <p className="text-muted-foreground text-sm">Track team progress and collaboration</p>
+                </div>
               </div>
               <NotificationBell />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard 
                 title="Total Guides" 
                 value={stats?.totalGuides || 0} 
@@ -349,26 +349,26 @@ export default function TeamDashboard() {
               />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
+                <CardHeader className="pb-2 sm:pb-4">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                     Progress Overview
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-3 sm:space-y-4">
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-sm font-medium">Guide Completion</span>
-                      <span className="text-sm text-muted-foreground">{completionRate}%</span>
+                      <span className="text-xs sm:text-sm font-medium">Guide Completion</span>
+                      <span className="text-xs sm:text-sm text-muted-foreground">{completionRate}%</span>
                     </div>
                     <Progress value={completionRate} className="h-2" />
                   </div>
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-sm font-medium">Assignment Completion</span>
-                      <span className="text-sm text-muted-foreground">{assignmentCompletionRate}%</span>
+                      <span className="text-xs sm:text-sm font-medium">Assignment Completion</span>
+                      <span className="text-xs sm:text-sm text-muted-foreground">{assignmentCompletionRate}%</span>
                     </div>
                     <Progress value={assignmentCompletionRate} className="h-2" />
                   </div>
@@ -376,24 +376,24 @@ export default function TeamDashboard() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
+                <CardHeader className="pb-2 sm:pb-4">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Activity className="h-4 w-4 sm:h-5 sm:w-5" />
                     Recent Activity
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[200px]">
+                  <ScrollArea className="h-[150px] sm:h-[200px]">
                     {stats?.recentActivity && stats.recentActivity.length > 0 ? (
-                      <div className="space-y-3">
+                      <div className="space-y-2 sm:space-y-3">
                         {stats.recentActivity.map((activity) => (
                           <ActivityItem key={activity.id} activity={activity} />
                         ))}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                        <Activity className="h-8 w-8 mb-2" />
-                        <p className="text-sm">No recent activity</p>
+                        <Activity className="h-6 w-6 sm:h-8 sm:w-8 mb-2" />
+                        <p className="text-xs sm:text-sm">No recent activity</p>
                       </div>
                     )}
                   </ScrollArea>
@@ -402,26 +402,26 @@ export default function TeamDashboard() {
             </div>
 
             <Tabs defaultValue="members" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="members" data-testid="tab-members">Team Members</TabsTrigger>
-                <TabsTrigger value="assignments" data-testid="tab-assignments">Assignments</TabsTrigger>
-                <TabsTrigger value="approvals" data-testid="tab-approvals">Pending Approvals</TabsTrigger>
+              <TabsList className="w-full sm:w-auto overflow-x-auto">
+                <TabsTrigger value="members" data-testid="tab-members" className="text-xs sm:text-sm">Team Members</TabsTrigger>
+                <TabsTrigger value="assignments" data-testid="tab-assignments" className="text-xs sm:text-sm">Assignments</TabsTrigger>
+                <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm">Pending Approvals</TabsTrigger>
               </TabsList>
 
               <TabsContent value="members">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Team Performance</CardTitle>
+                  <CardHeader className="pb-2 sm:pb-4">
+                    <CardTitle className="text-base sm:text-lg">Team Performance</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {stats?.members?.map((member) => (
                         <MemberCard key={member.userId} member={member} />
                       ))}
                       {(!stats?.members || stats.members.length === 0) && (
-                        <div className="text-center text-muted-foreground py-8">
-                          <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p>No team members yet</p>
+                        <div className="text-center text-muted-foreground py-6 sm:py-8">
+                          <Users className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No team members yet</p>
                         </div>
                       )}
                     </div>
@@ -431,18 +431,18 @@ export default function TeamDashboard() {
 
               <TabsContent value="assignments">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Active Assignments</CardTitle>
+                  <CardHeader className="pb-2 sm:pb-4">
+                    <CardTitle className="text-base sm:text-lg">Active Assignments</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {activeAssignments.map((assignment) => (
                         <AssignmentCard key={assignment.id} assignment={assignment} />
                       ))}
                       {activeAssignments.length === 0 && (
-                        <div className="text-center text-muted-foreground py-8">
-                          <CheckCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p>No active assignments</p>
+                        <div className="text-center text-muted-foreground py-6 sm:py-8">
+                          <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No active assignments</p>
                         </div>
                       )}
                     </div>
@@ -452,18 +452,18 @@ export default function TeamDashboard() {
 
               <TabsContent value="approvals">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Guides Awaiting Approval</CardTitle>
+                  <CardHeader className="pb-2 sm:pb-4">
+                    <CardTitle className="text-base sm:text-lg">Guides Awaiting Approval</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {approvals?.data?.map((approval) => (
                         <ApprovalCard key={approval.id} approval={approval} />
                       ))}
                       {(!approvals?.data || approvals.data.length === 0) && (
-                        <div className="text-center text-muted-foreground py-8">
-                          <CheckCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p>No pending approvals</p>
+                        <div className="text-center text-muted-foreground py-6 sm:py-8">
+                          <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No pending approvals</p>
                         </div>
                       )}
                     </div>

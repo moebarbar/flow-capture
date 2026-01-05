@@ -250,6 +250,18 @@ export const api = {
             type: z.string().nullable(),
             ariaLabel: z.string().nullable(),
           }).optional(),
+          elementBounds: z.object({
+            left: z.number(),
+            top: z.number(),
+            width: z.number(),
+            height: z.number(),
+            scrollX: z.number(),
+            scrollY: z.number(),
+            viewportWidth: z.number(),
+            viewportHeight: z.number(),
+          }).optional().nullable(),
+          borderColor: z.string().optional().nullable(),
+          isElementCapture: z.boolean().optional(),
         })),
       }),
       responses: {

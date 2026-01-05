@@ -28,6 +28,31 @@
         </svg>
         Start Recording
       </button>
+      <div class="divider">
+        <span>or</span>
+      </div>
+      <button id="element-capture-btn" class="btn btn-element-capture" data-testid="button-element-capture">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+          <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+          <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+          <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        Capture Element
+      </button>
+      <div class="color-picker-section">
+        <label for="border-color">Border Color</label>
+        <div class="color-picker-row">
+          <input type="color" id="border-color" value="#ef4444" data-testid="input-border-color">
+          <div class="color-presets">
+            <button class="color-preset" data-color="#ef4444" style="background: #ef4444;" data-testid="preset-red"></button>
+            <button class="color-preset" data-color="#22c55e" style="background: #22c55e;" data-testid="preset-green"></button>
+            <button class="color-preset" data-color="#3b82f6" style="background: #3b82f6;" data-testid="preset-blue"></button>
+            <button class="color-preset" data-color="#f59e0b" style="background: #f59e0b;" data-testid="preset-orange"></button>
+            <button class="color-preset" data-color="#8b5cf6" style="background: #8b5cf6;" data-testid="preset-purple"></button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="recording" class="state-panel hidden">
@@ -38,6 +63,17 @@
       <div class="step-counter">
         <span id="step-count">0</span>
         <span class="label">steps captured</span>
+      </div>
+      <div class="recording-actions">
+        <button id="capture-element-during-recording" class="btn btn-element-capture-small" data-testid="button-capture-element-during-recording">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          Capture Element
+        </button>
       </div>
       <button id="stop-btn" class="btn btn-danger" data-testid="button-stop-recording">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

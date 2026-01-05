@@ -919,7 +919,8 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
                           step.type === 'input' ? 'input' :
                           step.type === 'change' ? 'click' :
                           step.type === 'submit' ? 'click' :
-                          step.type === 'navigation' ? 'navigation' : 'custom';
+                          step.type === 'navigation' ? 'navigation' :
+                          step.type === 'element_capture' ? 'custom' : 'custom';
 
         await storage.createStep({
           guideId: guide.id,
@@ -934,6 +935,9 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
             element: step.element,
             pageTitle: step.pageTitle,
             capturedAt: step.timestamp,
+            elementBounds: step.elementBounds || null,
+            borderColor: step.borderColor || null,
+            isElementCapture: step.isElementCapture || false,
           },
         });
         stepsCreated++;

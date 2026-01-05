@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const apiUrlInput = document.getElementById('api-url');
   const saveSettingsBtn = document.getElementById('save-settings');
   const cancelSettingsBtn = document.getElementById('cancel-settings');
+  const elementCaptureBtn = document.getElementById('element-capture-btn');
+  const captureElementDuringRecording = document.getElementById('capture-element-during-recording');
+  const borderColorInput = document.getElementById('border-color');
+  const colorPresets = document.querySelectorAll('.color-preset');
 
   function showPanel(panel) {
     notRecordingPanel.classList.add('hidden');
@@ -30,7 +34,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function updateState() {
-    const { isRecording, steps, guideId } = await chrome.storage.local.get(['isRecording', 'steps', 'guideId']);
+    const { isRecording, steps, guideId, borderColor } = await chrome.storage.local.get(['isRecording', 'steps', 'guideId', 'borderColor']);
+    
+    if (borderColor) {
+      borderColorInput.value = borderColor;
+      updateActivePreset(borderColor);
+    }
     
     if (isRecording) {
       showPanel(recordingPanel);
@@ -44,6 +53,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       showPanel(notRecordingPanel);
     }
+  }
+
+  function updateActivePreset(color) {
+    colorPresets.forEach(preset => {
+      if (preset.dataset.color.toLowerCase() === color.toLowerCase()) {
+        preset.classList.add('active');
+      } else {
+        preset.classList.remove('active');
+      }
+    });
   }
 
   async function loadWorkspaces() {
@@ -110,6 +129,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     await loadWorkspaces();
     showPanel(syncPanel);
+  });
+
+  elementCaptureBtn.addEventListener('click', async () => {
+    window.close();
+    
+    chrome.runtime.sendMessage({ type: 'START_ELEMENT_CAPTURE' });
+  });
+
+  captureElementDuringRecording.addEventListener('click', async () => {
+    window.close();
+    
+    chrome.runtime.sendMessage({ type: 'START_ELEMENT_CAPTURE' });
+  });
+
+  borderColorInput.addEventListener('input', async (e) => {
+    const color = e.target.value;
+    updateActivePreset(color);
+    chrome.runtime.sendMessage({ type: 'SET_BORDER_COLOR', color });
+  });
+
+  colorPresets.forEach(preset => {
+    preset.addEventListener('click', async () => {
+      const color = preset.dataset.color;
+      borderColorInput.value = color;
+      updateActivePreset(color);
+      chrome.runtime.sendMessage({ type: 'SET_BORDER_COLOR', color });
+    });
   });
 
   syncBtn.addEventListener('click', async () => {

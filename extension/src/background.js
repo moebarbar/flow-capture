@@ -15,7 +15,8 @@ chrome.runtime.onInstalled.addListener(() => {
     steps: [],
     guideId: null,
     selectedWorkspaceId: null,
-    apiBaseUrl: 'https://flowcapture.replit.app'
+    apiBaseUrl: 'https://flowcapture.replit.app',
+    borderColor: '#ef4444'
   });
 });
 
@@ -42,6 +43,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ error: err.message }));
     return true;
+  } else if (message.type === 'CAPTURE_ELEMENT') {
+    handleCaptureElement(message.captureData, sender.tab)
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ error: err.message }));
+    return true;
+  } else if (message.type === 'START_ELEMENT_CAPTURE') {
+    startElementCaptureOnActiveTab()
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ error: err.message }));
+    return true;
+  } else if (message.type === 'SET_BORDER_COLOR') {
+    chrome.storage.local.set({ borderColor: message.color }).then(() => {
+      notifyAllTabsWithColor(message.color);
+      sendResponse({ success: true });
+    });
+    return true;
   } else if (message.type === 'GET_RECORDING_STATE') {
     sendResponse({ isRecording });
   } else if (message.type === 'SYNC_TO_BACKEND') {
@@ -62,9 +79,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'SET_API_URL') {
     chrome.storage.local.set({ apiBaseUrl: message.url });
     sendResponse({ success: true });
+  } else if (message.type === 'ELEMENT_CAPTURE_CANCELLED') {
+    sendResponse({ success: true });
   }
   return true;
 });
+
+async function startElementCaptureOnActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id) {
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'START_ELEMENT_CAPTURE' });
+    } catch (e) {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['src/content.js']
+      });
+      await chrome.tabs.sendMessage(tab.id, { type: 'START_ELEMENT_CAPTURE' });
+    }
+  }
+}
+
+async function notifyAllTabsWithColor(color) {
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    try {
+      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
+        await chrome.tabs.sendMessage(tab.id, { type: 'SET_BORDER_COLOR', color });
+      }
+    } catch (e) {
+    }
+  }
+}
 
 async function startRecordingOnAllTabs() {
   const tabs = await chrome.tabs.query({});
@@ -130,6 +176,36 @@ async function handleCaptureStep(step, tab) {
   console.log('Step captured. Total steps:', steps.length);
 }
 
+async function handleCaptureElement(captureData, tab) {
+  console.log('Capturing element:', captureData.description);
+  
+  let screenshot = null;
+  
+  if (tab && tab.windowId) {
+    try {
+      screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    } catch (e) {
+      console.error('Screenshot capture failed:', e);
+    }
+  }
+
+  const stepWithScreenshot = {
+    ...captureData,
+    screenshot,
+    timestamp: Date.now(),
+    tabId: tab?.id,
+    tabUrl: tab?.url,
+    tabTitle: tab?.title,
+    isElementCapture: true
+  };
+
+  const { steps = [] } = await chrome.storage.local.get(['steps']);
+  steps.push(stepWithScreenshot);
+  await chrome.storage.local.set({ steps });
+  
+  console.log('Element captured. Total steps:', steps.length);
+}
+
 async function fetchUser() {
   const apiUrl = await getConfiguredApiUrl();
   const response = await fetch(`${apiUrl}/api/extension/user`, {
@@ -171,7 +247,10 @@ async function syncStepsToBackend(workspaceId, title) {
     pageTitle: step.pageTitle || step.tabTitle,
     screenshot: step.screenshot,
     timestamp: step.timestamp,
-    element: step.element
+    element: step.element,
+    elementBounds: step.elementBounds || null,
+    borderColor: step.borderColor || null,
+    isElementCapture: step.isElementCapture || false
   }));
 
   const apiUrl = await getConfiguredApiUrl();

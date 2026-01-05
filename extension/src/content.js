@@ -4,14 +4,18 @@ if (window.__flowcaptureInitialized) {
   window.__flowcaptureInitialized = true;
 
   let isRecording = false;
+  let isElementCaptureMode = false;
   let highlightOverlay = null;
+  let hoverHighlight = null;
   let lastClickTime = 0;
+  let borderColor = '#ef4444';
   const CLICK_DEBOUNCE_MS = 300;
 
   async function init() {
     try {
-      const { isRecording: recording } = await chrome.storage.local.get(['isRecording']);
+      const { isRecording: recording, borderColor: savedColor } = await chrome.storage.local.get(['isRecording', 'borderColor']);
       isRecording = recording || false;
+      borderColor = savedColor || '#ef4444';
       
       if (isRecording) {
         setupEventListeners();
@@ -35,10 +39,26 @@ if (window.__flowcaptureInitialized) {
     } else if (message.type === 'STOP_RECORDING') {
       if (isRecording) {
         isRecording = false;
+        isElementCaptureMode = false;
         removeEventListeners();
         hideRecordingIndicator();
+        removeHoverHighlight();
+        removeElementCaptureUI();
       }
       sendResponse({ success: true });
+    } else if (message.type === 'START_ELEMENT_CAPTURE') {
+      startElementCaptureMode();
+      sendResponse({ success: true });
+    } else if (message.type === 'CANCEL_ELEMENT_CAPTURE') {
+      cancelElementCaptureMode();
+      sendResponse({ success: true });
+    } else if (message.type === 'SET_BORDER_COLOR') {
+      borderColor = message.color;
+      chrome.storage.local.set({ borderColor: message.color });
+      updateHoverHighlightColor();
+      sendResponse({ success: true });
+    } else if (message.type === 'GET_BORDER_COLOR') {
+      sendResponse({ color: borderColor });
     }
     return true;
   });
@@ -67,8 +87,244 @@ if (window.__flowcaptureInitialized) {
     console.log('FlowCapture: Event listeners removed');
   }
 
+  function startElementCaptureMode() {
+    isElementCaptureMode = true;
+    document.addEventListener('mousemove', handleElementHover, true);
+    document.addEventListener('click', handleElementSelect, true);
+    document.addEventListener('keydown', handleEscapeKey, true);
+    showElementCaptureUI();
+    document.body.style.cursor = 'crosshair';
+  }
+
+  function cancelElementCaptureMode() {
+    isElementCaptureMode = false;
+    document.removeEventListener('mousemove', handleElementHover, true);
+    document.removeEventListener('click', handleElementSelect, true);
+    document.removeEventListener('keydown', handleEscapeKey, true);
+    removeHoverHighlight();
+    removeElementCaptureUI();
+    document.body.style.cursor = '';
+  }
+
+  function handleEscapeKey(event) {
+    if (event.key === 'Escape' && isElementCaptureMode) {
+      cancelElementCaptureMode();
+      chrome.runtime.sendMessage({ type: 'ELEMENT_CAPTURE_CANCELLED' });
+    }
+  }
+
+  function handleElementHover(event) {
+    if (!isElementCaptureMode) return;
+    
+    const target = event.target;
+    if (isRecordingUI(target)) return;
+
+    const rect = target.getBoundingClientRect();
+    
+    if (!hoverHighlight) {
+      hoverHighlight = document.createElement('div');
+      hoverHighlight.className = 'flowcapture-overlay flowcapture-hover-highlight';
+      hoverHighlight.style.cssText = `
+        position: fixed;
+        pointer-events: none;
+        z-index: 2147483645;
+        border: 3px solid ${borderColor};
+        border-radius: 4px;
+        background: ${hexToRgba(borderColor, 0.1)};
+        box-shadow: 0 0 0 4px ${hexToRgba(borderColor, 0.2)}, 0 0 20px ${hexToRgba(borderColor, 0.3)};
+        transition: all 0.1s ease-out;
+      `;
+      document.body.appendChild(hoverHighlight);
+    }
+
+    hoverHighlight.style.left = `${rect.left - 3}px`;
+    hoverHighlight.style.top = `${rect.top - 3}px`;
+    hoverHighlight.style.width = `${rect.width + 6}px`;
+    hoverHighlight.style.height = `${rect.height + 6}px`;
+  }
+
+  function updateHoverHighlightColor() {
+    if (hoverHighlight) {
+      hoverHighlight.style.borderColor = borderColor;
+      hoverHighlight.style.background = hexToRgba(borderColor, 0.1);
+      hoverHighlight.style.boxShadow = `0 0 0 4px ${hexToRgba(borderColor, 0.2)}, 0 0 20px ${hexToRgba(borderColor, 0.3)}`;
+    }
+  }
+
+  function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  function handleElementSelect(event) {
+    if (!isElementCaptureMode) return;
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const target = event.target;
+    if (isRecordingUI(target)) return;
+
+    const rect = target.getBoundingClientRect();
+    const elementInfo = getElementInfo(target);
+    
+    const captureData = {
+      type: 'element_capture',
+      element: elementInfo,
+      selector: generateSelector(target),
+      description: `Captured element: ${getElementText(target) || target.tagName.toLowerCase()}`,
+      url: window.location.href,
+      pageTitle: document.title,
+      elementBounds: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight
+      },
+      borderColor: borderColor
+    };
+
+    showCaptureFlash(rect);
+    
+    chrome.runtime.sendMessage({
+      type: 'CAPTURE_ELEMENT',
+      captureData
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('FlowCapture: Error capturing element:', chrome.runtime.lastError);
+      } else {
+        console.log('FlowCapture: Element captured successfully');
+      }
+    });
+
+    cancelElementCaptureMode();
+  }
+
+  function showCaptureFlash(rect) {
+    const flash = document.createElement('div');
+    flash.className = 'flowcapture-overlay flowcapture-capture-flash';
+    flash.style.cssText = `
+      position: fixed;
+      left: ${rect.left - 4}px;
+      top: ${rect.top - 4}px;
+      width: ${rect.width + 8}px;
+      height: ${rect.height + 8}px;
+      border: 4px solid ${borderColor};
+      border-radius: 6px;
+      background: ${hexToRgba(borderColor, 0.2)};
+      pointer-events: none;
+      z-index: 2147483647;
+      animation: flowcapture-flash 0.5s ease-out forwards;
+    `;
+    
+    document.body.appendChild(flash);
+    
+    setTimeout(() => {
+      flash.remove();
+    }, 500);
+  }
+
+  function removeHoverHighlight() {
+    if (hoverHighlight) {
+      hoverHighlight.remove();
+      hoverHighlight = null;
+    }
+  }
+
+  function showElementCaptureUI() {
+    let ui = document.querySelector('.flowcapture-element-capture-ui');
+    if (ui) return;
+
+    ui = document.createElement('div');
+    ui.className = 'flowcapture-overlay flowcapture-element-capture-ui';
+    ui.innerHTML = `
+      <div class="flowcapture-element-capture-header">
+        <span class="flowcapture-element-capture-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+            <circle cx="12" cy="13" r="4"></circle>
+          </svg>
+        </span>
+        <span>Click on any element to capture</span>
+      </div>
+      <div class="flowcapture-element-capture-hint">Press ESC to cancel</div>
+    `;
+    ui.style.cssText = `
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #1e1e2e, #2d2d44);
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+      z-index: 2147483647;
+      pointer-events: none;
+      animation: flowcapture-slide-down 0.3s ease-out;
+    `;
+
+    let style = document.getElementById('flowcapture-element-styles');
+    if (!style) {
+      style = document.createElement('style');
+      style.id = 'flowcapture-element-styles';
+      style.textContent = `
+        .flowcapture-element-capture-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .flowcapture-element-capture-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          background: ${borderColor};
+          border-radius: 6px;
+        }
+        .flowcapture-element-capture-hint {
+          font-size: 12px;
+          color: rgba(255, 255, 255, 0.6);
+        }
+        @keyframes flowcapture-slide-down {
+          0% { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+          100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        @keyframes flowcapture-flash {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.8; transform: scale(1.02); }
+          100% { opacity: 0; transform: scale(1.05); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(ui);
+  }
+
+  function removeElementCaptureUI() {
+    const ui = document.querySelector('.flowcapture-element-capture-ui');
+    if (ui) {
+      ui.remove();
+    }
+  }
+
   function handleClick(event) {
-    if (!isRecording) return;
+    if (!isRecording || isElementCaptureMode) return;
     
     const now = Date.now();
     if (now - lastClickTime < CLICK_DEBOUNCE_MS) return;
@@ -91,7 +347,7 @@ if (window.__flowcaptureInitialized) {
   }
 
   function handleInput(event) {
-    if (!isRecording) return;
+    if (!isRecording || isElementCaptureMode) return;
     
     const target = event.target;
     if (isRecordingUI(target)) return;
@@ -117,7 +373,7 @@ if (window.__flowcaptureInitialized) {
   }
 
   function handleChange(event) {
-    if (!isRecording) return;
+    if (!isRecording || isElementCaptureMode) return;
     
     const target = event.target;
     if (isRecordingUI(target)) return;
@@ -138,7 +394,7 @@ if (window.__flowcaptureInitialized) {
   }
 
   function handleSubmit(event) {
-    if (!isRecording) return;
+    if (!isRecording || isElementCaptureMode) return;
     
     const target = event.target;
     

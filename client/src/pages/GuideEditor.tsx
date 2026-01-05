@@ -10,6 +10,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
+import { ElementZoomAnimation } from "@/components/ElementHighlightOverlay";
 import { 
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload
@@ -224,11 +225,21 @@ export default function GuideEditor() {
               transition={{ duration: 0.3 }}
               className="w-full max-w-4xl bg-card rounded-lg shadow-2xl border border-border overflow-hidden"
             >
-              <div className="aspect-video bg-gray-100 relative group/img">
+              <div className="aspect-video bg-gray-100 relative group/img overflow-hidden">
                 {selectedStep.imageUrl ? (
                   <>
                     <img src={selectedStep.imageUrl} alt="Step preview" className="w-full h-full object-contain bg-gray-900" />
-                    <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all flex items-center justify-center invisible group-hover/img:visible">
+                    
+                    {/* Element zoom animation for element captures */}
+                    {selectedStep.metadata && (selectedStep.metadata as any).isElementCapture && (
+                      <ElementZoomAnimation
+                        elementBounds={(selectedStep.metadata as any).elementBounds}
+                        borderColor={(selectedStep.metadata as any).borderColor || "#ef4444"}
+                        isElementCapture={(selectedStep.metadata as any).isElementCapture}
+                      />
+                    )}
+                    
+                    <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all flex items-center justify-center invisible group-hover/img:visible z-20">
                       <div className="flex gap-2">
                         <Button 
                           variant="secondary"

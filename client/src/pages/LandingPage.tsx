@@ -9,15 +9,56 @@ import {
 } from "lucide-react";
 import { SiGooglechrome } from "react-icons/si";
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ThemeToggle } from "@/components/ThemeToggle";
+
+interface SiteSettings {
+  siteName?: string;
+  siteDescription?: string;
+  logoUrl?: string | null;
+  faviconUrl?: string | null;
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  headScripts?: string | null;
+  bodyScripts?: string | null;
+  customCss?: string | null;
+}
 
 export default function LandingPage() {
   const { user } = useAuth();
+
+  const { data: branding } = useQuery<SiteSettings>({
+    queryKey: ['/api/settings/public'],
+  });
+
+  const siteName = branding?.siteName || "FlowCapture";
 
   useEffect(() => {
     if (user) {
       window.location.href = "/";
     }
   }, [user]);
+
+  useEffect(() => {
+    if (branding?.faviconUrl) {
+      const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement || document.createElement('link');
+      link.rel = 'icon';
+      link.href = branding.faviconUrl;
+      document.head.appendChild(link);
+    }
+    
+    if (branding?.customCss) {
+      const style = document.createElement('style');
+      style.id = 'custom-branding-css';
+      style.textContent = branding.customCss;
+      document.head.appendChild(style);
+      return () => {
+        const existing = document.getElementById('custom-branding-css');
+        if (existing) existing.remove();
+      };
+    }
+  }, [branding]);
 
   if (user) return null;
 
@@ -27,12 +68,17 @@ export default function LandingPage() {
       <nav className="fixed w-full z-50 glass border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold">
-              F
-            </div>
-            <span className="font-display font-bold text-xl tracking-tight">FlowCapture</span>
+            {branding?.logoUrl ? (
+              <img src={branding.logoUrl} alt={siteName} className="h-8 w-8 object-contain" />
+            ) : (
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold">
+                {siteName.charAt(0)}
+              </div>
+            )}
+            <span className="font-display font-bold text-xl tracking-tight">{siteName}</span>
           </div>
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ThemeToggle />
             <Button variant="ghost" asChild className="hidden sm:inline-flex">
               <a href="/api/login" data-testid="link-nav-login">Log in</a>
             </Button>
@@ -571,10 +617,14 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold">
-                  F
-                </div>
-                <span className="font-display font-bold text-xl tracking-tight">FlowCapture</span>
+                {branding?.logoUrl ? (
+                  <img src={branding.logoUrl} alt={siteName} className="h-8 w-8 object-contain" />
+                ) : (
+                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white font-bold">
+                    {siteName.charAt(0)}
+                  </div>
+                )}
+                <span className="font-display font-bold text-xl tracking-tight">{siteName}</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 The fastest way to create and share workflow documentation.
@@ -606,7 +656,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-border pt-8 text-center text-sm text-muted-foreground">
-            <p>© 2025 FlowCapture. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} {siteName}. All rights reserved.</p>
           </div>
         </div>
       </footer>

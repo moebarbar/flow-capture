@@ -126,6 +126,69 @@ export const discountCodes = pgTable("discount_codes", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Guide Analytics - Track views and engagement
+export const guideAnalytics = pgTable("guide_analytics", {
+  id: serial("id").primaryKey(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  viewerId: text("viewer_id"), // Can be null for anonymous views
+  sessionId: text("session_id"),
+  completedSteps: integer("completed_steps").default(0).notNull(),
+  totalSteps: integer("total_steps").default(0).notNull(),
+  timeSpentSeconds: integer("time_spent_seconds").default(0).notNull(),
+  completedAt: timestamp("completed_at"),
+  referrer: text("referrer"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Guide Templates - Pre-built guide templates
+export const templateCategoryEnum = pgEnum("template_category", [
+  "onboarding", "training", "sales", "support", "hr", "it", "marketing", "custom"
+]);
+
+export const guideTemplates = pgTable("guide_templates", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  category: templateCategoryEnum("category").default("custom").notNull(),
+  coverImageUrl: text("cover_image_url"),
+  stepsData: jsonb("steps_data").notNull(), // JSON array of step templates
+  isPublic: boolean("is_public").default(true).notNull(),
+  createdById: text("created_by_id").references(() => users.id),
+  usageCount: integer("usage_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Guide Versions - Track changes history
+export const guideVersions = pgTable("guide_versions", {
+  id: serial("id").primaryKey(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  versionNumber: integer("version_number").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  stepsSnapshot: jsonb("steps_snapshot").notNull(), // Full snapshot of steps at this version
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  changeNotes: text("change_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Workspace Settings - Per-workspace configuration
+export const workspaceSettings = pgTable("workspace_settings", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  autoRedactEmails: boolean("auto_redact_emails").default(false).notNull(),
+  autoRedactPasswords: boolean("auto_redact_passwords").default(true).notNull(),
+  autoRedactPhones: boolean("auto_redact_phones").default(false).notNull(),
+  autoRedactCustomPatterns: jsonb("auto_redact_custom_patterns"), // Array of regex patterns
+  defaultLanguage: text("default_language").default("en"),
+  enableAiDescriptions: boolean("enable_ai_descriptions").default(true).notNull(),
+  enableAiVoiceover: boolean("enable_ai_voiceover").default(false).notNull(),
+  brandColor: text("brand_color"),
+  customDomain: text("custom_domain"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // === RELATIONS ===
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
@@ -260,6 +323,18 @@ export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;
 
 export type DiscountCode = typeof discountCodes.$inferSelect;
 export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
+
+export type GuideAnalytics = typeof guideAnalytics.$inferSelect;
+export type InsertGuideAnalytics = typeof guideAnalytics.$inferInsert;
+
+export type GuideTemplate = typeof guideTemplates.$inferSelect;
+export type InsertGuideTemplate = typeof guideTemplates.$inferInsert;
+
+export type GuideVersion = typeof guideVersions.$inferSelect;
+export type InsertGuideVersion = typeof guideVersions.$inferInsert;
+
+export type WorkspaceSettingsType = typeof workspaceSettings.$inferSelect;
+export type InsertWorkspaceSettings = typeof workspaceSettings.$inferInsert;
 
 // API Request/Response Types
 export type CreateWorkspaceRequest = InsertWorkspace;

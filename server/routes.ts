@@ -1297,6 +1297,97 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     }
   });
 
+  // === STRIPE ADMIN ENDPOINTS ===
+  
+  app.get('/api/admin/stripe/products', requireAdmin, async (req, res) => {
+    try {
+      // Get products with their prices using the join query
+      const productsWithPrices = await stripeService.listProductsWithPrices(true, 50, 0);
+      
+      // Group by product and include first price as default
+      const productMap = new Map<string, any>();
+      for (const row of productsWithPrices as any[]) {
+        if (!productMap.has(row.product_id)) {
+          productMap.set(row.product_id, {
+            id: row.product_id,
+            name: row.product_name,
+            description: row.product_description,
+            active: row.product_active,
+            default_price: row.price_id ? {
+              id: row.price_id,
+              unit_amount: row.unit_amount,
+              currency: row.currency,
+              recurring: row.recurring,
+            } : null,
+          });
+        }
+      }
+      
+      res.json({ data: Array.from(productMap.values()) });
+    } catch (error) {
+      console.error('List products error:', error);
+      res.status(500).json({ message: 'Failed to list products', data: [] });
+    }
+  });
+
+  app.get('/api/admin/stripe/prices', requireAdmin, async (req, res) => {
+    try {
+      const prices = await stripeService.listPrices(true, 50, 0);
+      // Format prices for frontend
+      const formattedPrices = (prices as any[]).map((p: any) => ({
+        id: p.id,
+        product: p.product,
+        unit_amount: p.unit_amount,
+        currency: p.currency,
+        active: p.active,
+        recurring: p.recurring,
+      }));
+      res.json({ data: formattedPrices });
+    } catch (error) {
+      console.error('List prices error:', error);
+      res.status(500).json({ message: 'Failed to list prices', data: [] });
+    }
+  });
+
+  app.post('/api/admin/stripe/products', requireAdmin, async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      if (!name) {
+        return res.status(400).json({ message: 'Product name is required' });
+      }
+      const product = await stripeService.createProduct(name, description);
+      res.json(product);
+    } catch (error) {
+      console.error('Create product error:', error);
+      res.status(500).json({ message: 'Failed to create product' });
+    }
+  });
+
+  app.post('/api/admin/stripe/prices', requireAdmin, async (req, res) => {
+    try {
+      const { productId, amount, currency, interval } = req.body;
+      if (!productId || !amount) {
+        return res.status(400).json({ message: 'Product ID and amount are required' });
+      }
+      const validInterval = interval === 'year' ? 'year' : 'month';
+      const price = await stripeService.createPrice(productId, amount, currency || 'usd', validInterval);
+      res.json(price);
+    } catch (error) {
+      console.error('Create price error:', error);
+      res.status(500).json({ message: 'Failed to create price' });
+    }
+  });
+
+  app.post('/api/admin/stripe/sync', requireAdmin, async (req, res) => {
+    try {
+      const result = await stripeService.syncStripeData();
+      res.json(result);
+    } catch (error) {
+      console.error('Sync error:', error);
+      res.status(500).json({ message: 'Failed to sync Stripe data' });
+    }
+  });
+
   // === FINANCE ENDPOINTS ===
   
   app.get('/api/admin/finance/overview', requireAdmin, async (req, res) => {

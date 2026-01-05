@@ -695,11 +695,49 @@ function BrandingTab() {
   );
 }
 
+interface StripeProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  default_price?: {
+    id: string;
+    unit_amount: number | null;
+    currency: string;
+    recurring?: {
+      interval: string;
+    };
+  };
+}
+
+interface StripePrice {
+  id: string;
+  product: string;
+  unit_amount: number | null;
+  currency: string;
+  active: boolean;
+  recurring?: {
+    interval: string;
+  };
+}
+
 function IntegrationsTab() {
   const { toast } = useToast();
+  const [showProductDialog, setShowProductDialog] = useState(false);
+  const [showPriceDialog, setShowPriceDialog] = useState(false);
+  const [newProduct, setNewProduct] = useState({ name: '', description: '' });
+  const [newPrice, setNewPrice] = useState({ productId: '', amount: '', currency: 'usd', interval: 'month' });
   
   const { data: settings, isLoading } = useQuery<SiteSettings>({
     queryKey: ['/api/admin/settings'],
+  });
+
+  const { data: stripeProducts, isLoading: productsLoading } = useQuery<{ data: StripeProduct[] }>({
+    queryKey: ['/api/admin/stripe/products'],
+  });
+
+  const { data: stripePrices } = useQuery<{ data: StripePrice[] }>({
+    queryKey: ['/api/admin/stripe/prices'],
   });
 
   const [formData, setFormData] = useState<Partial<SiteSettings>>({});
@@ -717,6 +755,51 @@ function IntegrationsTab() {
     },
   });
 
+  const createProductMutation = useMutation({
+    mutationFn: async (data: { name: string; description: string }) => {
+      return apiRequest('POST', '/api/admin/stripe/products', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/stripe/products'] });
+      toast({ title: "Product created" });
+      setShowProductDialog(false);
+      setNewProduct({ name: '', description: '' });
+    },
+    onError: () => {
+      toast({ title: "Failed to create product", variant: "destructive" });
+    },
+  });
+
+  const createPriceMutation = useMutation({
+    mutationFn: async (data: { productId: string; amount: number; currency: string; interval: string }) => {
+      return apiRequest('POST', '/api/admin/stripe/prices', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/stripe/prices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/stripe/products'] });
+      toast({ title: "Price created" });
+      setShowPriceDialog(false);
+      setNewPrice({ productId: '', amount: '', currency: 'usd', interval: 'month' });
+    },
+    onError: () => {
+      toast({ title: "Failed to create price", variant: "destructive" });
+    },
+  });
+
+  const syncStripeMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/admin/stripe/sync', {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/stripe/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/stripe/prices'] });
+      toast({ title: "Stripe data synced" });
+    },
+    onError: () => {
+      toast({ title: "Failed to sync Stripe data", variant: "destructive" });
+    },
+  });
+
   const currentData = { ...settings, ...formData };
 
   if (isLoading) {
@@ -725,6 +808,202 @@ function IntegrationsTab() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Stripe Integration
+            </CardTitle>
+            <CardDescription>Manage your Stripe products and pricing plans</CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => syncStripeMutation.mutate()}
+              disabled={syncStripeMutation.isPending}
+              data-testid="button-sync-stripe"
+            >
+              {syncStripeMutation.isPending ? 'Syncing...' : 'Sync'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium">Products</h4>
+              <p className="text-sm text-muted-foreground">Your subscription products</p>
+            </div>
+            <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-add-product">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Product
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Product</DialogTitle>
+                  <DialogDescription>Add a new product to Stripe</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Product Name</Label>
+                    <Input
+                      value={newProduct.name}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Pro Plan"
+                      data-testid="input-product-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Textarea
+                      value={newProduct.description}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Access to all premium features..."
+                      data-testid="input-product-description"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowProductDialog(false)}>Cancel</Button>
+                  <Button 
+                    onClick={() => createProductMutation.mutate(newProduct)}
+                    disabled={createProductMutation.isPending || !newProduct.name}
+                    data-testid="button-create-product"
+                  >
+                    {createProductMutation.isPending ? 'Creating...' : 'Create'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {productsLoading ? (
+            <Skeleton className="h-20 w-full" />
+          ) : stripeProducts?.data?.length ? (
+            <div className="space-y-2">
+              {stripeProducts.data.map((product) => (
+                <div key={product.id} className="flex items-center justify-between p-3 border rounded-md" data-testid={`product-${product.id}`}>
+                  <div>
+                    <div className="font-medium">{product.name}</div>
+                    <div className="text-sm text-muted-foreground">{product.description || 'No description'}</div>
+                    {product.default_price && (
+                      <Badge variant="secondary" className="mt-1">
+                        ${((product.default_price.unit_amount || 0) / 100).toFixed(2)}/{product.default_price.recurring?.interval || 'one-time'}
+                      </Badge>
+                    )}
+                  </div>
+                  <Badge variant={product.active ? 'default' : 'outline'}>
+                    {product.active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No products found. Create one or sync from Stripe.</p>
+          )}
+
+          <div className="flex items-center justify-between pt-4 border-t">
+            <div>
+              <h4 className="font-medium">Prices</h4>
+              <p className="text-sm text-muted-foreground">Pricing plans for your products</p>
+            </div>
+            <Dialog open={showPriceDialog} onOpenChange={setShowPriceDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" data-testid="button-add-price">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Price
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Price</DialogTitle>
+                  <DialogDescription>Add a new price to a product</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Product</Label>
+                    <Select value={newPrice.productId} onValueChange={(v) => setNewPrice(prev => ({ ...prev, productId: v }))}>
+                      <SelectTrigger data-testid="select-price-product">
+                        <SelectValue placeholder="Select a product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stripeProducts?.data?.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Amount (cents)</Label>
+                      <Input
+                        type="number"
+                        value={newPrice.amount}
+                        onChange={(e) => setNewPrice(prev => ({ ...prev, amount: e.target.value }))}
+                        placeholder="1999"
+                        data-testid="input-price-amount"
+                      />
+                      <p className="text-xs text-muted-foreground">In cents (1999 = $19.99)</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Billing Interval</Label>
+                      <Select value={newPrice.interval} onValueChange={(v) => setNewPrice(prev => ({ ...prev, interval: v }))}>
+                        <SelectTrigger data-testid="select-price-interval">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="month">Monthly</SelectItem>
+                          <SelectItem value="year">Yearly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowPriceDialog(false)}>Cancel</Button>
+                  <Button 
+                    onClick={() => createPriceMutation.mutate({
+                      productId: newPrice.productId,
+                      amount: parseInt(newPrice.amount),
+                      currency: newPrice.currency,
+                      interval: newPrice.interval,
+                    })}
+                    disabled={createPriceMutation.isPending || !newPrice.productId || !newPrice.amount}
+                    data-testid="button-create-price"
+                  >
+                    {createPriceMutation.isPending ? 'Creating...' : 'Create'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {stripePrices?.data?.length ? (
+            <div className="space-y-2">
+              {stripePrices.data.slice(0, 10).map((price) => {
+                const product = stripeProducts?.data?.find(p => p.id === price.product);
+                return (
+                  <div key={price.id} className="flex items-center justify-between p-3 border rounded-md" data-testid={`price-${price.id}`}>
+                    <div>
+                      <div className="font-medium">${((price.unit_amount || 0) / 100).toFixed(2)}/{price.recurring?.interval || 'one-time'}</div>
+                      <div className="text-sm text-muted-foreground">{product?.name || price.product}</div>
+                    </div>
+                    <Badge variant={price.active ? 'default' : 'outline'}>
+                      {price.active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No prices found. Create one or sync from Stripe.</p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

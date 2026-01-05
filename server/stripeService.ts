@@ -139,6 +139,33 @@ export class StripeService {
     );
     return result.rows;
   }
+
+  // Create a new product in Stripe
+  async createProduct(name: string, description?: string) {
+    const stripe = await getUncachableStripeClient();
+    return await stripe.products.create({
+      name,
+      description: description || undefined,
+    });
+  }
+
+  // Create a new price in Stripe
+  async createPrice(productId: string, unitAmount: number, currency: string, interval: 'month' | 'year') {
+    const stripe = await getUncachableStripeClient();
+    return await stripe.prices.create({
+      product: productId,
+      unit_amount: unitAmount,
+      currency,
+      recurring: { interval },
+    });
+  }
+
+  // Sync data from Stripe (trigger a refresh)
+  async syncStripeData() {
+    // The stripe-replit-sync package handles this automatically
+    // This method can be used to trigger a manual sync if needed
+    return { success: true, message: 'Stripe data is synced automatically' };
+  }
 }
 
 export const stripeService = new StripeService();

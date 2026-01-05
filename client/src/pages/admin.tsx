@@ -1167,6 +1167,42 @@ function IntegrationsTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Google Analytics
+          </CardTitle>
+          <CardDescription>
+            Track page views and user interactions with Google Analytics 4
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="ga-id">Measurement ID</Label>
+            <Input
+              id="ga-id"
+              placeholder="G-XXXXXXXXXX"
+              disabled
+              className="font-mono"
+              data-testid="input-ga-measurement-id"
+            />
+            <p className="text-xs text-muted-foreground">
+              To add your Google Analytics Measurement ID, go to Replit Secrets and add VITE_GA_MEASUREMENT_ID with your GA4 Measurement ID (starts with "G-").
+            </p>
+          </div>
+          <div className="rounded-lg bg-muted p-4 text-sm">
+            <p className="font-medium mb-2">How to find your Measurement ID:</p>
+            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+              <li>Go to your Google Analytics account</li>
+              <li>Navigate to Admin &gt; Property &gt; Data Streams &gt; Web</li>
+              <li>Select your web stream (or create one)</li>
+              <li>Copy the Measurement ID (e.g., G-XXXXXXXXXX)</li>
+            </ol>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <Code className="h-5 w-5" />
             Head Scripts
           </CardTitle>

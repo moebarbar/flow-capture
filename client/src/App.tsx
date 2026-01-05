@@ -1,4 +1,4 @@
-import { lazy, Suspense, memo } from "react";
+import { lazy, Suspense, memo, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/use-auth";
+import { useAnalytics } from "@/hooks/use-analytics";
+import { initGA } from "@/lib/analytics";
 import { Loader2 } from "lucide-react";
 
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
@@ -61,6 +63,8 @@ const ProtectedRoute = memo(function ProtectedRoute({
 
 function Router() {
   const { user, isLoading } = useAuth();
+  
+  useAnalytics();
 
   if (isLoading) {
     return <PageLoader />;
@@ -164,6 +168,12 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    if (import.meta.env.VITE_GA_MEASUREMENT_ID) {
+      initGA();
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

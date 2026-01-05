@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar, useSidebarState } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, LayoutGrid, List as ListIcon } from "lucide-react";
 import { Link } from "wouter";
 import { EmptyState } from "@/components/EmptyState";
 import { formatDistanceToNow } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export default function GuidesList() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
+  const { isCollapsed } = useSidebarState();
   
   useEffect(() => {
     if (!workspacesLoading && workspaces && workspaces.length === 0 && !ensuredRef.current && !isEnsuring) {
@@ -51,7 +53,10 @@ export default function GuidesList() {
   return (
     <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <main className="flex-1 ml-64 p-8">
+      <main className={cn(
+        "flex-1 p-8 transition-all duration-200",
+        isCollapsed ? "ml-16" : "ml-64"
+      )}>
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">

@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar, useSidebarState } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -13,6 +13,7 @@ import {
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 interface WorkspaceSettings {
   id: number;
@@ -32,6 +33,7 @@ export default function WorkspaceSettingsPage() {
   const { data: workspaces } = useWorkspaces();
   const activeWorkspace = workspaces?.[0];
   const { toast } = useToast();
+  const { isCollapsed } = useSidebarState();
 
   const { data: settings, isLoading } = useQuery<WorkspaceSettings>({
     queryKey: ['/api/workspaces', activeWorkspace?.id, 'settings'],
@@ -77,9 +79,12 @@ export default function WorkspaceSettingsPage() {
 
   if (!activeWorkspace) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex">
         <Sidebar />
-        <main className="ml-64 p-8">
+        <main className={cn(
+          "flex-1 p-8 transition-all duration-200",
+          isCollapsed ? "ml-16" : "ml-64"
+        )}>
           <div className="flex items-center justify-center h-64">
             <p className="text-muted-foreground">Please select a workspace first</p>
           </div>
@@ -89,9 +94,12 @@ export default function WorkspaceSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <main className="ml-64 p-8">
+      <main className={cn(
+        "flex-1 p-8 transition-all duration-200",
+        isCollapsed ? "ml-16" : "ml-64"
+      )}>
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>

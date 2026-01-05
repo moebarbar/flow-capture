@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar, useSidebarState } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface Template {
   id: number;
@@ -49,6 +50,7 @@ export default function TemplateLibrary() {
   const activeWorkspace = workspaces?.[0];
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { isCollapsed } = useSidebarState();
 
   const { data: templates, isLoading } = useQuery<Template[]>({
     queryKey: ['/api/templates'],
@@ -90,9 +92,12 @@ export default function TemplateLibrary() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <main className="ml-64 p-8">
+      <main className={cn(
+        "flex-1 p-8 transition-all duration-200",
+        isCollapsed ? "ml-16" : "ml-64"
+      )}>
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-3xl font-bold" data-testid="text-templates-title">Template Library</h1>

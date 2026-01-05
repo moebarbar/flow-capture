@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar, useSidebarState } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, TrendingUp, BookOpen, MoreVertical } from "lucide-react";
 import { SiGooglechrome } from "react-icons/si";
@@ -9,11 +9,13 @@ import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 import { EmptyState } from "@/components/EmptyState";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
+  const { isCollapsed } = useSidebarState();
   
   useEffect(() => {
     if (!workspacesLoading && workspaces && workspaces.length === 0 && !ensuredRef.current && !isEnsuring) {
@@ -50,7 +52,10 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <main className="flex-1 ml-64 p-8 overflow-y-auto">
+      <main className={cn(
+        "flex-1 p-8 overflow-y-auto transition-all duration-200",
+        isCollapsed ? "ml-16" : "ml-64"
+      )}>
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between gap-4 flex-wrap mb-8">

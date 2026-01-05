@@ -4,15 +4,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, Image as ImageIcon, Sparkles, Chrome, Camera } from "lucide-react";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
-import { Sidebar } from "@/components/Sidebar";
+import { Sidebar, useSidebarState } from "@/components/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export default function ScreenshotStudio() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isWaitingForCapture, setIsWaitingForCapture] = useState(false);
   const { toast } = useToast();
+  const { isCollapsed } = useSidebarState();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -105,7 +107,10 @@ export default function ScreenshotStudio() {
   return (
     <div className="min-h-screen bg-background flex">
       <Sidebar />
-      <main className="flex-1 ml-64 p-8 overflow-y-auto">
+      <main className={cn(
+        "flex-1 p-8 overflow-y-auto transition-all duration-200",
+        isCollapsed ? "ml-16" : "ml-64"
+      )}>
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="mb-8">

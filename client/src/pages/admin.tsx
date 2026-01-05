@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Users, CreditCard, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, Image, BookOpen } from "lucide-react";
+import { Users, CreditCard, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, BookOpen, Palette, Code, DollarSign, Tag, Image } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -47,6 +47,44 @@ interface BlogPost {
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface SiteSettings {
+  id?: number;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  siteName: string;
+  siteDescription: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  headScripts: string | null;
+  bodyScripts: string | null;
+  customCss: string | null;
+}
+
+interface DiscountCode {
+  id: number;
+  code: string;
+  description: string | null;
+  discountType: string;
+  discountValue: number;
+  currency: string;
+  maxRedemptions: number | null;
+  redemptionCount: number;
+  expiresAt: string | null;
+  status: string;
+  createdAt: string;
+}
+
+interface FinanceOverview {
+  mrr: number;
+  arr: number;
+  totalRevenue: number;
+  recentRevenue: number;
+  activeSubscriptionCount: number;
+  totalInvoices: number;
+  paidInvoices: number;
 }
 
 function generateSlug(title: string): string {
@@ -195,15 +233,6 @@ function BlogPostEditor({ post, onClose }: { post?: BlogPost; onClose: () => voi
           )}
           {uploading && <span className="text-sm text-muted-foreground">Uploading...</span>}
         </div>
-        {featuredImageUrl && (
-          <Input
-            value={featuredImageUrl}
-            onChange={(e) => setFeaturedImageUrl(e.target.value)}
-            placeholder="Or paste image URL"
-            className="mt-2"
-            data-testid="input-post-image-url"
-          />
-        )}
       </div>
 
       <div className="space-y-2">
@@ -232,6 +261,681 @@ function BlogPostEditor({ post, onClose }: { post?: BlogPost; onClose: () => voi
   );
 }
 
+function BrandingTab() {
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState<string | null>(null);
+  
+  const { data: settings, isLoading } = useQuery<SiteSettings>({
+    queryKey: ['/api/admin/settings'],
+  });
+
+  const [formData, setFormData] = useState<Partial<SiteSettings>>({});
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: Partial<SiteSettings>) => {
+      return apiRequest('PUT', '/api/admin/settings', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings/public'] });
+      toast({ title: "Branding settings saved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save settings", variant: "destructive" });
+    },
+  });
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'faviconUrl') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(field);
+    try {
+      const presignRes = await fetch(`/api/object-storage/presign?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}&visibility=public`);
+      const { url, objectPath } = await presignRes.json();
+      
+      await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+
+      const publicUrl = `/api/object-storage/public/${objectPath}`;
+      setFormData(prev => ({ ...prev, [field]: publicUrl }));
+      toast({ title: "Image uploaded" });
+    } catch (error) {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const currentData = { ...settings, ...formData };
+
+  if (isLoading) {
+    return <div className="space-y-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Palette className="h-5 w-5" />
+            Site Identity
+          </CardTitle>
+          <CardDescription>Configure your site name, logo, and favicon</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Site Name</Label>
+              <Input
+                value={currentData.siteName || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, siteName: e.target.value }))}
+                placeholder="FlowCapture"
+                data-testid="input-site-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Site Description</Label>
+              <Input
+                value={currentData.siteDescription || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, siteDescription: e.target.value }))}
+                placeholder="Automatic workflow documentation"
+                data-testid="input-site-description"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Logo</Label>
+              <div className="flex items-center gap-4">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'logoUrl')}
+                  disabled={uploading === 'logoUrl'}
+                  data-testid="input-logo"
+                />
+                {currentData.logoUrl && (
+                  <div className="w-16 h-16 rounded border overflow-hidden">
+                    <img src={currentData.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Favicon</Label>
+              <div className="flex items-center gap-4">
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, 'faviconUrl')}
+                  disabled={uploading === 'faviconUrl'}
+                  data-testid="input-favicon"
+                />
+                {currentData.faviconUrl && (
+                  <div className="w-8 h-8 rounded border overflow-hidden">
+                    <img src={currentData.faviconUrl} alt="Favicon" className="w-full h-full object-contain" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Brand Colors</CardTitle>
+          <CardDescription>Set your brand colors for the landing page and app</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Primary Color</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={currentData.primaryColor || '#6366f1'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, primaryColor: e.target.value }))}
+                  className="w-16 h-10 p-1"
+                  data-testid="input-primary-color"
+                />
+                <Input
+                  value={currentData.primaryColor || '#6366f1'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, primaryColor: e.target.value }))}
+                  className="flex-1"
+                  data-testid="input-primary-color-hex"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Secondary Color</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={currentData.secondaryColor || '#8b5cf6'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, secondaryColor: e.target.value }))}
+                  className="w-16 h-10 p-1"
+                  data-testid="input-secondary-color"
+                />
+                <Input
+                  value={currentData.secondaryColor || '#8b5cf6'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, secondaryColor: e.target.value }))}
+                  className="flex-1"
+                  data-testid="input-secondary-color-hex"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Accent Color</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={currentData.accentColor || '#06b6d4'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, accentColor: e.target.value }))}
+                  className="w-16 h-10 p-1"
+                  data-testid="input-accent-color"
+                />
+                <Input
+                  value={currentData.accentColor || '#06b6d4'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, accentColor: e.target.value }))}
+                  className="flex-1"
+                  data-testid="input-accent-color-hex"
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={() => saveMutation.mutate(formData)} disabled={saveMutation.isPending} data-testid="button-save-branding">
+          {saveMutation.isPending ? 'Saving...' : 'Save Branding'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationsTab() {
+  const { toast } = useToast();
+  
+  const { data: settings, isLoading } = useQuery<SiteSettings>({
+    queryKey: ['/api/admin/settings'],
+  });
+
+  const [formData, setFormData] = useState<Partial<SiteSettings>>({});
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: Partial<SiteSettings>) => {
+      return apiRequest('PUT', '/api/admin/settings', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/settings'] });
+      toast({ title: "Integration settings saved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save settings", variant: "destructive" });
+    },
+  });
+
+  const currentData = { ...settings, ...formData };
+
+  if (isLoading) {
+    return <div className="space-y-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Code className="h-5 w-5" />
+            Head Scripts
+          </CardTitle>
+          <CardDescription>
+            Add analytics, tracking pixels, or other scripts to the head section. 
+            These load before page content renders.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={currentData.headScripts || ''}
+            onChange={(e) => setFormData(prev => ({ ...prev, headScripts: e.target.value }))}
+            placeholder="<!-- Google Analytics, Facebook Pixel, etc. -->"
+            className="min-h-[150px] font-mono text-sm"
+            data-testid="input-head-scripts"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Code className="h-5 w-5" />
+            Body Scripts
+          </CardTitle>
+          <CardDescription>
+            Add scripts that should load at the end of the body. 
+            Good for chat widgets, support tools, etc.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={currentData.bodyScripts || ''}
+            onChange={(e) => setFormData(prev => ({ ...prev, bodyScripts: e.target.value }))}
+            placeholder="<!-- Intercom, Crisp, Drift chat widgets, etc. -->"
+            className="min-h-[150px] font-mono text-sm"
+            data-testid="input-body-scripts"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Custom CSS</CardTitle>
+          <CardDescription>Add custom CSS styles to override default styling</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={currentData.customCss || ''}
+            onChange={(e) => setFormData(prev => ({ ...prev, customCss: e.target.value }))}
+            placeholder="/* Custom CSS styles */"
+            className="min-h-[150px] font-mono text-sm"
+            data-testid="input-custom-css"
+          />
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={() => saveMutation.mutate(formData)} disabled={saveMutation.isPending} data-testid="button-save-integrations">
+          {saveMutation.isPending ? 'Saving...' : 'Save Integrations'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function FinanceTab() {
+  const { data: overview, isLoading } = useQuery<FinanceOverview>({
+    queryKey: ['/api/admin/finance/overview'],
+  });
+
+  const { data: invoicesData } = useQuery<{ data: any[] }>({
+    queryKey: ['/api/admin/invoices'],
+  });
+
+  if (isLoading) {
+    return <div className="space-y-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Monthly Revenue (MRR)</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-mrr">
+              ${overview?.mrr?.toFixed(2) || '0.00'}
+            </div>
+            <p className="text-xs text-muted-foreground">Per month</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Annual Revenue (ARR)</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-arr">
+              ${overview?.arr?.toFixed(2) || '0.00'}
+            </div>
+            <p className="text-xs text-muted-foreground">Per year</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-total-revenue">
+              ${overview?.totalRevenue?.toFixed(2) || '0.00'}
+            </div>
+            <p className="text-xs text-muted-foreground">All time</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Last 30 Days</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-recent-revenue">
+              ${overview?.recentRevenue?.toFixed(2) || '0.00'}
+            </div>
+            <p className="text-xs text-muted-foreground">Recent revenue</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Invoices</CardTitle>
+          <CardDescription>Last 10 invoices from Stripe</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice ID</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invoicesData?.data?.slice(0, 10).map((inv: any) => (
+                <TableRow key={inv.id}>
+                  <TableCell className="font-mono text-sm">{inv.id?.slice(0, 20)}...</TableCell>
+                  <TableCell>${((inv.amount_due || 0) / 100).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Badge variant={inv.status === 'paid' ? 'default' : 'outline'}>
+                      {inv.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {inv.created ? format(new Date(inv.created * 1000), 'MMM d, yyyy') : 'N/A'}
+                  </TableCell>
+                </TableRow>
+              )) || (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                    No invoices found
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function PromotionsTab() {
+  const { toast } = useToast();
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editingCode, setEditingCode] = useState<DiscountCode | undefined>();
+
+  const { data: codesData, isLoading } = useQuery<{ data: DiscountCode[] }>({
+    queryKey: ['/api/admin/discount-codes'],
+  });
+
+  const [code, setCode] = useState('');
+  const [description, setDescription] = useState('');
+  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [discountValue, setDiscountValue] = useState('');
+  const [maxRedemptions, setMaxRedemptions] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (editingCode) {
+        return apiRequest('PATCH', `/api/admin/discount-codes/${editingCode.id}`, data);
+      }
+      return apiRequest('POST', '/api/admin/discount-codes', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/discount-codes'] });
+      toast({ title: editingCode ? "Discount code updated" : "Discount code created" });
+      closeEditor();
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to save", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('DELETE', `/api/admin/discount-codes/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/discount-codes'] });
+      toast({ title: "Discount code deleted" });
+    },
+  });
+
+  const openEditor = (discountCode?: DiscountCode) => {
+    if (discountCode) {
+      setEditingCode(discountCode);
+      setCode(discountCode.code);
+      setDescription(discountCode.description || '');
+      setDiscountType(discountCode.discountType as 'percent' | 'fixed');
+      setDiscountValue(discountCode.discountValue.toString());
+      setMaxRedemptions(discountCode.maxRedemptions?.toString() || '');
+      setExpiresAt(discountCode.expiresAt ? discountCode.expiresAt.split('T')[0] : '');
+    } else {
+      setEditingCode(undefined);
+      setCode('');
+      setDescription('');
+      setDiscountType('percent');
+      setDiscountValue('');
+      setMaxRedemptions('');
+      setExpiresAt('');
+    }
+    setIsEditorOpen(true);
+  };
+
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditingCode(undefined);
+  };
+
+  const handleSave = () => {
+    if (!code.trim() || !discountValue) {
+      toast({ title: "Code and discount value are required", variant: "destructive" });
+      return;
+    }
+    saveMutation.mutate({
+      code: code.toUpperCase(),
+      description: description || null,
+      discountType,
+      discountValue: parseInt(discountValue),
+      maxRedemptions: maxRedemptions ? parseInt(maxRedemptions) : null,
+      expiresAt: expiresAt || null,
+      status: 'active',
+    });
+  };
+
+  if (isLoading) {
+    return <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5" />
+              Discount Codes
+            </CardTitle>
+            <CardDescription>Create and manage promotional discount codes</CardDescription>
+          </div>
+          <Dialog open={isEditorOpen} onOpenChange={(open) => !open && closeEditor()}>
+            <DialogTrigger asChild>
+              <Button onClick={() => openEditor()} data-testid="button-new-discount">
+                <Plus className="h-4 w-4 mr-2" />
+                New Code
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{editingCode ? 'Edit Discount Code' : 'Create Discount Code'}</DialogTitle>
+                <DialogDescription>
+                  Create a promotional code for your customers
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Code</Label>
+                  <Input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="SUMMER20"
+                    data-testid="input-discount-code"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Input
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Summer sale discount"
+                    data-testid="input-discount-description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Discount Type</Label>
+                    <Select value={discountType} onValueChange={(v) => setDiscountType(v as 'percent' | 'fixed')}>
+                      <SelectTrigger data-testid="select-discount-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percent">Percentage</SelectItem>
+                        <SelectItem value="fixed">Fixed Amount</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Value {discountType === 'percent' ? '(%)' : '(cents)'}</Label>
+                    <Input
+                      type="number"
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      placeholder={discountType === 'percent' ? '20' : '500'}
+                      data-testid="input-discount-value"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Max Redemptions (optional)</Label>
+                    <Input
+                      type="number"
+                      value={maxRedemptions}
+                      onChange={(e) => setMaxRedemptions(e.target.value)}
+                      placeholder="100"
+                      data-testid="input-max-redemptions"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Expires (optional)</Label>
+                    <Input
+                      type="date"
+                      value={expiresAt}
+                      onChange={(e) => setExpiresAt(e.target.value)}
+                      data-testid="input-expires-at"
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeEditor}>Cancel</Button>
+                <Button onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save-discount">
+                  {saveMutation.isPending ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Discount</TableHead>
+                <TableHead>Usage</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {codesData?.data?.length ? (
+                codesData.data.map((dc) => (
+                  <TableRow key={dc.id} data-testid={`row-discount-${dc.id}`}>
+                    <TableCell>
+                      <div>
+                        <div className="font-mono font-medium">{dc.code}</div>
+                        {dc.description && (
+                          <div className="text-sm text-muted-foreground">{dc.description}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {dc.discountType === 'percent' ? `${dc.discountValue}%` : `$${(dc.discountValue / 100).toFixed(2)}`}
+                    </TableCell>
+                    <TableCell>
+                      {dc.redemptionCount}{dc.maxRedemptions ? `/${dc.maxRedemptions}` : ''}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={dc.status === 'active' ? 'default' : 'outline'}>
+                        {dc.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => openEditor(dc)}
+                          data-testid={`button-edit-discount-${dc.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            if (confirm('Delete this discount code?')) {
+                              deleteMutation.mutate(dc.id);
+                            }
+                          }}
+                          data-testid={`button-delete-discount-${dc.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No discount codes yet. Create your first code to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -244,14 +948,6 @@ export default function AdminPage() {
 
   const { data: usersData, isLoading: usersLoading } = useQuery<{ data: User[] }>({
     queryKey: ['/api/admin/users'],
-  });
-
-  const { data: subscriptionsData } = useQuery<{ data: any[] }>({
-    queryKey: ['/api/admin/subscriptions'],
-  });
-
-  const { data: invoicesData } = useQuery<{ data: any[] }>({
-    queryKey: ['/api/admin/invoices'],
   });
 
   const { data: blogPostsData, isLoading: postsLoading } = useQuery<{ data: BlogPost[] }>({
@@ -318,7 +1014,7 @@ export default function AdminPage() {
           <Shield className="h-8 w-8 text-primary" />
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-admin-title">Admin Dashboard</h1>
-            <p className="text-muted-foreground">Manage users, subscriptions, blog posts, and billing</p>
+            <p className="text-muted-foreground">Manage your SaaS platform</p>
           </div>
         </div>
 
@@ -373,11 +1069,13 @@ export default function AdminPage() {
         </div>
 
         <Tabs defaultValue="users" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
-            <TabsTrigger value="blog" data-testid="tab-blog">Blog Posts</TabsTrigger>
-            <TabsTrigger value="subscriptions" data-testid="tab-subscriptions">Subscriptions</TabsTrigger>
-            <TabsTrigger value="invoices" data-testid="tab-invoices">Invoices</TabsTrigger>
+            <TabsTrigger value="branding" data-testid="tab-branding">Branding</TabsTrigger>
+            <TabsTrigger value="integrations" data-testid="tab-integrations">Integrations</TabsTrigger>
+            <TabsTrigger value="finance" data-testid="tab-finance">Finance</TabsTrigger>
+            <TabsTrigger value="promotions" data-testid="tab-promotions">Promotions</TabsTrigger>
+            <TabsTrigger value="blog" data-testid="tab-blog">Blog</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -445,6 +1143,22 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="branding">
+            <BrandingTab />
+          </TabsContent>
+
+          <TabsContent value="integrations">
+            <IntegrationsTab />
+          </TabsContent>
+
+          <TabsContent value="finance">
+            <FinanceTab />
+          </TabsContent>
+
+          <TabsContent value="promotions">
+            <PromotionsTab />
           </TabsContent>
 
           <TabsContent value="blog">
@@ -551,98 +1265,6 @@ export default function AdminPage() {
                     </TableBody>
                   </Table>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="subscriptions">
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Subscriptions</CardTitle>
-                <CardDescription>View all subscription records from Stripe</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Subscription ID</TableHead>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {subscriptionsData?.data?.length ? (
-                      subscriptionsData.data.map((sub: any) => (
-                        <TableRow key={sub.id} data-testid={`row-subscription-${sub.id}`}>
-                          <TableCell className="font-mono text-sm">{sub.id}</TableCell>
-                          <TableCell>{sub.customer}</TableCell>
-                          <TableCell>
-                            <Badge variant={sub.status === 'active' ? 'default' : 'outline'}>
-                              {sub.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {sub.created ? format(new Date(sub.created * 1000), 'MMM d, yyyy') : 'N/A'}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                          No subscriptions found
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="invoices">
-            <Card>
-              <CardHeader>
-                <CardTitle>Invoice History</CardTitle>
-                <CardDescription>View all invoices from Stripe</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Invoice ID</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoicesData?.data?.length ? (
-                      invoicesData.data.map((inv: any) => (
-                        <TableRow key={inv.id} data-testid={`row-invoice-${inv.id}`}>
-                          <TableCell className="font-mono text-sm">{inv.id}</TableCell>
-                          <TableCell>
-                            ${((inv.amount_due || 0) / 100).toFixed(2)} {inv.currency?.toUpperCase()}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={inv.status === 'paid' ? 'default' : 'outline'}>
-                              {inv.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {inv.created ? format(new Date(inv.created * 1000), 'MMM d, yyyy') : 'N/A'}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                          No invoices found
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
               </CardContent>
             </Card>
           </TabsContent>

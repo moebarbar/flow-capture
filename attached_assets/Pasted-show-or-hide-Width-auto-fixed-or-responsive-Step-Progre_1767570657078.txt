@@ -1,0 +1,1716 @@
+show or hide
+
+Width: auto, fixed, or responsive
+
+Step Progression:
+
+Advance method:
+
+Manual (user clicks "Next")
+Auto-advance when user completes action:
+
+Clicks target element
+Fills in field
+Selects option
+Submits form
+
+
+Time-based (auto after 10 seconds)
+Combination (action or time, whichever first)
+
+
+Validation:
+
+Check if user performed correct action
+Show error if wrong action
+Provide hints if stuck
+"Show me" button (animated demonstration)
+
+
+Progress indicator:
+
+Step counter ("Step 3 of 12")
+Progress bar
+Dot indicator
+Percentage
+Position (top, bottom, tooltip)
+
+
+
+Navigation Controls:
+
+Show controls:
+
+"Next" button
+"Previous" button
+"Skip" button
+"Close/Exit" button (with confirmation)
+"Restart" button
+
+
+Button styles (inherit guide design)
+Keyboard shortcuts:
+
+→ Next step
+← Previous step
+Esc Close walkthrough
+? Help
+
+
+
+Branching Logic:
+
+"If user does X, show step Y"
+Conditional steps based on:
+
+User choices
+Form input values
+Page URL
+Element visibility
+User profile data
+
+
+Visual branching diagram
+Merge paths option
+
+Help Features:
+
+"Need help?" button in tooltip
+Options when clicked:
+
+Show hint
+Watch video demo
+Read full guide
+Contact support
+Restart walkthrough
+
+
+Stuck detection:
+
+If user doesn't progress after 30 seconds
+Auto-show hints
+Offer alternative path
+
+
+
+Completion Actions:
+
+On walkthrough completion:
+
+Show congratulations message
+Collect feedback (rating, comment)
+Award badge/certificate
+Redirect to URL
+Trigger event (for analytics)
+Show related guides
+Close automatically
+Persist completion status
+
+
+
+EMBED OPTIONS & DEPLOYMENT
+JavaScript Snippet:
+
+Generate embed code
+Copy to clipboard
+Instructions for adding to website:
+
+html  <script src="https://cdn.yourapp.com/walkthrough.js"></script>
+  <script>
+    YourApp.walkthrough({
+      guideId: 'abc123',
+      trigger: 'auto',
+      position: 'bottom-right'
+    });
+  </script>
+
+Configuration options documented
+Sandbox preview before deploying
+
+Iframe Embed:
+
+Generate iframe code
+Responsive sizing
+Show/hide controls
+Auto-start option
+Copy code button
+
+WordPress Plugin:
+
+Download plugin file
+Installation instructions
+Shortcode usage
+Widget configuration
+
+Chrome Extension Injection:
+
+Install companion extension
+Extension triggers walkthroughs on any site
+User-specific walkthroughs
+Admin can deploy to all team members
+
+SDK Integration:
+
+JavaScript SDK
+React component
+Vue component
+Angular component
+iOS Swift SDK
+Android Kotlin SDK
+Documentation and examples
+
+API for Programmatic Control:
+
+Start walkthrough via API
+Check completion status
+Track progress
+Customize per user
+A/B test different versions
+
+WALKTHROUGH PLAYER
+Floating Widget (on target website):
+
+Compact button when minimized:
+
+Position: bottom-right, bottom-left, top-right, top-left
+Custom icon or text
+Pulsing animation to attract attention
+Badge showing number of available guides
+
+
+Expanded view:
+
+List of available walkthroughs
+Search walkthroughs
+Categories/tags
+Start walkthrough button per guide
+Progress indicator for in-progress guides
+Recently viewed
+
+
+Minimize/expand toggle
+Drag to reposition
+Custom styling to match site
+
+During Walkthrough:
+
+Element highlighted/spotlighted
+Tooltip with content
+Navigation controls
+Progress indicator
+Minimize button (bookmark progress, resume later)
+Help button
+Close button
+
+Bookmarking/Save Progress:
+
+User can pause and resume later
+Progress saved to account (if logged in)
+Or save to browser local storage
+Email reminder to complete (optional)
+Show progress: "You're 60% done!"
+
+Accessibility:
+
+Keyboard navigation
+Screen reader support
+High contrast mode
+Focus management (proper focus trapping)
+ARIA labels
+Skip to content option
+
+TARGETING & TRIGGERS
+User Segmentation:
+
+Target walkthroughs to specific users:
+
+New users (first 7 days)
+Returning users
+Users on specific plan (Free, Pro, Enterprise)
+Users who haven't completed X
+Users from specific geography
+Users on specific device (mobile vs desktop)
+Custom user properties (via API)
+
+
+Frequency capping:
+
+Show once per user
+Show once per day
+Show X times maximum
+Never show again if dismissed
+
+
+
+URL-Based Triggers:
+
+Exact URL match
+URL contains string
+
+Regular expressions
+
+
+URL parameters
+Subdomain/domain match
+Multiple URL rules (OR/AND logic)
+
+Element-Based Triggers:
+
+When specific element appears on page
+CSS selector or XPath
+Element must be visible
+Delay after element appears
+
+Time-Based Triggers:
+
+After page load
+After X seconds on page
+After user idle for X seconds
+Specific time of day
+Specific day of week
+Date range
+
+Scroll-Based Triggers:
+
+After scrolling X pixels
+After scrolling X percent
+When specific element scrolled into view
+
+Exit Intent:
+
+Detect when user about to leave page
+Mouse movement toward browser close/back
+Show walkthrough as retention tool
+
+Event-Based Triggers:
+
+Custom JavaScript events
+Track clicks on specific elements
+Form submissions
+Button clicks
+User actions (via API)
+
+ANALYTICS FOR INTERACTIVE WALKTHROUGHS
+Engagement Metrics:
+
+Total views (walkthrough started)
+Completion rate
+Average completion time
+Step-by-step progression:
+
+Users reached each step
+Drop-off rate per step
+Average time per step
+Skip rate per step
+
+
+Help requests per step
+Stuck time per step
+
+User Behavior:
+
+Path taken through branches
+Most common paths
+Failed validation attempts
+Actions performed correctly/incorrectly
+Keyboard vs mouse usage
+
+Targeting Effectiveness:
+
+Trigger success rate
+Impressions vs starts
+Dismiss rate
+Performance by segment
+A/B test results (different versions)
+
+Impact Metrics:
+
+User retention after walkthrough
+Feature adoption rate
+Support ticket reduction
+Task completion improvement
+User satisfaction scores
+
+Heatmaps:
+
+Where users clicked
+Where users spent most time
+Problem areas (high confusion)
+
+Export Data:
+
+CSV export
+JSON export
+API access to analytics
+Schedule automated reports
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 8: WORKSPACE & TEAM COLLABORATION
+═══════════════════════════════════════════════════════════════════════════════
+WORKSPACE MANAGEMENT
+Workspace Creation:
+
+Create new workspace flow:
+
+Workspace name
+URL slug (company.yourapp.com)
+Workspace type (Company, Personal, Education, etc.)
+Industry selector
+Team size estimate
+Logo upload
+Primary color
+
+
+Default workspace for new users
+User can belong to multiple workspaces
+
+Workspace Settings Page:
+General Tab:
+
+Workspace name (editable)
+Workspace description
+URL slug (editable with availability check)
+Workspace avatar/logo
+
+Upload new
+Remove
+
+
+Industry/Category
+Company size
+Time zone
+Language preference
+Date format
+Currency
+Created date (read-only)
+Workspace ID (read-only, copyable)
+
+Members Tab:
+
+Member list:
+
+Search members
+Filter by role, team, status
+Sort by name, joined date, last active
+
+
+Table view:
+
+Avatar
+Name
+Email
+Role (Owner, Admin, Editor, Viewer)
+Teams (if applicable)
+Last active
+Status (Active, Pending, Suspended)
+Actions (Edit role, Remove, Suspend)
+
+
+Bulk actions:
+
+Select multiple members
+Change role
+Add to team
+Remove from workspace
+Export member list
+
+
+
+Invite New Members:
+
+"Invite Members" button
+Invite modal:
+
+Email input (comma-separated for bulk)
+Or paste list of emails
+Or upload CSV file
+Assign role dropdown (Admin, Editor, Viewer)
+Assign to team(s)
+Custom welcome message
+Send invite button
+
+
+Pending invitations list:
+
+Email
+Role
+Invited by
+Invited date
+Resend invite button
+Cancel invite button
+
+
+Invitation email:
+
+Custom branding
+Personal message
+Accept invitation link
+Expires after 7 days
+
+
+
+Member Roles & Permissions:
+
+Owner:
+
+Full access to everything
+Can delete workspace
+Can transfer ownership
+Only one owner per workspace
+
+
+Admin:
+
+Manage members and teams
+Manage billing
+Manage workspace settings
+Cannot delete workspace or transfer ownership
+
+
+Editor:
+
+Create, edit, delete guides
+Share guides
+Access analytics
+Cannot manage members or billing
+
+
+Viewer:
+
+View guides only
+Cannot create or edit
+Can comment if enabled
+
+
+
+Custom Roles (Enterprise):
+
+Create custom roles with granular permissions
+Permission categories:
+
+Guides (create, edit, delete, publish, share)
+Videos (create, edit, delete)
+Folders (create, edit, delete)
+Analytics (view)
+Members (invite, manage)
+Billing (view, manage)
+Settings (view, manage)
+
+
+Assign custom role to members
+
+Teams Tab:
+
+Teams within workspace:
+
+Engineering team
+Marketing team
+Sales team
+Support team
+Custom teams
+
+
+Team list with:
+
+Team name
+Description
+Member count
+Team lead
+Edit/Delete actions
+
+
+
+Create New Team:
+
+Team name
+Description
+Team color/icon
+Team lead (member selector)
+Add members (multi-select from workspace members)
+Create button
+
+Team Page:
+
+Team overview
+Members in team (with roles)
+Guides owned by team
+Team-specific folders
+Team activity feed
+Team settings:
+
+Rename team
+Change color/icon
+Add/remove members
+Delete team
+
+
+
+Branding Tab:
+
+Logo management:
+
+Logo for light backgrounds
+Logo for dark backgrounds
+Favicon
+Upload, replace, remove
+Preview on sample guide
+
+
+Brand colors:
+
+Primary color
+Secondary color
+Accent color
+Success, warning, error colors
+Color picker with hex input
+Save color palette
+
+
+Typography:
+
+Font family (Google Fonts)
+Custom font upload (Enterprise)
+Font size scale
+Preview sample text
+
+
+Email templates:
+
+Invitation email
+Notification emails
+Welcome email
+Rich text editor for customization
+Variables (user name, guide link, etc.)
+Preview and send test email
+
+
+Guide templates:
+
+Default guide layout
+Default colors and styles
+Header/footer content
+Watermark (Pro/Enterprise)
+
+
+
+Integration Tab:
+
+Connected apps list:
+
+Each integration card:
+
+App logo and name
+Connection status
+Settings button
+Disconnect button
+
+
+
+
+Available integrations:
+
+Slack
+Microsoft Teams
+Google Drive
+Confluence
+Notion
+Zendesk
+Intercom
+Salesforce
+HubSpot
+Jira
+GitHub
+And 50+ more
+
+
+"+ Add Integration" button
+Integration setup wizards
+Configuration per integration:
+
+API keys
+Webhook URLs
+Sync settings
+Notification preferences
+Field mapping
+
+
+Integration logs:
+
+Activity history
+Errors
+Sync status
+
+
+
+SSO Configuration Tab:
+
+SSO providers:
+
+Google Workspace
+Microsoft Azure AD
+Okta
+OneLogin
+Auth0
+Custom SAML
+
+
+SSO setup wizard:
+
+Choose provider
+Enter credentials/endpoints
+Domain verification
+Test connection
+Activate
+
+
+Enforce SSO (require for all members)
+Just-in-time (JIT) provisioning
+Attribute mapping
+Role assignment via SAML attributes
+Multi-factor authentication enforcement
+Session timeout settings
+
+Security Tab:
+
+Password policy:
+
+Minimum length
+Require uppercase
+Require lowercase
+Require numbers
+Require special characters
+Password expiration (days)
+Prevent password reuse
+
+
+Two-factor authentication:
+
+Require for all members
+Require for admins only
+Optional
+
+
+IP whitelist:
+
+Allow access only from specific IP ranges
+Add IP range
+Remove IP range
+Emergency access (bypass IP whitelist for admins)
+
+
+Session settings:
+
+Session timeout (minutes)
+Require re-authentication after N days
+Logout on device when password changed
+
+
+Audit logs:
+
+All security-related events
+Login attempts
+Permission changes
+Data access
+Export logs
+Retention period
+
+
+Data retention:
+
+Keep deleted guides for N days before permanent deletion
+Auto-archive inactive guides
+Export data retention
+
+
+Compliance:
+
+GDPR tools (data export, deletion)
+HIPAA compliance settings
+SOC 2 documentation
+Security questionnaire
+
+
+
+API & Webhooks Tab:
+
+API keys:
+
+Create new API key
+Key name
+Permissions scope
+Expiration date
+Generate button
+API key display (show once, copy)
+Revoke key
+
+
+Active API keys list:
+
+Key name
+Created date
+Last used
+Expiration
+Revoke button
+
+
+API usage:
+
+Requests this month
+Rate limit status
+Usage graph
+
+
+Webhooks:
+
+Create webhook
+Webhook URL
+Events to listen for:
+
+guide.created
+guide.published
+guide.viewed
+comment.added
+member.invited
+video.generated
+
+
+Secret key for validation
+Test webhook button
+Activity log per webhook
+Pause/resume webhook
+Delete webhook
+
+
+API documentation link
+
+Billing Tab:
+(Covered in detail in billing section)
+REAL-TIME COLLABORATION
+Co-Editing:
+
+Multiple users can edit same guide simultaneously
+User presence indicators:
+
+Avatars of active users (top right)
+Cursor with name label showing where each user is
+Color-coded cursors per user
+
+
+Live updates:
+
+See changes as others type/edit
+Smooth animations for updates
+Conflict resolution (last write wins, with notification)
+
+
+Lock editing:
+
+Optional: lock step while editing
+Others can view but not edit locked step
+Auto-unlock after 5 minutes of inactivity
+
+
+Activity feed:
+
+Real-time feed showing who's doing what
+"John is editing Step 3"
+"Sarah added a comment"
+"Mike published the guide"
+
+
+
+Comments & Feedback:
+
+Comment on specific steps:
+
+Click comment icon on step
+Comment bubble appears
+Text input for comment
+Submit button
+
+
+Comment features:
+
+Rich text in comments (bold, italic, links)
+@ mention team members (triggers notification)
+Attach images/files to comments
+Emoji reactions (👍 ❤️ 😄 👀)
+
+
+Comment threads:
+
+Reply to comments
+Nested threads
+Quote parent comment
+Expand/collapse threads
+
+
+Comment status:
+
+Open (default)
+Resolved (checkbox to mark as resolved)
+Resolved comments hidden by default (can show)
+
+
+Comment filters:
+
+Show all
+Show unresolved only
+Show my comments
+Show mentions
+
+
+Comment notifications:
+
+In-app notification
+Email notification (if enabled)
+Badge count on guide
+
+
+Edit/delete own comments
+Moderator can delete any comment
+
+Inline Suggestions:
+
+"Suggest Edit" mode:
+
+User can propose changes without directly editing
+Suggestion shown with highlight (like Google Docs)
+Original author can accept or reject
+Track who suggested what
+
+
+Suggestion actions:
+
+Accept suggestion (applies change)
+Reject suggestion (dismisses)
+Reply to suggestion (discuss)
+
+
+Bulk accept/reject all suggestions
+
+Version Control:
+
+Automatic snapshots:
+
+Every significant edit creates version
+Auto-save every 30 seconds
+Manual "Create version" button
+
+
+Version history timeline:
+
+List of all versions
+Date/time
+User who made changes
+Summary of changes (added 2 steps, edited description)
+Thumbnail preview
+
+
+Compare versions:
+
+Side-by-side comparison
+Highlight differences (red for deleted, green for added)
+Step-by-step comparison
+
+
+Restore version:
+
+"Restore this version" button
+Confirmation dialog
+Creates new version (doesn't delete history)
+Notify collaborators of restoration
+
+
+Branch versions:
+
+Create variant of guide
+Experimental edits without affecting original
+Merge variant back if successful
+
+
+Version labels/tags:
+
+Tag important versions (e.g., "v1.0", "Final", "Approved")
+Filter versions by tag
+
+
+Change log:
+
+Detailed log of what changed
+Per-step change tracking
+Export change log
+
+
+
+Review & Approval Workflow:
+
+Submit for review:
+
+When guide is ready, click "Submit for Review"
+Assign reviewers (select team members)
+Add message to reviewers
+Status changes to "In Review"
+Reviewers notified
+
+
+Review interface:
+
+Reviewers see guide with review toolbar
+Add comments and suggestions
+Approval checklist (customizable):
+
+Content accuracy
+Screenshots quality
+Descriptions clarity
+Branding consistency
+
+
+Overall verdict:
+
+Approve
+Request changes
+Reject
+
+
+Add review notes
+Submit review
+
+
+Approval requirements:
+
+Require N approvals before publishing (configurable)
+Require approval from specific roles (e.g., must have 1 admin approval)
+
+
+Revision requests:
+
+If reviewer requests changes, status becomes "Revision Needed"
+Author notified with reviewer's comments
+Author makes edits
+Resubmit for review
+
+
+Final approval:
+
+When all approvals met, "Publish" button becomes available
+Or auto-publish if configured
+All reviewers notified of publication
+
+
+Approval history:
+
+List of all reviews
+Who reviewed, when, verdict
+Comments from each reviewer
+
+
+
+SHARED FOLDERS
+Folder Creation & Management:
+
+Create folder:
+
+Folder name
+Description
+Color and icon
+Parent folder (for nesting)
+
+
+Nested folder structure:
+
+Unlimited depth
+Drag and drop folders to reorganize
+Breadcrumb navigation
+
+
+Folder settings:
+
+Rename
+Change color/icon
+Move to another folder
+Delete (with warning if not empty)
+
+
+
+Folder Permissions:
+
+Owner:
+
+Has full control
+
+
+Share with team members:
+
+Add member/team
+Permission level:
+
+Can edit (create, edit, delete guides in folder)
+Can view (read-only access)
+
+
+Remove access
+
+
+Share with external users:
+
+Generate share link
+Password protection
+Expiration date
+View-only or edit access
+
+
+Inherit permissions from parent folder option
+Override permissions per guide in folder
+
+Folder Views:
+
+All guides in folder (including subfolders)
+Grid, list, or timeline view
+Sort and filter options
+Folder stats:
+
+Number of guides
+Number of subfolders
+Total views
+Last modified
+
+
+
+NOTIFICATIONS
+Notification Center:
+
+Bell icon in top bar with badge count
+Click to open notification dropdown
+List of recent notifications (last 20)
+Each notification:
+
+Icon (type-specific)
+Message text
+Timestamp (relative, e.g., "5 minutes ago")
+Mark as read/unread
+Click to navigate to relevant item
+
+
+"Mark all as read" button
+"View all notifications" link (goes to full page)
+
+Full Notifications Page:
+
+List of all notifications
+Filter by:
+
+All
+Unread
+Mentions
+Comments
+Shares
+Team activity
+System updates
+
+
+Date range filter
+Search notifications
+Bulk actions (mark as read, delete)
+Pagination or infinite scroll
+
+Notification Types:
+
+Comments:
+
+Someone commented on your guide
+Someone replied to your comment
+Someone mentioned you in comment
+
+
+Collaboration:
+
+Someone shared guide with you
+You were added to a guide as collaborator
+Someone edited a guide you're collaborating on
+
+
+Approvals:
+
+Your guide was approved
+Changes requested on your guide
+You have a guide to review
+
+
+Team:
+
+You were added to workspace
+You were assigned to team
+New member joined your workspace
+Member role changed
+
+
+System:
+
+Extension updated
+New features available
+Scheduled maintenance
+Security alerts
+Billing issues
+
+
+Analytics:
+
+Your guide reached 1000 views
+Your guide has high engagement
+Someone completed your walkthrough
+
+
+
+Notification Settings:
+(In user settings)
+
+For each notification type:
+
+In-app notification (on/off)
+Email notification (on/off)
+Frequency (instant, daily digest, weekly digest)
+
+
+Quiet hours:
+
+Don't send notifications during certain hours
+Time zone aware
+
+
+Mobile push notifications (if mobile app exists)
+
+Email Notifications:
+
+Branded email templates
+Customizable per workspace
+Unsubscribe links
+Notification preferences link
+
+INTEGRATIONS
+Slack Integration:
+
+Connect Slack workspace to app workspace
+Features:
+
+Post new guides to Slack channel
+Notification when guide shared with you
+Notification when mentioned in comment
+Notification when guide approved/needs review
+
+
+Slash commands:
+
+/guide search [query] - search guides
+/guide share [guide-id] - share guide in channel
+/guide create - start guide creation flow
+
+
+Unfurl guide links (show preview in Slack)
+Settings:
+
+Choose channels for each notification type
+Notification frequency
+Customize message format
+
+
+
+Microsoft Teams Integration:
+
+Similar to Slack
+Tabs integration (embed guides in Teams channels)
+Bot commands
+Activity feed integration
+
+Confluence Integration:
+
+Embed guides in Confluence pages
+Macro for easy insertion
+Two-way sync (guide updates reflect in Confluence)
+Export guide to Confluence page
+
+Notion Integration:
+
+Embed guides in Notion docs
+Sync guide library to Notion database
+Export guides as Notion pages
+
+Google Drive Integration:
+
+Export guides to Google Drive
+Auto-sync guide updates
+Share guides via Drive
+Backup guides to Drive
+
+Zendesk Integration:
+
+Embed guides in Zendesk help center
+Link guides to support tickets
+Insert guides in ticket responses
+Track which guides reduce tickets
+
+Intercom Integration:
+
+Show guides in Intercom messenger
+Trigger guides based on user actions
+Link guides to chat conversations
+Guide analytics in Intercom dashboard
+
+Salesforce Integration:
+
+Attach guides to accounts/opportunities
+Sales enablement (guides in sales process)
+Track guide usage by prospect
+Custom object for guides
+
+HubSpot Integration:
+
+Use guides in email sequences
+Embed in knowledge base
+Track guide engagement in CRM
+Trigger automations based on guide completion
+
+Jira Integration:
+
+Link guides to Jira issues
+Document workflows for dev process
+Attach guides to epics/stories
+Auto-create guides from issue descriptions
+
+GitHub Integration:
+
+Document code workflows
+Link guides to pull requests
+Code review guides
+Onboarding for new contributors
+
+Zapier Integration:
+
+Triggers:
+
+New guide created
+Guide published
+Guide viewed
+Comment added
+Video generated
+
+
+Actions:
+
+Create guide
+Update guide
+Add comment
+Share guide
+
+
+Connect to 5000+ apps
+
+API Integration:
+
+RESTful API for all operations
+Comprehensive documentation (Swagger/OpenAPI)
+Code examples in multiple languages:
+
+JavaScript (Node.js)
+Python
+PHP
+Ruby
+C#
+Java
+
+
+Authentication via API keys or OAuth
+Rate limiting (varies by plan)
+Webhooks for real-time events
+SDKs:
+
+JavaScript/TypeScript SDK
+Python SDK
+Ruby SDK
+
+
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 9: ANALYTICS & INSIGHTS
+═══════════════════════════════════════════════════════════════════════════════
+ANALYTICS DASHBOARD
+Overview Page:
+Key Metrics (Top of page, 4 cards):
+
+Total Guides: Large number with trend (↑5 from last week)
+Total Views: Large number with trend
+Total Steps Documented: Large number
+Active Users: Number of users who viewed/created guides this month
+
+Time Period Selector:
+
+Last 7 days
+Last 30 days
+Last 90 days
+This year
+All time
+Custom date range (date picker)
+
+Views Over Time:
+
+Line chart showing views per day/week/month
+Toggle metrics:
+
+Total views
+Unique viewers
+Guide completions
+
+
+Compare time periods (overlay previous period)
+Export chart as image/CSV
+
+Guide Performance Table:
+
+Sortable table of all guides
+Columns:
+
+Guide title (clickable)
+Creator
+Views (total)
+Unique viewers
+Avg. time spent
+Completion rate (%)
+Helpfulness rating (1-5 stars)
+Comments count
+Shares count
+Last viewed
+
+
+Sort by any column
+Filter by folder, creator, date range
+Search guides
+Export to CSV
+
+Top Performing Guides:
+
+List of guides with highest:
+
+Views
+Completion rate
+Helpfulness ratings
+Engagement (comments + shares)
+
+
+Quick links to each guide
+
+User Activity:
+
+Most active creators (users who created most guides)
+Most active viewers (users who viewed most guides)
+New users this period
+Inactive users (haven't logged in for 30+ days)
+
+Geographic Distribution:
+
+World map heatmap
+Views by country
+Top 10 countries list
+Drill down to city level
+
+Device Breakdown:
+
+Pie chart:
+
+Desktop (%)
+Mobile (%)
+Tablet (%)
+
+
+Bar chart by OS:
+
+Windows
+macOS
+Linux
+iOS
+Android
+
+
+
+Browser Breakdown:
+
+Bar chart:
+
+Chrome
+Safari
+Firefox
+Edge
+Other
+
+
+
+Referral Sources:
+
+Where viewers came from:
+
+Direct (typed URL)
+Search engines
+Social media
+Email
+Other websites
+
+
+Top referral URLs list
+
+Search Terms:
+
+Most common search terms used to find guides
+Click-through rate per term
+Identify content gaps
+
+DETAILED GUIDE ANALYTICS
+(Accessed by clicking on a guide in analytics or from guide menu)
+Header:
+
+Guide title
+Thumbnail
+Quick actions (edit, share, export)
+Date range selector
+
+Overview Metrics (Cards):
+
+Total Views
+Unique Viewers
+Average Time Spent (minutes:seconds)
+Completion Rate (%)
+Helpfulness Rating (average)
+Shares Count
+Downloads Count
+Embedded Views vs Direct Views
+
+Views Over Time:
+
+Line chart
+Daily, weekly, or monthly granularity
+Compare with other guides (overlay)
+
+Audience Retention:
+
+Bar chart showing percentage of viewers who reached each step
+Identify drop-off points
+Steps with highest drop-off highlighted
+Hover for details
+
+Step-by-Step Engagement:
+
+Table view:
+
+Step number
+Step title
+Views (how many reached this step)
+Avg. time on step
+Drop-off rate (% who left)
+Skip rate (% who skipped)
+Replay rate (% who rewatched)
+Helpfulness votes (👍/👎)
+
+
+Sort by any metric
+Identify problematic steps (high drop-off, low helpfulness)
+
+User Paths:
+
+Sankey diagram showing how users navigate through guide
+Common paths
+Alternative routes taken
+Loops (users going back)
+
+Time on Step Distribution:
+
+Histogram showing how long users spend on each step
+Identify steps that are too quick or too slow
+Average vs median time
+
+Completion Funnel:
+
+Funnel visualization
+Shows conversion rate step-by-step
+Identify where most users drop off
+
+Geographic Data:
+
+Map showing where viewers are located
+Table: Country, Views, Avg. Completion Rate
+
+Device & Browser Data:
+
+Pie charts
+Identify issues (e.g., mobile users drop off more)
+
+Referral Sources:
+
+Where this guide's traffic comes from
+Top referrers
+Campaign tracking (UTM parameters)
+
+Search Keywords:
+
+Keywords that led users to this guide
+Internal search terms
+External search engines
+
+User Feedback:
+
+Helpfulness votes summary:
+
+👍 Helpful: X votes
+👎 Not helpful: Y votes
+Ratio and trend
+
+
+Comments summary:
+
+Total comments
+Positive vs negative sentiment (AI analysis)
+Most common topics in comments
+
+
+Feedback form responses:
+
+If feedback form enabled
+Responses displayed
+Common themes
+
+
+
+Engagement Metrics:
+
+Total comments count
+Average comments per viewer
+Shares (social, email, embed)
+Downloads (PDF, video)
+Bookmarks (users who saved guide)
+
+Video Performance (if video generated):
+
+Video plays
+Unique viewers
+Total watch time
+Average view duration (vs video length)
+Audience retention curve
+
+Shows percentage of viewers at each second
+Identify boring vs engaging parts
+
+
+Completion rate
+Replays
+Interactive element engagement:
+
+Hotspot clicks
+Quiz answers
+CTA clicks
+
+
+
+Conversion Tracking (if goals set):
+
+Goals:
+
+Completed signup
+Made purchase
+Contacted support
+Other custom goals
+
+
+Conversion rate
+Attribution (did guide lead to conversion?)
+
+A/B Testing Results (if multiple versions):
+
+Compare version A vs version B
+Metrics comparison table
+Statistical significance
+Winner declaration
+Recommendation
+
+Export Options:
+
+Export analytics as CSV
+Export as PDF report
+Schedule automated email reports (weekly, monthly)
+
+WORKSPACE-LEVEL ANALYTICS
+(For admins/owners)
+Dashboard:
+
+Overview of entire workspace
+All metrics aggregated across all guides
+
+Workspace Stats:
+
+Total guides created
+Total steps documented
+Total views across all guides
+Total hours of content
+Storage used
+
+Team Performance:
+
+Table of teams with metrics:
+
+Team name
+Guides created
+Total views
+Avg. completion rate
+Most active team
+
+
+Compare teams side-by-side
+
+Individual User Analytics:
+
+Table of workspace members:
+
+Name
+Role
+Guides created
+Guides viewed
+Time spent
+Last active
+Contribution score
+
+
+Identify top contributors
+Identify inactive users
+
+Folder Analytics:
+
+Performance by folder
+Most viewed folder
+Most active folder (most new guides)
+
+Content Trends:
+
+Popular topics (based on tags)
+Content gaps (what users search for but doesn't exist)
+Seasonal trends (views over months)
+
+Adoption Metrics:
+
+User onboarding completion rate
+Feature adoption (% of users using video, interactivity, etc.)
+Extension installation rate
+
+Engagement Trends:
+
+Comments over time
+Collaboration activity
+Review and approval cycle time
+
+ROI Metrics:
+
+Time saved (estimated based on views and time spent)
+Support tickets reduced (if integrated with support tools)
+Training costs saved
+User productivity increase
+
+Custom Reports:
+
+Report builder:
+
+Drag-and-drop metrics

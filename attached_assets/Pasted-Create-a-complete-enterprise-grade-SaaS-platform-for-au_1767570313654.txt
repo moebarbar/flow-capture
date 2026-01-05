@@ -1,0 +1,974 @@
+Create a complete, enterprise-grade SaaS platform for automated workflow documentation, step-by-step guide creation, interactive training materials, and video generation. This is a comprehensive full-stack application with Chrome extension, web application, video generation engine, team collaboration, analytics, and full admin panel.
+
+═══════════════════════════════════════════════════════════════════════════════
+PROJECT OVERVIEW
+═══════════════════════════════════════════════════════════════════════════════
+
+## WHAT TO BUILD
+A platform similar to Tango.ai that allows users to:
+- Automatically capture workflows by recording browser interactions via Chrome extension
+- Generate step-by-step guides with screenshots and AI-generated descriptions
+- Create interactive walkthroughs that guide users through processes in real-time
+- Convert guides into engaging explainer videos with AI voiceover and animations
+- Generate direct links to specific steps and elements within guides
+- Collaborate with teams in shared workspaces with real-time co-editing
+- Manage everything through a comprehensive super admin panel
+- Embed guides anywhere (websites, knowledge bases, apps)
+- Track detailed analytics and measure guide effectiveness
+- Full subscription management with multiple pricing tiers
+- Complete branding customization through admin panel
+- Manage landing page content dynamically from admin panel
+
+## TECHNOLOGY STACK
+
+Frontend:
+- React 18+ with TypeScript
+- Tailwind CSS for styling
+- Framer Motion for animations
+- Lucide React for icons
+- Recharts for analytics charts
+- React Router v6 for navigation
+- Zustand for state management
+- React Query for server state
+
+Backend:
+- Node.js with Express.js
+- PostgreSQL for primary database
+- Redis for caching and sessions
+- AWS S3 or CloudFlare R2 for file storage
+- JWT for authentication
+- Socket.io for real-time features
+- Bull for job queues
+- Stripe for payment processing
+- SendGrid for emails
+
+Chrome Extension:
+- Manifest V3
+- Vanilla JavaScript for performance
+- Chrome APIs for screenshots and tab management
+- Communication with backend via REST API
+
+Video Generation:
+- FFmpeg for video processing
+- Canvas API for animations
+- Text-to-speech API (Google Cloud TTS or AWS Polly)
+- Custom rendering engine
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 1: CHROME EXTENSION
+═══════════════════════════════════════════════════════════════════════════════
+
+## EXTENSION STRUCTURE
+Create a Chrome extension with these files:
+- manifest.json (Manifest V3 configuration)
+- popup.html/js/css (main popup interface)
+- content.js (injected into all web pages to capture interactions)
+- background.js (service worker managing state and communication)
+- recorder.js (intelligent workflow capture logic)
+- highlighter.js (visual element highlighting)
+- options.html/js/css (extension settings page)
+
+## MANIFEST.JSON REQUIREMENTS
+- Manifest version 3
+- Extension name: "WorkflowCapture Pro"
+- Permissions: tabs, activeTab, storage, scripting, webNavigation, desktopCapture, contextMenus, cookies
+- Host permissions: <all_urls>
+- Background service worker
+- Content scripts injected into all pages
+- Browser action with popup
+- Extension icons in 16x16, 48x48, 128x128 sizes
+
+## POPUP INTERFACE DESIGN
+
+When NOT Recording:
+- Width: 450px, Height: 650px
+- Modern gradient background with floating animated elements
+- Header with:
+  - Workspace switcher dropdown
+  - User avatar with dropdown menu (profile, settings, help, logout)
+  - Notification bell icon with badge count
+- Hero section with:
+  - Large animated "Start Recording" button with gradient and pulse effect
+  - Tagline: "Capture Any Workflow"
+  - Description text
+- Quick stats cards showing:
+  - Total guides created
+  - Steps captured this week
+  - Team members active
+  - With icons and trend indicators
+- Recent guides list (last 5) displaying:
+  - Thumbnail preview
+  - Guide title
+  - Step count
+  - Creation date
+  - Quick action buttons (edit, share, delete)
+- "View All Guides" button
+- Quick action buttons for "Create from Template" and "Import Guide"
+- Footer with settings link, help link, and version number
+
+When Recording:
+- Height expands to 800px
+- Recording indicator at top:
+  - Pulsing red dot animation
+  - "RECORDING" text
+  - Recording timer (00:00:00 format)
+- Current page information:
+  - Favicon
+  - Page title
+  - Current URL
+- Large step counter with:
+  - Circular progress ring animation
+  - Step number in center
+  - "Steps Captured" label
+- Live step feed showing last 5 captured steps:
+  - Step number badge
+  - Screenshot thumbnail
+  - Action description (auto-generated)
+  - Timestamp
+  - Smooth animations when new steps appear
+- Recording controls:
+  - Pause/Resume button
+  - Manual screenshot button
+  - Add manual step button
+  - Stop & Edit button (prominent, red)
+- Collapsible recording settings section:
+  - Checkbox: Highlight clicked elements
+  - Checkbox: Show mouse cursor
+  - Checkbox: Privacy mode (blur sensitive data)
+  - Dropdown: Screenshot quality (High/Medium/Low)
+
+## INTELLIGENT WORKFLOW CAPTURE
+
+Content Script Features:
+- Capture all user interactions:
+  - Click events on buttons, links, icons, images
+  - Form input changes (text, dropdowns, checkboxes, radio buttons, file uploads, date pickers)
+  - Form submissions
+  - Navigation events (URL changes, back/forward, page refreshes)
+  - Tab/modal switches
+  - Accordion expansions
+  - Keyboard shortcuts
+  - Drag and drop actions
+  - Hover-triggered interactions
+  - Scroll events (debounced)
+  - Focus events for accessibility
+- For each interaction, capture:
+  - Element information (tag name, ID, classes, text, label, placeholder, type, name, ARIA attributes, role)
+  - CSS selector (intelligent, unique selector generation)
+  - XPath (alternative selector method)
+  - Element position (bounding rectangle)
+  - Visibility status
+  - Relevant computed styles
+  - Parent context
+- Smart features:
+  - Ignore recording UI interactions
+  - Debounce rapid repeated actions
+  - Group related actions
+  - Detect form completion
+  - Identify important UI elements automatically
+  - Handle dynamic content (SPAs, AJAX)
+  - Detect iframe interactions
+  - Monitor network requests
+
+## SCREENSHOT TECHNOLOGY
+
+Advanced Screenshot Capture:
+- High-resolution capture (up to 1920x1080)
+- Automatic element highlighting:
+  - Red border around clicked element (3px, rounded corners)
+  - Subtle shadow for emphasis
+  - Pulse animation on capture
+- Smart cropping to focus on interaction area
+- Full-page scrolling screenshots when needed
+- Viewport annotations showing interaction context
+- Optional mouse cursor position marking
+- Click animation overlay
+- Element information overlay (optional)
+- Respect privacy mode (auto-blur detected sensitive fields)
+- Compress images before upload
+- Multiple quality settings
+
+## DEEP LINK GENERATION
+
+For each captured step, generate:
+- Full URL with anchor to specific element
+- If element has ID, use #elementId as anchor
+- If no ID, generate hash-based anchor from CSS selector
+- Store mapping of anchor to element selector and XPath
+- Detect if element is clickable (button, link, etc.)
+- Create clickable hotspot data with:
+  - X, Y position (percentage relative to screenshot)
+  - Width and height (percentage)
+  - Action type (click, navigate, etc.)
+  - Target URL or action
+- Validate URLs and test accessibility
+- Handle dynamic URLs with query parameters
+- Create fallback selectors if primary fails
+
+## NATURAL LANGUAGE DESCRIPTIONS
+
+Auto-generate smart descriptions for each action:
+- Button clicks: "Clicked '[button text]' button"
+- Link clicks: "Clicked '[link text]' link"
+- Input fields: "Entered text in [field label] field"
+- Dropdowns: "Selected '[option]' from [dropdown label]"
+- Checkboxes: "Selected/Deselected [checkbox label]"
+- Radio buttons: "Selected [option] option"
+- Form submissions: "Submitted [form name] form"
+- Navigation: "Navigated to [page title]"
+- Use context clues from ARIA labels, placeholders, surrounding text
+- Vary action verbs naturally (clicked, selected, entered, navigated, opened, closed, expanded, collapsed)
+- Create full sentences that read naturally
+
+## PRIVACY & SECURITY
+
+Privacy Mode Features:
+- Auto-detect and mask:
+  - Password fields (show ••••••••)
+  - Credit card numbers (show •••• •••• •••• ••••)
+  - SSN fields (show •••-••-••••)
+  - Email addresses (show first 2 chars + *** + domain)
+  - Long text inputs when privacy mode enabled
+- Option to blur entire sections of screenshots
+- Respect form autocomplete="off" attributes
+- Warning indicators for sensitive pages (banking, healthcare)
+- User can manually mark fields as sensitive
+- Local storage encryption for saved recordings
+- Secure API communication (HTTPS only)
+
+## REAL-TIME SYNC
+
+Background Service Worker:
+- Manage recording state across all tabs
+- Handle screenshot capture via chrome.tabs.captureVisibleTab
+- Store steps temporarily in chrome.storage.local
+- Upload steps to server in real-time (every 5 seconds or after each step)
+- WebSocket connection for live preview in web app
+- Handle offline mode with queue-based sync
+- Retry failed uploads automatically
+- Conflict resolution for simultaneous edits
+- Update extension badge with step count during recording
+
+## EXTENSION SETTINGS PAGE
+
+Options Interface:
+- Extension preferences:
+  - Default screenshot quality
+  - Auto-highlight elements (on/off)
+  - Show mouse cursor (on/off)
+  - Privacy mode default state
+  - Auto-sync frequency
+- Account settings:
+  - Linked workspace
+  - API key display
+  - Login/logout
+- Keyboard shortcuts customization
+- Storage usage indicator
+- Clear local cache button
+- Extension version and update info
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 2: WEB APPLICATION - LANDING PAGE
+═══════════════════════════════════════════════════════════════════════════════
+
+## ULTRA-CREATIVE LANDING PAGE DESIGN
+
+Create a stunning, modern landing page that stops users in their tracks:
+
+### HERO SECTION
+- Full viewport height
+- Animated gradient background (purple to blue to pink)
+- Floating animated elements in background:
+  - Colored orbs that move slowly
+  - Particles floating upward
+  - Subtle grid lines
+  - Glassmorphism effects
+- Main headline (large, bold):
+  - "Turn Any Process Into Step-by-Step Guides—Automatically"
+  - Animated typing effect or fade-in with slide
+- Subheadline:
+  - "Record once. Share everywhere. Train faster."
+- Animated product demo:
+  - Auto-playing video or GIF showing extension in action
+  - Or interactive demo iframe
+  - Mockup of extension and web app interface
+  - 3D perspective transforms on scroll
+- Two prominent CTA buttons:
+  - "Start Free Trial" (primary gradient button, large, with arrow icon)
+  - "Watch Demo" (secondary outline button with play icon)
+- Social proof below:
+  - "Join 50,000+ teams creating better documentation"
+  - Trusted by logos (mock famous companies with logo grid)
+  - Animated counter showing active users
+- Scroll indicator (animated down arrow)
+
+### FEATURES SECTION
+- Section title: "Everything You Need to Create Perfect Documentation"
+- 3-column grid (responsive to single column on mobile)
+- Each feature card:
+  - Large animated icon (Lucide React icons with motion)
+  - Feature title
+  - Description (2-3 sentences)
+  - Hover effect (lift, glow, scale)
+- Features:
+  1. "Capture Workflows Instantly" - Click record, perform actions, get perfect guides
+  2. "AI-Powered Descriptions" - Smart, natural language descriptions generated automatically
+  3. "Interactive Walkthroughs" - Guide users through processes in real-time on your site
+  4. "Video Generation" - Transform guides into engaging explainer videos with one click
+  5. "Team Collaboration" - Real-time co-editing, comments, approvals
+  6. "Deep Analytics" - Track views, engagement, completion rates
+  7. "Embed Anywhere" - Share via link, embed in sites, integrate with tools
+  8. "Multi-language Support" - Translate guides into 50+ languages
+  9. "Version Control" - Track changes, restore previous versions
+- Optional: Animated icon showcase that cycles through features
+
+### HOW IT WORKS SECTION
+- Section title: "Create Perfect Guides in 3 Simple Steps"
+- 3-step visual timeline with connecting line
+- Each step:
+  - Large step number (gradient circle)
+  - Illustration or screenshot
+  - Step title
+  - Description
+  - Animation on scroll (fade in, slide up)
+- Steps:
+  1. "Install Extension" - One-click Chrome installation
+  2. "Record Your Workflow" - Click record and perform your process
+  3. "Share Perfect Guides" - Instantly share beautiful, interactive guides
+- Add small subtext: "No technical skills required"
+- Optional: Interactive element showing live capture
+
+### INTERACTIVE DEMO SECTION
+- Section title: "See It In Action"
+- Embedded interactive guide viewer
+- Sample workflow showing product capabilities
+- Users can interact with demo
+- "Try It Yourself" button
+- Tabs to switch between different demo scenarios:
+  - Customer onboarding
+  - Employee training
+  - Product tutorial
+
+### VIDEO GENERATION SHOWCASE
+- Section title: "Transform Guides Into Engaging Videos"
+- Large video player showing sample transformation
+- Before/After slider:
+  - Left: Static guide
+  - Right: Animated video version
+- Features list:
+  - AI voiceover
+  - Professional animations
+  - Multiple templates
+  - One-click generation
+- "Create Your First Video" CTA button
+
+### USE CASES SECTION
+- Section title: "Loved by Teams Across Industries"
+- 6-card grid (2 rows x 3 columns)
+- Each use case card:
+  - Icon
+  - Use case title
+  - Brief description
+  - Mini screenshot or illustration
+  - Link to "Learn more"
+- Use cases:
+  1. Customer Onboarding - Reduce support tickets by 60%
+  2. Employee Training - Onboard new hires 3x faster
+  3. Product Tutorials - Help users discover features
+  4. Sales Enablement - Consistent demo experiences
+  5. Customer Support - Visual troubleshooting guides
+  6. Process Documentation - Never lose tribal knowledge
+
+### INTEGRATIONS SECTION
+- Section title: "Integrates With Your Favorite Tools"
+- Logo cloud of integrations:
+  - Confluence, Notion, Slack, Teams, Zendesk, Intercom
+  - Salesforce, HubSpot, Jira, GitHub
+  - And more (50+ integrations)
+- Animated logos with hover effects
+- "View All Integrations" link
+
+### TESTIMONIALS SECTION
+- Section title: "Trusted by Thousands of Teams"
+- 3 testimonial cards in carousel or grid
+- Each testimonial:
+  - 5-star rating (animated stars)
+  - Quote (actual-sounding testimonial about time saved)
+  - Customer avatar/photo
+  - Name and title
+  - Company name
+  - Company logo
+- Auto-rotating carousel with smooth transitions
+- Manual navigation dots
+
+### PRICING SECTION
+- Section title: "Simple, Transparent Pricing"
+- Toggle for Monthly/Annual billing (with "Save 20%" badge on annual)
+- 3 pricing tiers in cards:
+
+  **Free Plan:**
+  - $0/month
+  - 5 guides
+  - 1 workspace
+  - Basic features
+  - Community support
+  - "Get Started Free" button
+
+  **Pro Plan:** (Most Popular badge)
+  - $29/user/month (or $23/user/month billed annually)
+  - Unlimited guides
+  - Unlimited workspaces
+  - All features including:
+    - AI-powered descriptions
+    - Video generation (100/month)
+    - Interactive walkthroughs
+    - Advanced analytics
+    - Priority support
+    - Custom branding
+    - API access
+  - "Start 14-Day Free Trial" button (gradient, prominent)
+
+  **Enterprise Plan:**
+  - Custom pricing
+  - Everything in Pro plus:
+    - Unlimited video generation
+    - SSO/SAML
+    - Dedicated account manager
+    - Custom integrations
+    - SLA guarantee
+    - Advanced security
+    - White-label option
+    - Unlimited workspaces
+  - "Contact Sales" button
+
+- Feature comparison table below (expandable):
+  - Detailed feature breakdown across all plans
+  - Checkmarks for included features
+  - Tooltips explaining complex features
+- FAQ accordion below pricing:
+  - "Can I change plans anytime?" (Yes)
+  - "What payment methods do you accept?" (Cards, PayPal, invoices for Enterprise)
+  - "Is there a free trial?" (Yes, 14 days, no credit card required)
+  - "How does billing work?" (Per active user, monthly or annual)
+  - "Can I cancel anytime?" (Yes, no long-term contracts)
+
+### STATISTICS SECTION
+- Section title: "The Numbers Speak for Themselves"
+- 4 animated counter cards:
+  - "50,000+ Active Users"
+  - "2M+ Guides Created"
+  - "500K+ Hours Saved"
+  - "98% Customer Satisfaction"
+- Count-up animation on scroll into view
+- Visual graphs/charts in background
+
+### SECURITY & COMPLIANCE
+- Section title: "Enterprise-Grade Security"
+- Grid of security badges:
+  - SOC 2 Type II Certified
+  - GDPR Compliant
+  - HIPAA Compliant
+  - ISO 27001
+  - AES-256 Encryption
+  - 99.9% Uptime SLA
+- Trust seals and certifications
+- Link to security documentation
+
+### FINAL CTA SECTION
+- Large, prominent section
+- Gradient background
+- Headline: "Ready to Transform Your Documentation?"
+- Subheadline: "Join thousands of teams already creating better guides"
+- Large "Start Free Trial" button
+- "No credit card required • 14-day free trial • Cancel anytime"
+- Small trust indicators (users, rating, awards)
+
+### FOOTER
+- Multi-column layout
+- Column 1 - Product:
+  - Features
+  - Pricing
+  - Use Cases
+  - What's New
+  - Roadmap
+- Column 2 - Company:
+  - About Us
+  - Careers (We're hiring!)
+  - Blog
+  - Press Kit
+  - Contact
+- Column 3 - Resources:
+  - Help Center
+  - API Documentation
+  - Video Tutorials
+  - Community Forum
+  - Status Page
+- Column 4 - Legal:
+  - Privacy Policy
+  - Terms of Service
+  - Cookie Policy
+  - Security
+  - GDPR
+- Column 5 - Connect:
+  - Twitter
+  - LinkedIn
+  - Facebook
+  - YouTube
+  - GitHub
+- Newsletter signup form:
+  - "Get product updates and tips"
+  - Email input
+  - Subscribe button
+- Bottom bar:
+  - Copyright notice
+  - Language selector
+  - Theme toggle (light/dark)
+  - "Made with ❤️ for teams who document"
+
+### LANDING PAGE SPECIAL FEATURES
+- Smooth scroll animations (elements fade and slide in on scroll)
+- Parallax effects on background elements
+- Cursor trail effect or custom cursor
+- Micro-interactions on hover (buttons scale, cards lift, icons bounce)
+- Page load animation (logo animation or progress bar)
+- Exit-intent popup (when user tries to leave):
+  - "Wait! Get 20% off your first month"
+  - Email capture form
+  - Dismissible
+- Chat widget (bottom right):
+  - Live chat or chatbot
+  - "Need help? Chat with us"
+- Announcement bar at top (dismissible):
+  - "🎉 NEW: Video generation now available! Try it free →"
+- Sticky header on scroll:
+  - Logo
+  - Navigation menu (Features, Pricing, Resources, Login, Sign Up)
+  - CTA button
+  - Becomes compact on scroll
+- Mobile responsive (perfect on all screen sizes)
+- Fast loading (under 3 seconds)
+- SEO optimized (proper meta tags, structured data)
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 3: WEB APPLICATION - USER DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════
+
+## AUTHENTICATION SYSTEM
+
+### Login Page
+- Clean, centered form
+- Email and password inputs
+- "Remember me" checkbox
+- "Forgot password?" link
+- "Login" button (primary, gradient)
+- Divider: "Or continue with"
+- SSO buttons:
+  - Google (with Google logo)
+  - Microsoft (with Microsoft logo)
+  - Option to add more (GitHub, Okta, SAML for enterprise)
+- "Don't have an account? Sign up" link
+- Background: subtle gradient or pattern
+- Animated illustration on side (optional)
+
+### Register Page
+- Similar layout to login
+- Fields:
+  - Full name
+  - Email
+  - Password
+  - Confirm password
+  - Company name (optional)
+- Password strength indicator
+- Terms of service checkbox
+- "Create Account" button
+- SSO options
+- "Already have an account? Login" link
+
+### Forgot Password
+- Email input
+- "Send Reset Link" button
+- Confirmation message after submission
+- Link back to login
+
+### Email Verification
+- After registration, show message:
+  - "Check your email!"
+  - "We sent a verification link to [email]"
+  - Resend link option
+  - Change email option
+- Verification page after clicking link
+- Redirect to onboarding after verification
+
+### Onboarding Flow (First-Time Users)
+Multi-step wizard after signup:
+
+Step 1: Workspace Creation
+- "Let's create your workspace"
+- Workspace name input
+- Workspace URL slug (auto-generated, editable)
+- Optional: Upload workspace logo
+- "Continue" button
+
+Step 2: Team Invitations
+- "Invite your team members"
+- Email input with "+ Add another" button
+- Bulk invite option (paste comma-separated emails)
+- Role selection per invite (Admin, Editor, Viewer)
+- "Skip for now" or "Send Invites" button
+
+Step 3: Extension Installation
+- "Install the Chrome Extension"
+- Large install button (opens Chrome Web Store)
+- Illustration showing extension in action
+- "I've installed it" button
+- "Skip for now" link
+
+Step 4: Quick Tutorial
+- Interactive guide showing:
+  - How to start recording
+  - How to edit guides
+  - How to share guides
+- Animated GIFs or embedded videos
+- Progress dots showing steps
+- "Next" and "Skip Tutorial" buttons
+
+Step 5: Import Sample Workflow
+- "Want to see an example?"
+- "Import Sample Guide" button
+- This adds a pre-built guide to their workspace
+- "Skip" or "Import & Finish" button
+
+After onboarding, redirect to dashboard with welcome message
+
+## MAIN DASHBOARD LAYOUT
+
+### Left Sidebar (Fixed, 240px wide)
+Top Section:
+- Workspace switcher dropdown:
+  - Shows current workspace name and logo
+  - Click to show list of all user's workspaces
+  - "+ Create New Workspace" option at bottom
+  - Search workspaces if user has many
+
+Navigation Menu (with icons):
+- 📊 Dashboard (home icon)
+- 📁 All Guides (folder icon)
+- 🎬 Videos (video icon)
+- 📂 Folders (folder tree icon)
+- 👥 Team (users icon)
+- 📈 Analytics (chart icon)
+- ⚙️ Settings (gear icon)
+- Active state highlighting (background color, border)
+- Hover effects
+
+Middle Section:
+- Workspace storage indicator:
+  - Progress bar showing used/total storage
+  - "5.2 GB / 10 GB used"
+  - Visual warning if approaching limit
+- "Upgrade Plan" button (if applicable):
+  - Gradient button
+  - Shows upgrade options on click
+
+Bottom Section:
+- User menu:
+  - User avatar
+  - User name
+  - User email (truncated)
+  - Dropdown on click:
+    - Profile
+    - Settings
+    - Billing
+    - Help & Support
+    - Keyboard Shortcuts
+    - What's New
+    - Divider
+    - Logout
+
+Sidebar Features:
+- Collapsible on smaller screens (hamburger menu)
+- Smooth animations for expand/collapse
+- Tooltips on collapsed state
+
+### Top Bar (Fixed at top, full width minus sidebar)
+Left Side:
+- Global search bar:
+  - Icon: magnifying glass
+  - Placeholder: "Search guides, folders, and content..."
+  - Keyboard shortcut indicator: "⌘K"
+  - Dropdown suggestions as user types:
+    - Recent searches
+    - Matching guides
+    - Matching folders
+    - Jump to guide/folder
+  - Advanced search filters
+
+Right Side:
+- "Create New" dropdown button:
+  - Gradient primary button with + icon
+  - Dropdown menu:
+    - Start Recording (with record icon)
+    - Upload Video
+    - Create from Template
+    - Import from URL
+    - Create Manually
+  - Keyboard shortcut: "⌘N"
+- Notifications bell icon:
+  - Badge with count of unread notifications
+  - Dropdown panel on click:
+    - List of notifications (last 10)
+    - Notification types:
+      - Comments on your guides
+      - Mentions
+      - Guide shared with you
+      - Team member activity
+      - System notifications
+    - Each notification:
+      - Icon
+      - Message
+      - Timestamp
+      - Mark as read button
+      - Click to go to relevant item
+    - "View All" link at bottom
+    - "Mark All as Read" button
+- User avatar:
+  - Clickable for quick user menu
+  - Online status indicator (green dot)
+
+### Main Content Area
+
+## DASHBOARD HOME VIEW
+
+Welcome Section:
+- Personalized greeting: "Welcome back, [First Name]!"
+- Current date and time
+- Quick tip or motivational message
+- Dismiss button
+
+Quick Action Cards (3 across):
+- Large, prominent cards with hover effects
+- Card 1: "Start Recording"
+  - Gradient background
+  - Large record icon
+  - "Capture a new workflow"
+  - Click opens extension or shows instructions
+- Card 2: "Create from Template"
+  - Icon: document with stars
+  - "Choose from 50+ templates"
+  - Click opens template library
+- Card 3: "Import Documentation"
+  - Icon: upload
+  - "Import existing guides"
+  - Click opens import modal
+
+Stats Overview (4 cards in a row):
+- Card 1: Total Guides Created
+  - Large number (e.g., "47")
+  - Icon: folder
+  - Trend indicator: "↑ 12% from last month" (in green)
+  - Sparkline chart showing trend
+- Card 2: Total Steps Documented
+  - Large number (e.g., "1,234")
+  - Icon: list
+  - Trend indicator
+- Card 3: Team Members
+  - Number with avatars
+  - Icon: users
+  - "+ Invite" button
+- Card 4: Views This Month
+  - Large number (e.g., "5,432")
+  - Icon: eye
+  - Trend indicator
+
+Activity Feed Section:
+- Section header: "Recent Activity"
+- Timeline-style list:
+  - Each activity item:
+    - User avatar
+    - Activity description (e.g., "John Smith created 'How to Export Reports'")
+    - Timestamp (e.g., "2 hours ago")
+    - Link to guide/action
+  - Activity types:
+    - Guides created
+    - Guides published
+    - Comments added
+    - Shares
+    - Team member joined
+    - Edits made
+  - Real-time updates (new items fade in at top)
+  - Load more button or infinite scroll
+- Filter options: All Activity, My Activity, Team Activity
+
+Popular Guides Section:
+- Section header: "Most Viewed This Week" with view count icon
+- Grid layout (3-4 columns):
+  - Guide card for each popular guide:
+    - Thumbnail (first screenshot)
+    - Guide title
+    - View count with eye icon
+    - Creator avatar and name
+    - Quick action buttons (view, edit, share)
+    - Hover effect (lift, shadow)
+- "View All Popular Guides" link
+
+Recent Guides Section:
+- Section header: "Continue Where You Left Off"
+- Horizontal scrollable list or grid:
+  - Guide cards showing recently viewed/edited guides
+  - Each card:
+    - Thumbnail
+    - Title
+    - Last modified date
+    - Progress indicator if partially completed
+    - Quick actions
+
+Folders Section:
+- Section header: "Your Folders"
+- Grid of folder cards (with icons and colors):
+  - Folder name
+  - Item count
+  - Last modified
+  - Quick access link
+- "Create New Folder" card
+
+Quick Tips Section (Optional):
+- Rotating tips about features
+- "💡 Did you know?" header
+- Tip text
+- "Learn More" link
+- Dismiss or next tip button
+
+Upcoming Features/Announcements (Optional):
+- Card showing new features
+- "What's New" header
+- Feature name and description
+- Screenshot or video
+- "Try It Now" button
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 4: GUIDES MANAGEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+## ALL GUIDES VIEW
+
+Layout Controls (Top Bar):
+- View toggles:
+  - Grid view button (default)
+  - List view button
+  - Timeline view button (chronological)
+- Sort dropdown:
+  - Date created (newest/oldest)
+  - Date modified (newest/oldest)
+  - Title (A-Z/Z-A)
+  - Views (high to low)
+  - Steps count
+- Filter button (opens filter panel)
+- Bulk actions toolbar (appears when items selected):
+  - Select all checkbox
+  - Move to folder dropdown
+  - Share button
+  - Export button
+  - Delete button
+  - Cancel selection button
+
+Left Filter Panel (Collapsible):
+- Show/hide toggle button
+- Filters:
+  - Created by:
+    - Me
+    - Team member names (with checkboxes)
+  - Date range:
+    - Today, This week, This month, Custom range
+    - Date picker
+  - Folder:
+    - Folder tree with checkboxes
+    - Nested folder structure
+  - Tags:
+    - Tag cloud or list with checkboxes
+    - Search tags
+  - Status:
+    - Draft
+    - Published
+    - Archived
+  - Guide type:
+    - Workflow
+    - Video
+    - Interactive
+  - Views:
+    - Popular (100+ views)
+    - Moderate (10-99 views)
+    - New (0-9 views)
+- Applied filters shown at top with X to remove
+- "Clear All Filters" button
+- Filter count badge on filter button
+
+Main Content Area - Grid View:
+- Responsive grid (4 columns on large screens, 3 on medium, 2 on small, 1 on mobile)
+- Each guide card:
+  - Thumbnail image (first screenshot or custom cover)
+  - Hover overlay with quick preview
+  - Status badge (Draft, Published, Archived) in corner
+  - Title (truncated with tooltip on hover)
+  - Description (2 lines, truncated)
+  - Metadata row:
+    - Step count icon + number
+    - View count icon + number
+    - Creator avatar (small)
+  - Tags (max 3 shown, +N more if more exist)
+  - Date modified ("2 days ago")
+  - Share status icon (public/private/team)
+  - Quick action menu (three dots):
+    - View guide
+    - Edit guide
+    - Duplicate
+    - Move to folder
+    - Share settings
+    - Export as PDF
+    - Generate video
+    - View analytics
+    - Archive
+    - Delete
+  - Checkbox for bulk selection (appears on hover)
+  - Hover effects (lift, shadow increase)
+  - Click card to open guide viewer
+
+Main Content Area - List View:
+- Table-style layout with columns:
+  - Checkbox (for bulk selection)
+  - Thumbnail (small)
+  - Title (clickable)
+  - Creator (avatar + name)
+  - Date modified (sortable)
+  - Views (sortable)
+  - Steps (sortable)
+  - Status badge
+  - Tags
+  - Actions (dropdown menu)
+- Sortable column headers
+- Row hover effect (background color change)
+- Zebra striping for readability
+- Pagination or infinite scroll
+
+Empty State (When no guides):
+- Illustration of empty folder
+- Headline: "No guides yet"
+- Subtext: "Create your first guide to get started"
+- Large "Create Guide" button
+- Or "Import Template" button
+- Helpful tips or video tutorial link
+
+Search Results View:
+- Show query at top: "Results for '[search term]'"
+- Number of results
+- Highlight matching text in results
+- Filter by relevance or date
+- Similar guides suggestions
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 5: GUIDE EDITOR
+═══════════════════════════════════════════════════════════════════════════════
+
+## EDITOR LAYOUT
+
+Three-Panel Layout:
+-

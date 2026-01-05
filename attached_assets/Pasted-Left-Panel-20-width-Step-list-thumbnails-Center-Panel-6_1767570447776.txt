@@ -1,0 +1,1661 @@
+Left Panel (20% width): Step list/thumbnails
+
+Center Panel (60% width): Main editing canvas
+Right Panel (20% width): Properties and settings
+All panels resizable with drag handles
+Panels collapsible for more space
+
+Top Toolbar:
+
+Back arrow (return to dashboard)
+Guide title (large, editable inline)
+Auto-save indicator ("Saved" or "Saving..." with spinner)
+Last saved timestamp
+Actions:
+
+Save button (if manual save preferred)
+Save as template
+Preview button (opens in new tab)
+Publish/Unpublish toggle with status indicator
+Share button (opens share modal)
+More options dropdown:
+
+Duplicate guide
+Export options
+Move to folder
+View analytics
+Archive
+Delete
+Version history
+
+
+
+
+Keyboard shortcuts indicator (?)
+
+LEFT PANEL - STEP LIST
+Header:
+
+"Steps (12)" - count of total steps
+"+ Add Step" button
+Collapse/expand all button
+Search steps input
+
+Step List:
+
+Vertical list of all steps
+Each step item:
+
+Step number badge (reorders automatically)
+Thumbnail preview (small screenshot)
+Step type icon (click, input, navigation, etc.)
+Brief description (truncated)
+Duration indicator (optional)
+Drag handle for reordering
+Active state (highlighted when selected)
+Hover actions:
+
+Duplicate step
+Delete step
+Insert step before/after
+
+
+
+
+Drag and drop to reorder (with visual placeholder)
+Click step to select and show in center panel
+Context menu on right-click:
+
+Edit
+Duplicate
+Delete
+Move up/down
+Insert step above/below
+
+
+Keyboard navigation (arrow keys to move between steps)
+
+Bulk Actions (when multiple steps selected):
+
+Select multiple with Shift+click or Ctrl+click
+Actions bar appears:
+
+Delete selected
+Duplicate selected
+Merge steps
+Move to another guide
+Export selected
+
+
+
+Add Step Options:
+
+Manual step (upload screenshot + add description)
+Navigation step (URL change)
+Wait step (pause/delay)
+Note/tip step (informational callout)
+Code snippet step
+Video clip step
+
+CENTER PANEL - MAIN EDITOR
+Guide Header Section:
+
+Cover image area:
+
+Large hero image (custom upload or auto-use first screenshot)
+"Change cover" button on hover
+Image editor (crop, filters)
+
+
+Guide title (very large, editable inline)
+Guide description (rich text editor):
+
+Bold, italic, underline
+Bullet lists, numbered lists
+Links
+Mentions (@team members)
+Up to 500 characters
+
+
+Metadata:
+
+Created by avatar + name
+Created date
+Last modified date
+View count
+
+
+Tags input:
+
+"+ Add tag" button
+Autocomplete from existing tags
+Create new tags
+Tag colors
+Remove tag with X
+
+
+Category selector:
+
+Dropdown of predefined categories
+Or custom category input
+
+
+Visibility indicator:
+
+Public (anyone with link)
+Team only
+Private (only me)
+Icon with dropdown to change
+
+
+
+Step Editor (for each selected step):
+Screenshot Display Area:
+
+Large, high-quality image display (responsive width)
+Zoom controls:
+
+Fit to width (default)
+100% (actual size)
+150%
+200%
+Custom zoom slider
+
+
+Pan functionality when zoomed (drag or arrow keys)
+Fullscreen mode button
+Download screenshot button
+
+Annotation Toolbar (Floating or fixed above screenshot):
+
+Tool buttons with icons:
+
+Arrow tool (straight, curved, with different head styles)
+Text box tool
+Rectangle highlighter
+Circle highlighter
+Numbered markers (1, 2, 3...)
+Blur tool (click-drag to blur regions)
+Crop tool
+Drawing pen (freehand)
+Emoji stickers
+Shape tool (rectangle, circle, line)
+
+
+Color picker for all tools (preset colors + custom)
+Stroke width selector (thin, medium, thick)
+Fill opacity slider
+Text settings (font size, bold, color)
+Undo button
+Redo button
+Clear all annotations button
+Layer management (if multiple annotations):
+
+Bring to front/back
+Delete selected
+Lock/unlock
+
+
+
+Interactive Elements:
+
+Clickable hotspot markers showing clickable elements
+Edit hotspot:
+
+Position
+Size
+Action type
+Target URL
+Tooltip text
+
+
+Add new hotspot manually
+Hotspot visibility toggle
+
+Screenshot Actions:
+
+Replace screenshot (upload new)
+Retake screenshot (if extension connected)
+Edit in external tool
+Download original
+
+Description Editor (Below screenshot):
+
+Rich text editor with toolbar:
+
+Formatting: Bold, Italic, Underline, Strikethrough
+Headings (H1, H2, H3)
+Lists (bullet, numbered)
+Alignment (left, center, right)
+Links (insert/edit)
+Code blocks (inline and block)
+Blockquotes
+Horizontal rule
+Inline images
+Tables
+
+
+AI Enhancement buttons:
+
+"Improve Description" (makes it clearer)
+"Make it shorter" (condenses)
+"Make it more detailed" (expands)
+"Change tone" dropdown:
+
+Professional
+Casual
+Friendly
+Technical
+Simple (for beginners)
+
+
+Loading state while AI processes
+Show before/after comparison
+Accept or reject AI suggestions
+
+
+Character counter (with limit indicator if set)
+Preview/Edit mode toggle
+Voice-to-text button (if supported):
+
+Click to start recording
+Transcribe speech to text
+Insert at cursor position
+
+
+Markdown support toggle
+Expand editor to full screen
+
+Step Metadata Section:
+
+Action type selector:
+
+Click
+Type/Input
+Navigate
+Select
+Submit
+Wait
+Scroll
+Custom
+
+
+Element information (read-only, collapsible):
+
+Element type (button, input, link)
+Element text
+CSS selector (copyable)
+XPath (copyable)
+
+
+Deep link section:
+
+Generated URL with anchor
+"Test Link" button (opens in new tab)
+"Copy Link" button
+Edit anchor manually
+Link validation status
+
+
+Duration/timing:
+
+Estimated time for this step
+Auto-calculated or manual input
+Format: minutes and seconds
+
+
+Difficulty indicator:
+
+Easy (green)
+Medium (yellow)
+Hard (red)
+Affects guide's overall difficulty rating
+
+
+Prerequisites (optional):
+
+Link to other steps that must be completed first
+Select from guide's steps or other guides
+
+
+
+Advanced Options (Collapsible):
+
+Conditional branching:
+
+"If user clicks X, go to step Y"
+"If user selects option A, show step B, otherwise show step C"
+Visual branching diagram
+
+
+Alternative paths:
+
+"Or do this instead" section
+Multiple ways to complete the step
+
+
+Callouts:
+
+Add tip callout (info icon, blue)
+Add warning callout (warning icon, yellow)
+Add note callout (note icon, gray)
+Add danger callout (X icon, red)
+Callout text editor
+Positioning (before/after step)
+
+
+Embedded media:
+
+Embed video or GIF
+Upload file or paste URL
+YouTube, Vimeo, Loom support
+Video controls settings
+
+
+Code snippet:
+
+Language selector (JavaScript, Python, etc.)
+Code editor with syntax highlighting
+Copy button
+Line numbers
+
+
+Downloadable attachment:
+
+Upload file (PDF, CSV, template, etc.)
+Download button will appear in published guide
+File size limit indicator
+
+
+Timing settings:
+
+Wait time before next step (seconds)
+Auto-advance timer (if interactive mode)
+Pause point indicator
+
+
+
+Navigation:
+
+Previous step button
+Next step button
+Jump to step dropdown
+Keyboard shortcuts (←→ arrows)
+
+RIGHT PANEL - PROPERTIES
+Tabs at top:
+
+Guide Settings tab
+Design tab
+Sharing tab
+Analytics tab (if published)
+
+Guide Settings Tab:
+General:
+
+Guide status:
+
+Draft (gray badge)
+Published (green badge)
+Archived (red badge)
+
+
+Language selector:
+
+Current language
+Dropdown of 50+ languages
+"Translate guide" button
+Auto-translate with AI option
+
+
+Workspace assignment:
+
+Current workspace
+Move to another workspace (if user has multiple)
+
+
+Folder location:
+
+Current folder or "Unfiled"
+Move to folder (folder tree selector)
+Create new folder option
+
+
+
+Collaborators:
+
+List of current collaborators:
+
+Avatar
+Name
+Role (Owner, Editor, Viewer)
+Remove button (if owner)
+
+
+Add collaborator button:
+
+Email input
+Role selector
+Send invite
+
+
+Pending invitations list
+Permissions settings:
+
+Can edit
+Can comment
+Can share
+Can view analytics
+
+
+
+Version History:
+
+Timeline of versions
+Each version:
+
+Timestamp
+User who made changes
+Description of changes
+"Restore this version" button
+Compare with current button
+
+
+Auto-save frequency setting
+Manual version snapshot button
+
+Metadata:
+
+Created date/time (read-only)
+Last modified date/time (read-only)
+View statistics:
+
+Total views
+Unique viewers
+Average time spent
+Completion rate
+
+
+Internal notes (only visible to team):
+
+Text area for notes about the guide
+Not shown to external viewers
+
+
+
+Design Tab:
+Theme Settings:
+
+Theme selector:
+
+Light theme (default)
+Dark theme
+High contrast theme
+Custom theme
+
+
+Preview of theme
+
+Brand Customization:
+
+Logo upload:
+
+Company logo appears in guide
+Position (top left, top right, center)
+Size slider
+
+
+Brand colors:
+
+Primary color picker
+Secondary color picker
+Accent color picker
+Button color
+Link color
+Preview of colors in use
+
+
+Custom CSS (advanced):
+
+Code editor for custom styles
+Only available on Pro/Enterprise plans
+Preview changes in real-time
+
+
+
+Typography:
+
+Font family selector:
+
+System fonts
+Google Fonts
+Custom font upload (Pro/Enterprise)
+
+
+Font size:
+
+Body text (base size)
+Headings (scale automatically)
+Slider or input
+
+
+Line height
+Letter spacing
+
+Layout Options:
+
+Guide layout style:
+
+Single column (default)
+Two column (screenshot left, text right)
+Sidebar style (steps in left sidebar)
+Presentation mode (fullscreen, click through)
+
+
+Card style for steps:
+
+Flat (no borders)
+Bordered
+Shadowed
+Rounded corners slider
+
+
+Spacing:
+
+Tight
+Normal (default)
+Relaxed
+Custom (padding/margin sliders)
+
+
+
+Button Styles:
+
+Button shape (rounded, pill, square)
+Button size (small, medium, large)
+Button color (inherits from brand colors or custom)
+Preview of button styles
+
+Sharing Tab:
+Public Link:
+
+"Generate public link" button
+URL display (copyable)
+QR code generator (click to show)
+Password protection toggle:
+
+Enable/disable
+Set password
+Password hint
+
+
+Expiration date:
+
+Never expires (default)
+Set expiration date
+Expire after N views
+
+
+Link analytics:
+
+Views from this link
+Click-through rate
+
+
+
+Embed Options:
+
+Embed code generator:
+
+iframe embed code (copyable)
+JavaScript snippet (for interactive mode)
+Preview of embedded guide
+
+
+Embed settings:
+
+Width and height
+Show/hide header
+Show/hide footer
+Auto-start or manual start
+Allow fullscreen
+
+
+Platform-specific embedding:
+
+WordPress snippet
+Notion embed
+Confluence macro
+Copy instructions for each
+
+
+
+Download Options:
+
+Export as PDF:
+
+Layout options (portrait/landscape)
+Include cover page
+Include table of contents
+Include annotations
+Download button
+
+
+Export as Markdown:
+
+With images
+Download .md file
+
+
+Export as HTML:
+
+Single HTML file with embedded images
+Zip with assets
+Download button
+
+
+Export as PowerPoint:
+
+One slide per step
+Include notes
+Download .pptx
+
+
+Export as Video (if video generated):
+
+Quality selector (720p, 1080p, 4K)
+Format (MP4, WebM)
+Download button
+
+
+
+Social Sharing:
+
+Share buttons:
+
+Twitter (pre-filled tweet with link)
+LinkedIn (post with link)
+Facebook (post with link)
+Copy link
+
+
+Email share:
+
+To: email input (multiple)
+Subject: pre-filled, editable
+Message: text area
+Send button
+
+
+
+Interactive Settings:
+
+Enable quiz mode:
+
+Add questions after each step
+Question editor
+Correct answer marking
+Pass/fail threshold
+
+
+Knowledge checks:
+
+True/false questions
+Multiple choice
+Short answer
+
+
+Completion tracking:
+
+Require users to complete all steps
+Issue certificate of completion
+Certificate template editor
+
+
+Require sign-in to view:
+
+Enable/disable
+Collect viewer information
+
+
+Allow comments:
+
+Enable/disable
+Moderate comments
+
+
+Enable reactions:
+
+👍 Helpful
+👎 Not helpful
+❤️ Love it
+😕 Confusing
+
+
+Feedback form:
+
+Enable post-guide survey
+Custom questions
+Rating scale
+Text feedback
+
+
+
+Analytics Tab (If Published):
+Overview:
+
+Total views (large number)
+Unique viewers
+Average time spent
+Completion rate percentage
+Engagement score
+Date range selector
+
+Performance Chart:
+
+Line graph of views over time
+Selectable metrics (views, unique viewers, completions)
+Compare date ranges
+
+Step-by-Step Engagement:
+
+List of steps with metrics:
+
+Average time on step
+Drop-off rate (how many leave at this step)
+Skip rate
+Replay rate
+Helpfulness votes
+
+
+Identify problem steps (high drop-off or low helpfulness)
+
+Audience Insights:
+
+Geographic distribution (world map heatmap)
+Device breakdown (desktop, mobile, tablet) - pie chart
+Browser breakdown (Chrome, Safari, Firefox, etc.) - bar chart
+Operating system breakdown
+Top referral sources (where viewers came from)
+
+User Behavior:
+
+Average path through guide
+Common exit points
+Most replayed steps
+Search terms used to find guide
+Internal vs external viewers
+
+Engagement Metrics:
+
+Comments count
+Helpful votes
+Not helpful votes
+Shares count
+Downloads count
+Completion rate trend
+
+Export Analytics:
+
+Export as CSV
+Export as PDF report
+Schedule automated reports (weekly, monthly)
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 6: VIDEO GENERATION ENGINE
+═══════════════════════════════════════════════════════════════════════════════
+VIDEO CREATION WIZARD
+Multi-step wizard interface:
+Step 1: Source Selection
+Options:
+
+Convert existing guide to video:
+
+Select from guide library
+Search guides
+Filter by folder/tags
+Preview selected guide
+
+
+Select specific steps:
+
+Checkbox list of all steps
+Select all/deselect all
+Reorder steps for video
+Drag and drop
+
+
+Upload screenshots/images manually:
+
+Drag and drop zone
+Browse files button
+Supports: JPG, PNG, GIF
+Auto-generate descriptions option
+
+
+Import existing video to enhance:
+
+Upload video file
+AI analysis to add captions, annotations
+Support MP4, MOV, AVI
+
+
+
+Preview Section:
+
+Thumbnail grid of selected content
+Estimated video length
+Step count
+
+Navigation:
+
+"Next" button
+"Cancel" button
+
+Step 2: Video Style
+Template Gallery:
+
+Grid of video style templates
+Each template card:
+
+Preview thumbnail/GIF
+Template name
+Description
+"Use This Template" button
+
+
+Templates:
+
+Professional/Corporate:
+
+Clean, minimal design
+Corporate blue/gray colors
+Smooth, subtle animations
+Professional voiceover tone
+
+
+Modern/Dynamic:
+
+Vibrant colors
+Bold animations
+Energetic transitions
+Upbeat background music
+
+
+Minimal/Clean:
+
+White background
+Simple black text
+Minimal animations
+Focus on content
+
+
+Engaging/Fun:
+
+Colorful gradients
+Playful animations
+Casual tone
+Pop music
+
+
+Technical/Developer:
+
+Dark theme
+Code-style aesthetics
+Terminal animations
+Technical terminology
+
+
+Educational/Tutorial:
+
+Chalkboard or notebook style
+Hand-drawn elements
+Teaching tone
+Clear explanations
+
+
+
+
+Filter templates:
+
+By industry (tech, healthcare, finance, etc.)
+By style (modern, classic, fun)
+By length (short, medium, long)
+
+
+
+Selected Template Customization:
+
+Preview of selected template with your content
+Customization options:
+
+Primary color picker
+Secondary color picker
+Accent color
+Background style (solid, gradient, image)
+Transition style (fade, slide, zoom, etc.)
+Animation speed (slow, normal, fast)
+Corner style (sharp, rounded)
+
+
+
+Branding Section:
+
+Logo upload:
+
+Company logo
+Position selector (top-left, top-right, bottom-right, watermark)
+Size slider
+Opacity slider
+Show throughout video or just intro/outro
+
+
+Brand colors:
+
+Use workspace brand colors
+Or custom colors
+
+
+Custom fonts:
+
+Upload font files (Pro/Enterprise)
+Or select from Google Fonts
+
+
+Intro slide:
+
+Enable/disable
+Duration (3-5 seconds)
+Template selection
+Custom text (title, subtitle, logo)
+
+
+Outro slide:
+
+Enable/disable
+Duration
+Template selection
+Call-to-action text
+Button/link to include
+
+
+
+Navigation:
+
+"Back" button
+"Next" button
+
+Step 3: Narration & Audio
+Voice Options:
+Text-to-Speech Selection:
+
+Voice preview player for each option
+Male voices:
+
+Voice 1 (US English, professional)
+Voice 2 (UK English, friendly)
+Voice 3 (US English, energetic)
+And more (15+ options)
+
+
+Female voices:
+
+Voice 1 (US English, clear)
+Voice 2 (UK English, professional)
+Voice 3 (US English, warm)
+And more (15+ options)
+
+
+Languages:
+
+English (US, UK, AU, CA, IN)
+Spanish
+French
+German
+Italian
+Portuguese
+Japanese
+Chinese
+Korean
+And 40+ more
+
+
+Voice settings:
+
+Speech rate slider (0.5x to 2x)
+Pitch adjustment slider (-10 to +10)
+Volume slider
+Add pauses after sentences (auto or manual)
+Emphasis on keywords (auto-detect or manual)
+Preview with your script
+
+
+
+Script Editor:
+
+Auto-generated script from step descriptions
+Rich text editor for editing script
+Each step has dedicated script section
+Timing indicator (estimated duration per step)
+Special markdown:
+
+[PAUSE:2s] - inserts 2-second pause
+important - adds emphasis
+<phoneme>difficult_word</phoneme> - custom pronunciation
+
+
+Character count per step
+Total script length and estimated video duration
+Read aloud preview button
+
+Or Record Own Voiceover:
+
+Click to record button
+Waveform visualizer while recording
+Record per step or entire video
+Playback controls
+Re-record option
+Upload pre-recorded audio files
+Sync audio to steps
+
+Or Upload Audio File:
+
+Drag and drop audio file
+Supports: MP3, WAV, M4A
+Auto-sync to steps (AI detects sentences)
+Manual adjustment of sync points
+
+Background Music Library:
+
+Music categories:
+
+Corporate/Professional
+Upbeat/Energetic
+Calm/Relaxed
+Cinematic
+Tech/Electronic
+Acoustic
+Silent (no music)
+
+
+Each track:
+
+Play preview button
+Duration
+Mood tags
+
+
+Volume mixer:
+
+Background music volume slider
+Voiceover volume slider
+Auto-ducking (music lowers when voice speaks)
+
+
+Custom music upload:
+
+Upload own track
+Must have rights to use
+Confirmation checkbox
+
+
+
+Navigation:
+
+"Back" button
+"Next" button
+
+Step 4: Animations & Effects
+For Each Step:
+Transition Effects (between steps):
+
+Transition type selector:
+
+Fade (default)
+Slide (left, right, up, down)
+Zoom in/out
+Dissolve
+Wipe (horizontal, vertical)
+Custom (advanced users)
+
+
+Transition duration (0.3s to 2s)
+Preview transition button
+
+Screenshot Animations:
+
+Entry animation:
+
+None
+Fade in
+Slide in (direction selector)
+Zoom in (start from 0%, 50%, 80%)
+Bounce in
+
+
+Duration slider
+Delay before animation
+Preview button
+
+Element Animations (for highlighted elements):
+
+Mouse cursor movement:
+
+Show cursor (on/off)
+Cursor animation (smooth move to element)
+Cursor speed
+Custom cursor icon
+
+
+Click animation:
+
+Ripple effect (size, color)
+Pulse effect
+Glow effect
+Duration
+
+
+Typing animation (for input steps):
+
+Simulate typing the text
+Typing speed
+Cursor blink
+
+
+Highlight pulse:
+
+Pulse on important elements
+Color selector
+Duration and repeat count
+
+
+
+Camera Movements:
+
+Zoom to element:
+
+Auto-zoom to highlighted element
+Zoom level (1.5x, 2x, 3x)
+Duration
+
+
+Pan across screenshot:
+
+For large screenshots
+Pan path (left to right, top to bottom, custom)
+Speed
+
+
+Ken Burns effect (slow zoom + pan for static images)
+
+Text Overlays:
+
+Step numbers:
+
+Show/hide step numbers
+Position (top-left, top-center, etc.)
+Style (circle, square, badge)
+Animation (fade in, slide in)
+
+
+Instruction text:
+
+Show step description on screen
+Position (top, bottom, center, custom)
+Font size and style
+Background (none, semi-transparent, full)
+Animation (typewriter, fade, slide)
+Duration (sync with voiceover or custom)
+
+
+Tooltips/Callouts:
+
+Add custom text callouts
+Arrow pointing to element
+Position and style
+Animation
+
+
+Keyboard shortcuts shown:
+
+Display keys being pressed (e.g., "Ctrl+C")
+Key animation (press effect)
+Position
+
+
+
+Timing Adjustments:
+
+Duration per step:
+
+Auto-calculated from voiceover + animations
+Manual override (2s to 30s)
+Slider with preview
+
+
+Playback speed:
+
+Normal (1x)
+Faster (1.25x, 1.5x)
+Slower (0.75x, 0.5x)
+
+
+Pause points:
+
+Add pause after step
+Duration of pause
+Option to show "pause" indicator
+
+
+
+Global Animation Settings:
+
+Animation speed multiplier (apply to all)
+Transition consistency (same transition for all steps)
+Reset all to defaults button
+
+Preview Section:
+
+Mini video player
+Play/pause controls
+Scrub through timeline
+Jump to specific step
+Speed controls (0.5x, 1x, 2x)
+View on different device sizes (desktop, tablet, mobile)
+
+Navigation:
+
+"Back" button
+"Next" button
+
+Step 5: Interactive Elements (Optional)
+Chapters/Markers:
+
+Automatically create chapters (one per step)
+Manual chapter creation:
+
+Add chapter at timestamp
+Chapter title
+Chapter description
+Thumbnail (auto or custom)
+
+
+Chapter navigation menu in video player
+Chapters shown in progress bar
+
+Clickable Hotspots:
+
+Add clickable areas on video frames
+Pause video when hotspot appears
+Hotspot actions:
+
+Open URL in new tab
+Show popup with more info
+Jump to another part of video
+Display additional content
+
+
+Hotspot settings:
+
+Position and size
+Style (pulse, glow, outline)
+Trigger timing
+Tooltip text
+
+
+
+Quiz Questions:
+
+Add questions at specific timestamps
+Question types:
+
+Multiple choice
+True/False
+Short answer
+
+
+Question editor:
+
+Question text
+Answer options (for multiple choice)
+Correct answer marking
+Explanation for correct/incorrect
+
+
+Video pauses for questions
+Track user answers
+Show score at end
+
+Call-to-Action Buttons:
+
+Add CTA at end or specific timestamps
+Button text (e.g., "Learn More", "Get Started", "Contact Us")
+Button link
+Button style (color, size)
+Animation (slide in, fade in)
+Duration shown
+
+Navigation Menu:
+
+Enable/disable in-video navigation
+Jump to any step/chapter
+Show table of contents
+Style and position customization
+
+Navigation:
+
+"Back" button
+"Next" button
+
+Step 6: Preview & Render
+Full Video Preview:
+
+Large video player (responsive)
+Full playback controls:
+
+Play/pause
+Seek bar with thumbnails
+Volume
+Speed (0.25x to 2x)
+Fullscreen
+Picture-in-picture
+
+
+Show chapters/markers in seek bar
+Show interactive elements when triggered
+Preview on different devices (toggle device frame)
+
+Timeline Editor:
+
+Visual timeline of entire video
+Each step as segment on timeline
+Drag to adjust timing
+Visual indicators for:
+
+Voiceover
+Background music
+Animations
+Transitions
+Interactive elements
+
+
+Zoom in/out on timeline
+Play from any point
+
+Quality & Format Settings:
+
+Video quality:
+
+720p (HD)
+1080p (Full HD) - recommended
+1440p (2K)
+2160p (4K) - Enterprise only
+
+
+Frame rate:
+
+24 fps (cinematic)
+30 fps (standard, recommended)
+60 fps (smooth) - Pro/Enterprise
+
+
+Format:
+
+MP4 (H.264) - most compatible
+WebM (VP9) - web optimized
+MOV - for editing
+
+
+Bitrate:
+
+Auto (recommended)
+Custom (advanced users)
+
+
+Aspect ratio:
+
+16:9 (widescreen, default)
+9:16 (vertical, for mobile)
+1:1 (square, for social media)
+4:3 (classic)
+
+
+
+Estimated Output:
+
+Video length: 3:45
+File size estimate: ~85 MB
+Estimated render time: 5-10 minutes
+
+Render Button:
+
+Large "Generate Video" button
+Renders on server (not local)
+Progress modal shows:
+
+Progress bar
+Current step being processed
+Estimated time remaining
+Cancel option
+
+
+Notification when complete
+Option to close modal and render in background
+
+Post-Render Actions:
+
+Download video button
+Share video button
+Add to video library
+Embed video in guide
+Generate new version with changes
+
+VIDEO LIBRARY
+Layout:
+
+Grid view or list view toggle
+Filter and sort options:
+
+Date created
+Duration
+Views
+Source guide
+Status (ready, rendering, failed)
+
+
+
+Each Video Card:
+
+Thumbnail with play button overlay
+Video title
+Duration badge
+Resolution badge (1080p)
+Source guide link
+View count
+Created date
+Status indicator
+Quick actions menu:
+
+Play video
+Edit video (opens wizard with current settings)
+Regenerate video
+Download
+Share
+Embed
+View analytics
+Delete
+
+
+Hover shows preview (play first few seconds)
+
+Video Player (Embedded or Modal):
+
+Custom branded video player
+Controls:
+
+Play/pause (spacebar)
+Seek bar with chapter markers
+Time display (current / total)
+Volume control (mute/unmute)
+Speed control dropdown (0.5x - 2x)
+Fullscreen toggle
+Picture-in-picture
+Settings menu (quality, captions)
+
+
+Interactive features visible:
+
+Chapter navigation sidebar
+Clickable hotspots highlighted
+Quiz questions appear when triggered
+CTA buttons overlay
+
+
+Transcript panel (toggle):
+
+Scrollable transcript
+Synced with video (current sentence highlighted)
+Click sentence to jump to that point
+Search transcript
+Copy transcript button
+
+
+Notes section:
+
+Users can add timestamped notes
+Private or shared notes
+Jump to noted timestamp
+
+
+Download button (if allowed)
+Share button
+
+Video Analytics (Per Video):
+
+Total plays
+Unique viewers
+Total watch time
+Average watch duration
+Completion rate (% who watched to end)
+Audience retention graph:
+
+Shows at which points viewers drop off
+Peaks and valleys
+Identify engaging vs boring parts
+
+
+Engagement rate
+Replays count
+Interactive element clicks:
+
+Hotspot clicks
+CTA clicks
+Chapter navigation usage
+
+
+Quiz performance:
+
+Average score
+Question-by-question breakdown
+Pass rate
+
+
+Geographic data
+Device data
+Referral sources
+Export analytics data
+
+Rendering Queue:
+
+If multiple videos being generated
+Queue list showing:
+
+Video title
+Position in queue
+Estimated wait time
+Cancel render option
+
+
+Notification when video ready
+
+Failed Renders:
+
+Error message display
+Reason for failure (if detectable)
+"Retry" button
+"Edit Settings" button to fix issues
+Contact support option
+
+═══════════════════════════════════════════════════════════════════════════════
+PART 7: INTERACTIVE WALKTHROUGHS
+═══════════════════════════════════════════════════════════════════════════════
+WALKTHROUGH BUILDER
+Convert any guide into interactive walkthrough:
+Walkthrough Settings:
+
+Enable interactive mode toggle
+Target website URL
+
+Where walkthrough will run
+Multiple URLs (for different pages in flow)
+
+
+Launch trigger:
+
+Manual start (button click)
+Auto-start on page load
+URL-based (specific page)
+Element-based (when element appears)
+Time-based (after 30 seconds)
+Scroll-based (after scrolling 50%)
+Exit intent (when user tries to leave)
+User segment (new users, returning users, specific plan)
+
+
+
+Element Overlay Configuration:
+For each step, configure:
+
+Target element:
+
+Auto-detected from guide data
+Manual selector input (CSS or XPath)
+Visual element picker (click on preview)
+
+
+Highlight style:
+
+Spotlight (dim everything else)
+Outline (border around element)
+Glow (shadow effect)
+None (just show tooltip)
+
+
+Highlight color and intensity
+Spotlight animation (pulse, fade, none)
+
+Tooltip Configuration:
+
+Tooltip content:
+
+Step description (from guide)
+Custom text/HTML
+Rich media (images, videos, GIFs)
+
+
+Tooltip position:
+
+Auto (smart positioning)
+Top, bottom, left, right
+Manual offset (x, y pixels)
+
+
+Tooltip style:
+
+Minimal
+Card style
+Speech bubble
+Custom CSS
+
+
+Pointer/arrow:

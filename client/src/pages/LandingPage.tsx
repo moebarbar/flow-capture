@@ -143,9 +143,9 @@ export default function LandingPage() {
               </Badge>
             </div>
             <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-extrabold tracking-tight mb-8 pb-2 leading-[1.1] bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
-              Documentation that <br className="hidden sm:block" />
+              Stop documenting. <br className="hidden sm:block" />
               <span className="relative">
-                writes itself
+                Start capturing.
                 <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 300 12" fill="none">
                   <path d="M2 10C50 4 100 2 150 6C200 10 250 8 298 4" stroke="url(#gradient)" strokeWidth="3" strokeLinecap="round"/>
                   <defs>
@@ -165,7 +165,7 @@ export default function LandingPage() {
               <Button size="lg" className="rounded-full text-lg h-14 px-10 bg-brand-600 text-white shadow-xl shadow-brand-500/30 transition-all" asChild>
                 <a href={branding?.extensionLink || "#install-extension"} target={branding?.extensionLink?.startsWith('http') ? "_blank" : undefined} rel={branding?.extensionLink?.startsWith('http') ? "noopener noreferrer" : undefined} data-testid="button-hero-install-extension">
                   <SiGooglechrome className="mr-2 h-5 w-5" />
-                  Start Free Today
+                  Install Chrome Extension – It's Free
                 </a>
               </Button>
               <Button size="lg" variant="outline" className="rounded-full text-lg h-14 px-8 border-2" asChild>

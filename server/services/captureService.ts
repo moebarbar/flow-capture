@@ -135,6 +135,15 @@ export const captureService = {
       return null;
     }
 
+    // Verify the associated guide still exists
+    const [guide] = await db.select().from(guides).where(eq(guides.id, session.guideId));
+    if (!guide) {
+      await db.update(captureSessions)
+        .set({ status: "stopped" })
+        .where(eq(captureSessions.id, session.id));
+      return null;
+    }
+
     return session;
   },
 

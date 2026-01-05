@@ -120,30 +120,47 @@ export async function exportGuideToPdf(guide: Guide, steps: Step[]): Promise<voi
 
 async function loadImageAsBase64(url: string): Promise<string | null> {
   return new Promise((resolve) => {
+    // Handle data URLs directly
+    if (url.startsWith('data:')) {
+      resolve(url);
+      return;
+    }
+
+    // For relative URLs (our own storage), try loading directly
     const img = new Image();
     img.crossOrigin = 'anonymous';
     
+    const timeoutId = setTimeout(() => {
+      console.warn(`Image load timeout for: ${url}`);
+      resolve(null);
+    }, 10000); // 10 second timeout
+    
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL('image/png'));
-      } else {
+      clearTimeout(timeoutId);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 800;
+        canvas.height = img.naturalHeight || 600;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        } else {
+          resolve(null);
+        }
+      } catch (e) {
+        console.warn(`Canvas error for image: ${url}`, e);
         resolve(null);
       }
     };
     
     img.onerror = () => {
+      clearTimeout(timeoutId);
+      console.warn(`Failed to load image: ${url}`);
       resolve(null);
     };
     
-    if (url.startsWith('data:')) {
-      resolve(url);
-    } else {
-      img.src = url;
-    }
+    // Use the URL directly - for our object storage URLs they should work
+    img.src = url;
   });
 }

@@ -3608,13 +3608,14 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         for (const stepData of stepsSnapshot) {
           await storage.createStep({
             guideId,
-            order: stepData.order,
-            title: stepData.title,
-            description: stepData.description,
-            actionType: stepData.actionType,
-            selector: stepData.selector,
-            url: stepData.url || stepData.pageUrl,
-            imageUrl: stepData.imageUrl
+            order: stepData.order ?? 0,
+            title: stepData.title || null,
+            description: stepData.description || null,
+            actionType: stepData.actionType || 'click',
+            selector: stepData.selector || null,
+            url: stepData.url || stepData.pageUrl || null,
+            imageUrl: stepData.imageUrl || null,
+            metadata: stepData.metadata || null
           });
         }
       }
@@ -3671,7 +3672,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     const user = req.user as any;
     const workspaceId = parseInt(req.query.workspaceId as string);
 
-    if (!workspaceId) return res.status(400).json({ message: "workspaceId required" });
+    if (!workspaceId || isNaN(workspaceId)) return res.status(400).json({ message: "Valid workspaceId required" });
 
     try {
       const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);

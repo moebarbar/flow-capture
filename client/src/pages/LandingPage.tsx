@@ -10,7 +10,8 @@ import {
   Sparkles, Globe, Languages, MessageSquare, PlayCircle, Shield,
   Eye, EyeOff, LayoutTemplate, History, BarChart3, AlertTriangle,
   MessageCircle, BookOpen, Key, ClipboardList, Globe2, Code,
-  Lock, CheckCircle2, Star, Wand2, Video, Box, ShieldCheck
+  Lock, CheckCircle2, Star, Wand2, Video, Box, ShieldCheck,
+  UserCheck, CheckCheck, Bell, Link2, Workflow, Settings2
 } from "lucide-react";
 import { SiGooglechrome, SiSlack } from "react-icons/si";
 import { useEffect } from "react";
@@ -107,6 +108,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-6">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-features">Features</a>
             <a href="#ai-powered" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-ai">AI Features</a>
+            <a href="#collaboration" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-collaboration">Team</a>
             <a href="#enterprise" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-enterprise">Enterprise</a>
             <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-pricing">Pricing</a>
           </div>
@@ -663,58 +665,185 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Integrations Section */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8">
+      {/* Team Collaboration Section */}
+      <section id="collaboration" className="py-24 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            className="text-center mb-16"
+            {...fadeInUp}
+          >
+            <Badge variant="secondary" className="mb-4 rounded-full px-4 py-1.5 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 border-0 dark:from-blue-900/30 dark:to-indigo-900/30 dark:text-blue-300" data-testid="badge-collaboration-section">
+              <Users className="h-3.5 w-3.5 mr-1.5" />
+              Team Collaboration
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">
+              Built for Teams That Work Together
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+              Assign steps, request approvals, leave comments, and stay notified.
+              Everything your team needs to collaborate on documentation seamlessly.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            <motion.div {...fadeInUp} transition={{ delay: 0.1 }} data-testid="card-collab-assignments">
+              <Card className="p-6 h-full">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center mb-4">
+                  <UserCheck className="h-6 w-6" />
+                </div>
+                <h4 className="text-lg font-bold mb-2 font-display">Step Assignments</h4>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Assign specific steps to team members. Track who's responsible for what with clear ownership.
+                </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Check className="h-3 w-3 text-green-500" /> Due dates</span>
+                  <span className="flex items-center gap-1"><Check className="h-3 w-3 text-green-500" /> Progress tracking</span>
+                </div>
+              </Card>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.2 }} data-testid="card-collab-approvals">
+              <Card className="p-6 h-full border-green-200/50 dark:border-green-800/50">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white flex items-center justify-center mb-4">
+                  <CheckCheck className="h-6 w-6" />
+                </div>
+                <h4 className="text-lg font-bold mb-2 font-display">Approval Workflows</h4>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Request reviews before publishing. Multi-level approval chains for quality control.
+                </p>
+                <div className="flex gap-2">
+                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Approved</Badge>
+                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Pending</Badge>
+                </div>
+              </Card>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.3 }} data-testid="card-collab-comments">
+              <Card className="p-6 h-full">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white flex items-center justify-center mb-4">
+                  <MessageCircle className="h-6 w-6" />
+                </div>
+                <h4 className="text-lg font-bold mb-2 font-display">Comments & Discussions</h4>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Leave feedback on specific steps. Threaded discussions keep context together.
+                </p>
+                <div className="bg-muted/50 rounded-lg p-3 text-xs">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="h-5 w-5 rounded-full bg-brand-200 dark:bg-brand-800" />
+                    <span className="font-medium text-foreground">Sarah</span>
+                  </div>
+                  <div className="h-2 w-3/4 bg-muted rounded" />
+                </div>
+              </Card>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.4 }} data-testid="card-collab-notifications">
+              <Card className="p-6 h-full">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-white flex items-center justify-center mb-4">
+                  <Bell className="h-6 w-6" />
+                </div>
+                <h4 className="text-lg font-bold mb-2 font-display">Smart Notifications</h4>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Stay informed with real-time alerts for assignments, mentions, approvals, and updates.
+                </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Check className="h-3 w-3 text-green-500" /> Email</span>
+                  <span className="flex items-center gap-1"><Check className="h-3 w-3 text-green-500" /> In-app</span>
+                  <span className="flex items-center gap-1"><Check className="h-3 w-3 text-green-500" /> Slack</span>
+                </div>
+              </Card>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.5 }} data-testid="card-collab-sharing">
+              <Card className="p-6 h-full border-brand-200/50 dark:border-brand-800/50">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center mb-4">
+                  <Link2 className="h-6 w-6" />
+                </div>
+                <h4 className="text-lg font-bold mb-2 font-display">Password-Protected Sharing</h4>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Share guides securely with password protection and expiring links. Control who sees your content.
+                </p>
+                <div className="flex items-center gap-2 text-xs">
+                  <Lock className="h-4 w-4 text-brand-600" />
+                  <span className="text-muted-foreground">Secure & Private</span>
+                </div>
+              </Card>
+            </motion.div>
+
+            <motion.div {...fadeInUp} transition={{ delay: 0.6 }} data-testid="card-collab-workspaces">
+              <Card className="p-6 h-full">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-600 text-white flex items-center justify-center mb-4">
+                  <Layers className="h-6 w-6" />
+                </div>
+                <h4 className="text-lg font-bold mb-2 font-display">Multi-Workspace Support</h4>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Organize guides by team, project, or client. Role-based access ensures the right people see the right content.
+                </p>
+                <div className="flex gap-2">
+                  <Badge variant="secondary" className="text-xs">Owner</Badge>
+                  <Badge variant="secondary" className="text-xs">Admin</Badge>
+                  <Badge variant="secondary" className="text-xs">Editor</Badge>
+                  <Badge variant="secondary" className="text-xs">Viewer</Badge>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* Integrations & Automations Section */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-muted/30 border-y border-border">
         <div className="max-w-7xl mx-auto">
           <motion.div 
             className="text-center mb-16"
             {...fadeInUp}
           >
             <Badge variant="secondary" className="mb-4 rounded-full px-4 py-1.5" data-testid="badge-integrations-section">
-              Integrations
+              <Zap className="h-3.5 w-3.5 mr-1.5" />
+              Integrations & Automations
             </Badge>
             <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">
-              Works Where You Work
+              Connect Everything, Automate Anything
             </h2>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
-              Seamlessly integrate with your favorite tools. Share guides in Slack, 
-              embed in Notion, or build custom workflows with our API.
+              Integrate with 10+ services, create custom webhooks, and build powerful automations
+              that trigger actions when things happen in your guides.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             <motion.div {...fadeInUp} transition={{ delay: 0.1 }} data-testid="card-integration-slack">
               <Card className="p-6 h-full text-center group">
                 <div className="h-16 w-16 rounded-2xl bg-[#4A154B]/10 dark:bg-[#4A154B]/20 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                   <SiSlack className="h-8 w-8 text-[#4A154B] dark:text-[#E01E5A]" />
                 </div>
-                <h4 className="text-lg font-bold mb-2 font-display">Slack/Teams Bot</h4>
+                <h4 className="text-lg font-bold mb-2 font-display">Slack & Teams</h4>
                 <p className="text-muted-foreground text-sm">
-                  Share guides directly in chat. Search and access docs without leaving your workflow.
+                  Push notifications and updates directly to your team's channels.
                 </p>
               </Card>
             </motion.div>
 
-            <motion.div {...fadeInUp} transition={{ delay: 0.2 }} data-testid="card-integration-guide-hub">
-              <Card className="p-6 h-full text-center group">
+            <motion.div {...fadeInUp} transition={{ delay: 0.2 }} data-testid="card-integration-webhooks">
+              <Card className="p-6 h-full text-center group border-brand-200/50 dark:border-brand-800/50">
                 <div className="h-16 w-16 rounded-2xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                  <BookOpen className="h-8 w-8 text-brand-600" />
+                  <Workflow className="h-8 w-8 text-brand-600" />
                 </div>
-                <h4 className="text-lg font-bold mb-2 font-display">Public Guide Hub</h4>
+                <h4 className="text-lg font-bold mb-2 font-display">Custom Webhooks</h4>
                 <p className="text-muted-foreground text-sm">
-                  Create a branded knowledge base. Your own docs portal with custom domain.
+                  HMAC-signed webhooks with retry logic. Connect to any system.
                 </p>
               </Card>
             </motion.div>
 
-            <motion.div {...fadeInUp} transition={{ delay: 0.3 }} data-testid="card-integration-custom-domains">
+            <motion.div {...fadeInUp} transition={{ delay: 0.3 }} data-testid="card-integration-automations">
               <Card className="p-6 h-full text-center group">
-                <div className="h-16 w-16 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                  <Globe2 className="h-8 w-8 text-green-600" />
+                <div className="h-16 w-16 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <Settings2 className="h-8 w-8 text-purple-600" />
                 </div>
-                <h4 className="text-lg font-bold mb-2 font-display">Custom Domains</h4>
+                <h4 className="text-lg font-bold mb-2 font-display">Automations</h4>
                 <p className="text-muted-foreground text-sm">
-                  White-label hosting on your own domain. Full brand control.
+                  Trigger actions when guides are created, published, or completed.
                 </p>
               </Card>
             </motion.div>
@@ -724,13 +853,23 @@ export default function LandingPage() {
                 <div className="h-16 w-16 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                   <Code className="h-8 w-8 text-gray-600 dark:text-gray-400" />
                 </div>
-                <h4 className="text-lg font-bold mb-2 font-display">API Access</h4>
+                <h4 className="text-lg font-bold mb-2 font-display">REST API</h4>
                 <p className="text-muted-foreground text-sm">
-                  Full REST API for custom integrations. Build anything you can imagine.
+                  Full API access for custom integrations. Build anything.
                 </p>
               </Card>
             </motion.div>
           </div>
+
+          <motion.div 
+            className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground"
+            {...fadeInUp}
+          >
+            <span className="font-medium">Also integrates with:</span>
+            {['Jira', 'ClickUp', 'Notion', 'Confluence', 'Monday.com', 'Mixpanel', 'Google Analytics'].map((tool) => (
+              <Badge key={tool} variant="outline" className="text-xs">{tool}</Badge>
+            ))}
+          </motion.div>
         </div>
       </section>
 
@@ -1036,19 +1175,19 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
-                    <span>Unlimited guides</span>
+                    <span>AI-powered descriptions & translations</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
-                    <span>AI-powered descriptions</span>
+                    <span>Team collaboration & approvals</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
-                    <span>Screenshot beautification</span>
+                    <span>Integrations & automations</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
-                    <span>Team collaboration</span>
+                    <span>Password-protected sharing</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
@@ -1059,6 +1198,10 @@ export default function LandingPage() {
                     <span>Priority support</span>
                   </li>
                 </ul>
+                <div className="text-xs text-muted-foreground mb-4 text-center">
+                  <Sparkles className="h-3 w-3 inline mr-1" />
+                  Bonus: Screenshot Studio for enhanced visuals
+                </div>
                 <Button size="lg" className="w-full rounded-full bg-brand-600 text-white" asChild>
                   <a href="/api/login" data-testid="button-pricing-pro">Start Pro Trial</a>
                 </Button>
@@ -1146,9 +1289,9 @@ export default function LandingPage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><a href="#features" className="hover:text-foreground transition-colors" data-testid="link-footer-features">Features</a></li>
                 <li><a href="#ai-powered" className="hover:text-foreground transition-colors" data-testid="link-footer-ai">AI Features</a></li>
+                <li><a href="#collaboration" className="hover:text-foreground transition-colors" data-testid="link-footer-collaboration">Team Collaboration</a></li>
                 <li><a href="#how-it-works" className="hover:text-foreground transition-colors" data-testid="link-footer-how-it-works">How It Works</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-pricing">Pricing</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-extension">Chrome Extension</a></li>
+                <li><a href="#pricing" className="hover:text-foreground transition-colors" data-testid="link-footer-pricing">Pricing</a></li>
               </ul>
             </div>
             <div>

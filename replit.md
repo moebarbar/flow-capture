@@ -63,6 +63,11 @@ Key entities in `shared/schema.ts`:
 
 ## External Dependencies
 
+### Email Service (SendGrid)
+- SendGrid integration is needed for email notifications (sign-ups, assignments, approvals, workflow updates)
+- User needs to provide `SENDGRID_API_KEY` secret to enable email functionality
+- Email service is stubbed in `server/services/emailService.ts` - ready to be activated when API key is provided
+
 ### Database
 - **PostgreSQL**: Primary database via `DATABASE_URL` environment variable
 - **Drizzle ORM**: Type-safe database queries with schema defined in `shared/schema.ts`

@@ -25,6 +25,7 @@ const SharedGuidePage = lazy(() => import("@/pages/SharedGuidePage"));
 const EmbedGuidePage = lazy(() => import("@/pages/EmbedGuidePage"));
 const ContentPage = lazy(() => import("@/pages/ContentPage"));
 const TeamDashboard = lazy(() => import("@/pages/TeamDashboard"));
+const IntegrationsPage = lazy(() => import("@/pages/IntegrationsPage"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -146,6 +147,9 @@ function Router() {
       </Route>
       <Route path="/workspaces/:workspaceId/team">
         {() => <ProtectedRoute component={TeamDashboard} />}
+      </Route>
+      <Route path="/integrations">
+        {() => <ProtectedRoute component={IntegrationsPage} />}
       </Route>
 
       <Route>

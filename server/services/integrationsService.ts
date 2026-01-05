@@ -103,30 +103,36 @@ class IntegrationsService {
 
   async triggerWebhook(webhook: Webhook, event: string, payload: Record<string, unknown>): Promise<boolean> {
     const startTime = Date.now();
+    const MAX_PAYLOAD_LOG_SIZE = 10000;
     
     try {
-      const signature = this.signPayload(JSON.stringify(payload), webhook.secret || '');
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const payloadStr = JSON.stringify(payload);
+      const signaturePayload = `${timestamp}.${payloadStr}`;
+      const signature = this.signPayload(signaturePayload, webhook.secret || '');
       
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'X-Webhook-Signature': signature,
+        'X-Webhook-Signature': `t=${timestamp},v1=${signature}`,
         'X-Webhook-Event': event,
-        ...(webhook.headers as Record<string, string> || {})
+        'X-Webhook-Id': webhook.id.toString()
       };
 
       const response = await fetch(webhook.url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload)
+        body: payloadStr
       });
 
       const executionTime = Date.now() - startTime;
       const responseBody = await response.text().catch(() => '');
 
+      const sanitizedPayload = this.sanitizePayloadForLog(payload, MAX_PAYLOAD_LOG_SIZE);
+
       await db.insert(webhookLogs).values({
         webhookId: webhook.id,
         event,
-        payload,
+        payload: sanitizedPayload,
         statusCode: response.status,
         responseBody: responseBody.substring(0, 1000),
         success: response.ok,
@@ -147,10 +153,12 @@ class IntegrationsService {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       
+      const sanitizedPayload = this.sanitizePayloadForLog(payload, MAX_PAYLOAD_LOG_SIZE);
+
       await db.insert(webhookLogs).values({
         webhookId: webhook.id,
         event,
-        payload,
+        payload: sanitizedPayload,
         statusCode: 0,
         responseBody: error instanceof Error ? error.message : 'Unknown error',
         success: false,
@@ -163,6 +171,27 @@ class IntegrationsService {
 
       return false;
     }
+  }
+
+  private sanitizePayloadForLog(payload: Record<string, unknown>, maxSize: number): Record<string, unknown> {
+    const sensitiveKeys = ['password', 'secret', 'token', 'apiKey', 'api_key', 'authorization', 'auth'];
+    const sanitized: Record<string, unknown> = {};
+    
+    for (const [key, value] of Object.entries(payload)) {
+      if (sensitiveKeys.some(sk => key.toLowerCase().includes(sk))) {
+        sanitized[key] = '[REDACTED]';
+      } else if (typeof value === 'string' && value.length > 500) {
+        sanitized[key] = value.substring(0, 500) + '[TRUNCATED]';
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    
+    const str = JSON.stringify(sanitized);
+    if (str.length > maxSize) {
+      return { _truncated: true, _message: 'Payload too large for logging' };
+    }
+    return sanitized;
   }
 
   private signPayload(payload: string, secret: string): string {

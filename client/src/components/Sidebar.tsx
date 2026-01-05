@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles } from "lucide-react";
+import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles, Moon, Sun } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspaces } from "@/hooks/use-workspaces";
+import { useTheme } from "@/components/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -37,6 +38,11 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const { data: workspaces } = useWorkspaces();
   const { isCollapsed, toggle } = useSidebarState();
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+  };
 
   // Basic mock active workspace for now
   const activeWorkspace = workspaces?.[0];
@@ -150,6 +156,46 @@ export function Sidebar() {
           
           return navItem;
         })}
+      </div>
+
+      {/* Theme Toggle */}
+      <div className={cn("border-t border-border", isCollapsed ? "p-2" : "px-3 py-2")}>
+        {isCollapsed ? (
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="w-full"
+                data-testid="button-theme-toggle"
+              >
+                {resolvedTheme === "dark" ? (
+                  <Moon className="h-5 w-5" />
+                ) : (
+                  <Sun className="h-5 w-5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="font-medium">
+              {resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            variant="ghost"
+            onClick={toggleTheme}
+            className="w-full justify-start gap-3 px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            data-testid="button-theme-toggle"
+          >
+            {resolvedTheme === "dark" ? (
+              <Moon className="h-5 w-5 shrink-0" />
+            ) : (
+              <Sun className="h-5 w-5 shrink-0" />
+            )}
+            {resolvedTheme === "dark" ? "Dark mode" : "Light mode"}
+          </Button>
+        )}
       </div>
 
       {/* User Profile */}

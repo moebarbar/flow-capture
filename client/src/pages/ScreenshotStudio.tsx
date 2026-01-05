@@ -59,9 +59,16 @@ export default function ScreenshotStudio() {
   useEffect(() => {
     const handleExtensionMessage = (event: MessageEvent) => {
       if (event.data?.type === "FLOWCAPTURE_SCREENSHOT_CAPTURED" && event.data?.screenshot) {
+        // Clear the timeout since capture succeeded
+        const timeoutId = (window as any).__flowcaptureTimeoutId;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          delete (window as any).__flowcaptureTimeoutId;
+        }
+        
         setImageUrl(event.data.screenshot);
         setIsWaitingForCapture(false);
-        toast({ title: "Screenshot captured from extension" });
+        toast({ title: "Screenshot captured successfully" });
       }
     };
 
@@ -70,18 +77,28 @@ export default function ScreenshotStudio() {
   }, [toast]);
 
   const handleCaptureViaExtension = () => {
-    // Send message to extension popup or content script
+    // Send message to extension content script
     window.postMessage({ type: "FLOWCAPTURE_REQUEST_SCREENSHOT" }, "*");
     setIsWaitingForCapture(true);
     toast({ 
-      title: "Ready to capture",
-      description: "Click the FlowCapture extension icon or use Ctrl+Shift+S to capture a screenshot" 
+      title: "Capturing screenshot...",
+      description: "The extension will capture your current browser tab" 
     });
     
-    // Auto-timeout after 30 seconds
-    setTimeout(() => {
-      setIsWaitingForCapture(false);
-    }, 30000);
+    // Auto-timeout after 10 seconds with helpful error message
+    const timeoutId = setTimeout(() => {
+      if (isWaitingForCapture) {
+        setIsWaitingForCapture(false);
+        toast({ 
+          title: "Extension not detected",
+          description: "Make sure the FlowCapture Chrome extension is installed and enabled",
+          variant: "destructive"
+        });
+      }
+    }, 10000);
+    
+    // Store timeout ID to clear it if capture succeeds
+    (window as any).__flowcaptureTimeoutId = timeoutId;
   };
 
   return (

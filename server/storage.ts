@@ -1,7 +1,7 @@
 import { 
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
   guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares,
-  type User, type InsertUser,
+  type User, type UpsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
   type Step, type InsertStep,
@@ -14,14 +14,14 @@ import {
   type GuideShare, type InsertGuideShare
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createUser(user: UpsertUser): Promise<User>;
   updateUserStripeInfo(userId: string, info: { stripeCustomerId?: string; stripeSubscriptionId?: string; subscriptionStatus?: string }): Promise<User>;
   updateUserRole(userId: string, role: string): Promise<User>;
   getAllUsers(limit?: number, offset?: number): Promise<User[]>;
@@ -97,7 +97,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createUser(insertUser: UpsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
@@ -156,7 +156,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWorkspacesForUser(userId: string): Promise<Workspace[]> {
-    // Get workspaces where user is a member
+    // Get workspaces where user is a member - optimized single query
     const memberRecords = await db.select()
       .from(workspaceMembers)
       .where(eq(workspaceMembers.userId, userId));
@@ -165,14 +165,10 @@ export class DatabaseStorage implements IStorage {
 
     const workspaceIds = memberRecords.map(m => m.workspaceId);
     
-    // This is a simple implementation. Drizzle's `inArray` would be better but keeping it simple with loops or separate queries if needed.
-    // Actually let's use a join or multiple queries.
-    const results = [];
-    for (const rec of memberRecords) {
-      const w = await this.getWorkspace(rec.workspaceId);
-      if (w) results.push(w);
-    }
-    return results;
+    // Single query using inArray instead of N+1 pattern
+    return db.select()
+      .from(workspaces)
+      .where(inArray(workspaces.id, workspaceIds));
   }
 
   async updateWorkspace(id: number, update: Partial<InsertWorkspace>): Promise<Workspace> {
@@ -259,12 +255,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reorderSteps(stepIds: number[]): Promise<void> {
-    // This could be optimized to a single query with a CASE statement
-    for (let i = 0; i < stepIds.length; i++) {
-      await db.update(steps)
-        .set({ order: i })
-        .where(eq(steps.id, stepIds[i]));
-    }
+    if (stepIds.length === 0) return;
+    
+    // Batch update using Promise.all for parallel execution
+    await Promise.all(
+      stepIds.map((id, i) =>
+        db.update(steps)
+          .set({ order: i })
+          .where(eq(steps.id, id))
+      )
+    );
   }
 
   // Folder methods

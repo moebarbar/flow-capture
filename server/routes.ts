@@ -374,71 +374,81 @@ export async function registerRoutes(
 
   // Public: Get shared guide info (no password required)
   app.get('/api/share/:token', async (req, res) => {
-    const { token } = req.params;
-    
-    const share = await storage.getGuideShareByToken(token);
-    if (!share || !share.enabled) {
-      return res.status(404).json({ message: "Guide not found or sharing is disabled" });
+    try {
+      const { token } = req.params;
+      
+      const share = await storage.getGuideShareByToken(token);
+      if (!share || !share.enabled) {
+        return res.status(404).json({ message: "Guide not found or sharing is disabled" });
+      }
+      
+      const guide = await storage.getGuide(share.guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      res.json({
+        title: guide.title,
+        requiresPassword: !!share.passwordHash,
+      });
+    } catch (error) {
+      console.error("Share lookup error:", error);
+      res.status(500).json({ message: "Failed to load shared guide" });
     }
-    
-    const guide = await storage.getGuide(share.guideId);
-    if (!guide) {
-      return res.status(404).json({ message: "Guide not found" });
-    }
-    
-    res.json({
-      title: guide.title,
-      requiresPassword: !!share.passwordHash,
-    });
   });
 
   // Public: Verify password and get shared guide content
   app.post('/api/share/:token/verify', async (req, res) => {
-    const { token } = req.params;
-    const { password } = req.body;
-    
-    const share = await storage.getGuideShareByToken(token);
-    if (!share || !share.enabled) {
-      return res.status(404).json({ message: "Guide not found or sharing is disabled" });
-    }
-    
-    if (share.passwordHash) {
-      if (!password) {
-        return res.status(401).json({ message: "Password required" });
+    try {
+      const { token } = req.params;
+      const { password } = req.body;
+      
+      const share = await storage.getGuideShareByToken(token);
+      if (!share || !share.enabled) {
+        return res.status(404).json({ message: "Guide not found or sharing is disabled" });
       }
       
-      const isValid = await bcrypt.compare(password, share.passwordHash);
-      if (!isValid) {
-        return res.status(401).json({ message: "Invalid password" });
+      if (share.passwordHash) {
+        if (!password) {
+          return res.status(401).json({ message: "Password required" });
+        }
+        
+        const isValid = await bcrypt.compare(password, share.passwordHash);
+        if (!isValid) {
+          return res.status(401).json({ message: "Invalid password" });
+        }
       }
+      
+      await storage.incrementShareAccessCount(share.id);
+      
+      const guide = await storage.getGuide(share.guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const steps = await storage.getStepsByGuide(share.guideId);
+      
+      res.json({
+        guide: {
+          id: guide.id,
+          title: guide.title,
+          description: guide.description,
+          coverImageUrl: guide.coverImageUrl,
+        },
+        steps: steps.map(s => ({
+          id: s.id,
+          order: s.order,
+          title: s.title,
+          description: s.description,
+          imageUrl: s.imageUrl,
+          actionType: s.actionType,
+          metadata: s.metadata,
+        })),
+      });
+    } catch (error) {
+      console.error("Share verification error:", error);
+      res.status(500).json({ message: "Failed to verify shared guide" });
     }
-    
-    await storage.incrementShareAccessCount(share.id);
-    
-    const guide = await storage.getGuide(share.guideId);
-    if (!guide) {
-      return res.status(404).json({ message: "Guide not found" });
-    }
-    
-    const steps = await storage.getStepsByGuide(share.guideId);
-    
-    res.json({
-      guide: {
-        id: guide.id,
-        title: guide.title,
-        description: guide.description,
-        coverImageUrl: guide.coverImageUrl,
-      },
-      steps: steps.map(s => ({
-        id: s.id,
-        order: s.order,
-        title: s.title,
-        description: s.description,
-        imageUrl: s.imageUrl,
-        actionType: s.actionType,
-        metadata: s.metadata,
-      })),
-    });
   });
 
   // === GUIDE EXPORT ===
@@ -541,44 +551,49 @@ export async function registerRoutes(
 
   // Public: Get embed content (for iframe)
   app.get('/api/embed/:token', async (req, res) => {
-    const { token } = req.params;
-    
-    const share = await storage.getGuideShareByToken(token);
-    if (!share || !share.enabled) {
-      return res.status(404).json({ message: "Guide not found or sharing is disabled" });
+    try {
+      const { token } = req.params;
+      
+      const share = await storage.getGuideShareByToken(token);
+      if (!share || !share.enabled) {
+        return res.status(404).json({ message: "Guide not found or sharing is disabled" });
+      }
+      
+      // Password-protected guides cannot be embedded
+      if (share.passwordHash) {
+        return res.status(403).json({ message: "Password-protected guides cannot be embedded. Use the share link instead." });
+      }
+      
+      await storage.incrementShareAccessCount(share.id);
+      
+      const guide = await storage.getGuide(share.guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const steps = await storage.getStepsByGuide(share.guideId);
+      
+      res.json({
+        guide: {
+          id: guide.id,
+          title: guide.title,
+          description: guide.description,
+          coverImageUrl: guide.coverImageUrl,
+        },
+        steps: steps.map(s => ({
+          id: s.id,
+          order: s.order,
+          title: s.title,
+          description: s.description,
+          imageUrl: s.imageUrl,
+          actionType: s.actionType,
+          metadata: s.metadata,
+        })),
+      });
+    } catch (error) {
+      console.error("Embed lookup error:", error);
+      res.status(500).json({ message: "Failed to load embedded guide" });
     }
-    
-    // Password-protected guides cannot be embedded
-    if (share.passwordHash) {
-      return res.status(403).json({ message: "Password-protected guides cannot be embedded. Use the share link instead." });
-    }
-    
-    await storage.incrementShareAccessCount(share.id);
-    
-    const guide = await storage.getGuide(share.guideId);
-    if (!guide) {
-      return res.status(404).json({ message: "Guide not found" });
-    }
-    
-    const steps = await storage.getStepsByGuide(share.guideId);
-    
-    res.json({
-      guide: {
-        id: guide.id,
-        title: guide.title,
-        description: guide.description,
-        coverImageUrl: guide.coverImageUrl,
-      },
-      steps: steps.map(s => ({
-        id: s.id,
-        order: s.order,
-        title: s.title,
-        description: s.description,
-        imageUrl: s.imageUrl,
-        actionType: s.actionType,
-        metadata: s.metadata,
-      })),
-    });
   });
 
   // === AI ===

@@ -556,6 +556,175 @@ export async function registerRoutes(
     }
   });
 
+  // === SITE SETTINGS ENDPOINTS ===
+  
+  // Public settings (for landing page)
+  app.get('/api/settings/public', async (req, res) => {
+    try {
+      const settings = await storage.getSiteSettings();
+      if (!settings) {
+        return res.json({
+          siteName: 'FlowCapture',
+          siteDescription: 'Automatic workflow documentation',
+          primaryColor: '#6366f1',
+          secondaryColor: '#8b5cf6',
+          accentColor: '#06b6d4',
+        });
+      }
+      res.json({
+        siteName: settings.siteName,
+        siteDescription: settings.siteDescription,
+        logoUrl: settings.logoUrl,
+        faviconUrl: settings.faviconUrl,
+        primaryColor: settings.primaryColor,
+        secondaryColor: settings.secondaryColor,
+        accentColor: settings.accentColor,
+        headScripts: settings.headScripts,
+        bodyScripts: settings.bodyScripts,
+        customCss: settings.customCss,
+        socialLinks: settings.socialLinks,
+      });
+    } catch (error) {
+      res.json({ siteName: 'FlowCapture' });
+    }
+  });
+
+  // Admin settings endpoints
+  app.get('/api/admin/settings', requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getSiteSettings();
+      res.json(settings || {});
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get settings' });
+    }
+  });
+
+  app.put('/api/admin/settings', requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.upsertSiteSettings(req.body);
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update settings' });
+    }
+  });
+
+  // === DISCOUNT CODES ENDPOINTS ===
+  
+  app.get('/api/admin/discount-codes', requireAdmin, async (req, res) => {
+    try {
+      const codes = await storage.getAllDiscountCodes();
+      res.json({ data: codes });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get discount codes' });
+    }
+  });
+
+  app.get('/api/admin/discount-codes/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const code = await storage.getDiscountCode(id);
+      if (!code) return res.status(404).json({ message: 'Discount code not found' });
+      res.json(code);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get discount code' });
+    }
+  });
+
+  const createDiscountCodeSchema = z.object({
+    code: z.string().min(1).max(50),
+    description: z.string().optional(),
+    discountType: z.enum(['percent', 'fixed']),
+    discountValue: z.number().min(1),
+    currency: z.string().default('usd'),
+    maxRedemptions: z.number().nullable().optional(),
+    expiresAt: z.string().nullable().optional(),
+    status: z.enum(['active', 'inactive', 'expired']).default('active'),
+  });
+
+  app.post('/api/admin/discount-codes', requireAdmin, async (req, res) => {
+    try {
+      const data = createDiscountCodeSchema.parse(req.body);
+      const code = await storage.createDiscountCode(data as any);
+      res.status(201).json(code);
+    } catch (error: any) {
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Validation error', errors: error.errors });
+      }
+      res.status(400).json({ message: error.message || 'Failed to create discount code' });
+    }
+  });
+
+  app.patch('/api/admin/discount-codes/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const existing = await storage.getDiscountCode(id);
+      if (!existing) return res.status(404).json({ message: 'Discount code not found' });
+      
+      const updated = await storage.updateDiscountCode(id, req.body);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update discount code' });
+    }
+  });
+
+  app.delete('/api/admin/discount-codes/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteDiscountCode(id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete discount code' });
+    }
+  });
+
+  // === FINANCE ENDPOINTS ===
+  
+  app.get('/api/admin/finance/overview', requireAdmin, async (req, res) => {
+    try {
+      const subscriptions = await stripeService.getSubscriptions();
+      const invoices = await stripeService.getInvoices();
+      
+      const activeSubscriptions = subscriptions.filter(s => s.status === 'active');
+      const totalMRR = activeSubscriptions.reduce((sum, sub: any) => {
+        const amount = sub.items?.data?.[0]?.price?.unit_amount || 0;
+        return sum + (amount / 100);
+      }, 0);
+      
+      const paidInvoices = invoices.filter((inv: any) => inv.status === 'paid');
+      const totalRevenue = paidInvoices.reduce((sum: number, inv: any) => sum + ((inv.amount_paid || 0) / 100), 0);
+      
+      const recentRevenue = paidInvoices
+        .filter((inv: any) => {
+          const date = new Date(inv.created * 1000);
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          return date >= thirtyDaysAgo;
+        })
+        .reduce((sum: number, inv: any) => sum + ((inv.amount_paid || 0) / 100), 0);
+      
+      res.json({
+        mrr: totalMRR,
+        arr: totalMRR * 12,
+        totalRevenue,
+        recentRevenue,
+        activeSubscriptionCount: activeSubscriptions.length,
+        totalInvoices: invoices.length,
+        paidInvoices: paidInvoices.length,
+      });
+    } catch (error) {
+      console.error('Finance overview error:', error);
+      res.json({
+        mrr: 0,
+        arr: 0,
+        totalRevenue: 0,
+        recentRevenue: 0,
+        activeSubscriptionCount: 0,
+        totalInvoices: 0,
+        paidInvoices: 0,
+      });
+    }
+  });
+
   // === EXTENSION ENDPOINTS ===
   app.get(api.extension.getUser.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

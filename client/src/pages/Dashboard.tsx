@@ -1,4 +1,5 @@
-import { useWorkspaces } from "@/hooks/use-workspaces";
+import { useEffect, useRef } from "react";
+import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,18 @@ import { EmptyState } from "@/components/EmptyState";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
-  const { data: workspaces } = useWorkspaces();
-  const workspaceId = workspaces?.[0]?.id; // Mock active workspace
+  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
+  const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
+  const ensuredRef = useRef(false);
+  
+  useEffect(() => {
+    if (!workspacesLoading && workspaces && workspaces.length === 0 && !ensuredRef.current && !isEnsuring) {
+      ensuredRef.current = true;
+      ensureDefaultWorkspace();
+    }
+  }, [workspaces, workspacesLoading, isEnsuring, ensureDefaultWorkspace]);
+
+  const workspaceId = workspaces?.[0]?.id;
   const { data: guides, isLoading } = useGuides({ workspaceId });
   const { mutate: createGuide, isPending: isCreating } = useCreateGuide();
 

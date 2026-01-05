@@ -62,6 +62,31 @@ export async function registerRoutes(
     res.json(workspace);
   });
 
+  app.post('/api/workspaces/ensure-default', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const firstName = user.claims.first_name || "My";
+
+    try {
+      const existingWorkspaces = await storage.getWorkspacesForUser(userId);
+      if (existingWorkspaces.length > 0) {
+        return res.json(existingWorkspaces[0]);
+      }
+
+      const slug = `personal-${userId.slice(0, 8)}-${Date.now()}`;
+      const workspace = await storage.createWorkspace({
+        name: `${firstName}'s Workspace`,
+        slug,
+        ownerId: userId,
+      });
+      res.status(201).json(workspace);
+    } catch (err) {
+      console.error("Failed to create default workspace:", err);
+      res.status(500).json({ message: "Failed to create workspace" });
+    }
+  });
+
   // === GUIDES ===
   app.get(api.guides.list.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

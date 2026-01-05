@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
 import { Sidebar, useSidebarState } from "@/components/Sidebar";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, TrendingUp, BookOpen, MoreVertical } from "lucide-react";
 import { SiGooglechrome } from "react-icons/si";
@@ -64,6 +65,7 @@ export default function Dashboard() {
               <p className="text-muted-foreground mt-1">Overview of your documentation activity</p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
+              <NotificationBell />
               <Button 
                 variant="outline"
                 className="rounded-full px-5"

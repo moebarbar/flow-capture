@@ -22,6 +22,7 @@ import ScreenshotStudio from "@/pages/ScreenshotStudio";
 import SharedGuidePage from "@/pages/SharedGuidePage";
 import EmbedGuidePage from "@/pages/EmbedGuidePage";
 import ContentPage from "@/pages/ContentPage";
+import TeamDashboard from "@/pages/TeamDashboard";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -91,6 +92,9 @@ function Router() {
       </Route>
       <Route path="/studio">
         {() => <ProtectedRoute component={ScreenshotStudio} />}
+      </Route>
+      <Route path="/workspaces/:workspaceId/team">
+        {() => <ProtectedRoute component={TeamDashboard} />}
       </Route>
 
       <Route component={NotFound} />

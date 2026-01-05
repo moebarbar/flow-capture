@@ -1,6 +1,7 @@
 import { 
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
   guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares, contentPages,
+  stepAssignments, guideApprovals, stepComments, notifications, teamActivity,
   type User, type UpsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
@@ -12,7 +13,12 @@ import {
   type DiscountCode, type InsertDiscountCode,
   type WorkspaceWithMembers,
   type GuideTemplate, type GuideVersion, type WorkspaceSettingsType,
-  type GuideShare, type InsertGuideShare
+  type GuideShare, type InsertGuideShare,
+  type StepAssignment, type InsertStepAssignment,
+  type GuideApproval, type InsertGuideApproval,
+  type StepComment, type InsertStepComment,
+  type Notification, type InsertNotification,
+  type TeamActivity, type InsertTeamActivity
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
@@ -94,6 +100,53 @@ export interface IStorage {
   getFooterContentPages(): Promise<ContentPage[]>;
   updateContentPage(id: number, page: Partial<InsertContentPage>): Promise<ContentPage>;
   deleteContentPage(id: number): Promise<void>;
+
+  // Step Assignments
+  createStepAssignment(assignment: InsertStepAssignment): Promise<StepAssignment>;
+  getStepAssignment(id: number): Promise<StepAssignment | undefined>;
+  getAssignmentsByStep(stepId: number): Promise<StepAssignment[]>;
+  getAssignmentsByGuide(guideId: number): Promise<StepAssignment[]>;
+  getAssignmentsByUser(userId: string): Promise<StepAssignment[]>;
+  getAssignmentsByWorkspace(workspaceId: number): Promise<StepAssignment[]>;
+  updateStepAssignment(id: number, assignment: Partial<InsertStepAssignment>): Promise<StepAssignment>;
+  deleteStepAssignment(id: number): Promise<void>;
+
+  // Guide Approvals
+  createGuideApproval(approval: InsertGuideApproval): Promise<GuideApproval>;
+  getGuideApproval(id: number): Promise<GuideApproval | undefined>;
+  getApprovalsByGuide(guideId: number): Promise<GuideApproval[]>;
+  getPendingApprovalsByReviewer(reviewerId: string): Promise<GuideApproval[]>;
+  getPendingApprovalsByWorkspace(workspaceId: number): Promise<GuideApproval[]>;
+  updateGuideApproval(id: number, approval: Partial<InsertGuideApproval>): Promise<GuideApproval>;
+  deleteGuideApproval(id: number): Promise<void>;
+
+  // Step Comments
+  createStepComment(comment: InsertStepComment): Promise<StepComment>;
+  getStepComment(id: number): Promise<StepComment | undefined>;
+  getCommentsByStep(stepId: number): Promise<StepComment[]>;
+  getCommentsByGuide(guideId: number): Promise<StepComment[]>;
+  updateStepComment(id: number, comment: Partial<InsertStepComment>): Promise<StepComment>;
+  deleteStepComment(id: number): Promise<void>;
+
+  // Notifications
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByUser(userId: string, limit?: number): Promise<Notification[]>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+  markNotificationRead(id: number): Promise<void>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  deleteNotification(id: number): Promise<void>;
+
+  // Team Activity
+  createTeamActivity(activity: InsertTeamActivity): Promise<TeamActivity>;
+  getTeamActivityByWorkspace(workspaceId: number, limit?: number): Promise<TeamActivity[]>;
+  getTeamDashboardStats(workspaceId: number): Promise<{
+    totalGuides: number;
+    publishedGuides: number;
+    pendingApprovals: number;
+    activeAssignments: number;
+    completedAssignments: number;
+    recentActivity: TeamActivity[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -628,6 +681,224 @@ export class DatabaseStorage implements IStorage {
 
   async deleteContentPage(id: number): Promise<void> {
     await db.delete(contentPages).where(eq(contentPages.id, id));
+  }
+
+  // Step Assignments methods
+  async createStepAssignment(assignment: InsertStepAssignment): Promise<StepAssignment> {
+    const [newAssignment] = await db.insert(stepAssignments).values(assignment).returning();
+    return newAssignment;
+  }
+
+  async getStepAssignment(id: number): Promise<StepAssignment | undefined> {
+    const [assignment] = await db.select().from(stepAssignments).where(eq(stepAssignments.id, id));
+    return assignment;
+  }
+
+  async getAssignmentsByStep(stepId: number): Promise<StepAssignment[]> {
+    return db.select().from(stepAssignments)
+      .where(eq(stepAssignments.stepId, stepId))
+      .orderBy(desc(stepAssignments.createdAt));
+  }
+
+  async getAssignmentsByGuide(guideId: number): Promise<StepAssignment[]> {
+    return db.select().from(stepAssignments)
+      .where(eq(stepAssignments.guideId, guideId))
+      .orderBy(desc(stepAssignments.createdAt));
+  }
+
+  async getAssignmentsByUser(userId: string): Promise<StepAssignment[]> {
+    return db.select().from(stepAssignments)
+      .where(eq(stepAssignments.assigneeId, userId))
+      .orderBy(desc(stepAssignments.createdAt));
+  }
+
+  async getAssignmentsByWorkspace(workspaceId: number): Promise<StepAssignment[]> {
+    return db.select().from(stepAssignments)
+      .where(eq(stepAssignments.workspaceId, workspaceId))
+      .orderBy(desc(stepAssignments.createdAt));
+  }
+
+  async updateStepAssignment(id: number, update: Partial<InsertStepAssignment>): Promise<StepAssignment> {
+    const [updated] = await db.update(stepAssignments)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(stepAssignments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStepAssignment(id: number): Promise<void> {
+    await db.delete(stepAssignments).where(eq(stepAssignments.id, id));
+  }
+
+  // Guide Approvals methods
+  async createGuideApproval(approval: InsertGuideApproval): Promise<GuideApproval> {
+    const [newApproval] = await db.insert(guideApprovals).values(approval).returning();
+    return newApproval;
+  }
+
+  async getGuideApproval(id: number): Promise<GuideApproval | undefined> {
+    const [approval] = await db.select().from(guideApprovals).where(eq(guideApprovals.id, id));
+    return approval;
+  }
+
+  async getApprovalsByGuide(guideId: number): Promise<GuideApproval[]> {
+    return db.select().from(guideApprovals)
+      .where(eq(guideApprovals.guideId, guideId))
+      .orderBy(desc(guideApprovals.createdAt));
+  }
+
+  async getPendingApprovalsByReviewer(reviewerId: string): Promise<GuideApproval[]> {
+    return db.select().from(guideApprovals)
+      .where(and(
+        eq(guideApprovals.reviewerId, reviewerId),
+        eq(guideApprovals.status, 'pending')
+      ))
+      .orderBy(desc(guideApprovals.createdAt));
+  }
+
+  async getPendingApprovalsByWorkspace(workspaceId: number): Promise<GuideApproval[]> {
+    return db.select().from(guideApprovals)
+      .where(and(
+        eq(guideApprovals.workspaceId, workspaceId),
+        eq(guideApprovals.status, 'pending')
+      ))
+      .orderBy(desc(guideApprovals.createdAt));
+  }
+
+  async updateGuideApproval(id: number, update: Partial<InsertGuideApproval>): Promise<GuideApproval> {
+    const [updated] = await db.update(guideApprovals)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(guideApprovals.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGuideApproval(id: number): Promise<void> {
+    await db.delete(guideApprovals).where(eq(guideApprovals.id, id));
+  }
+
+  // Step Comments methods
+  async createStepComment(comment: InsertStepComment): Promise<StepComment> {
+    const [newComment] = await db.insert(stepComments).values(comment).returning();
+    return newComment;
+  }
+
+  async getStepComment(id: number): Promise<StepComment | undefined> {
+    const [comment] = await db.select().from(stepComments).where(eq(stepComments.id, id));
+    return comment;
+  }
+
+  async getCommentsByStep(stepId: number): Promise<StepComment[]> {
+    return db.select().from(stepComments)
+      .where(eq(stepComments.stepId, stepId))
+      .orderBy(asc(stepComments.createdAt));
+  }
+
+  async getCommentsByGuide(guideId: number): Promise<StepComment[]> {
+    return db.select().from(stepComments)
+      .where(eq(stepComments.guideId, guideId))
+      .orderBy(asc(stepComments.createdAt));
+  }
+
+  async updateStepComment(id: number, update: Partial<InsertStepComment>): Promise<StepComment> {
+    const [updated] = await db.update(stepComments)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(stepComments.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStepComment(id: number): Promise<void> {
+    await db.delete(stepComments).where(eq(stepComments.id, id));
+  }
+
+  // Notifications methods
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [newNotification] = await db.insert(notifications).values(notification).returning();
+    return newNotification;
+  }
+
+  async getNotificationsByUser(userId: string, limit = 50): Promise<Notification[]> {
+    return db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      ));
+    return result[0]?.count ?? 0;
+  }
+
+  async markNotificationRead(id: number): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.isRead, false)
+      ));
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.id, id));
+  }
+
+  // Team Activity methods
+  async createTeamActivity(activity: InsertTeamActivity): Promise<TeamActivity> {
+    const [newActivity] = await db.insert(teamActivity).values(activity).returning();
+    return newActivity;
+  }
+
+  async getTeamActivityByWorkspace(workspaceId: number, limit = 50): Promise<TeamActivity[]> {
+    return db.select().from(teamActivity)
+      .where(eq(teamActivity.workspaceId, workspaceId))
+      .orderBy(desc(teamActivity.createdAt))
+      .limit(limit);
+  }
+
+  async getTeamDashboardStats(workspaceId: number): Promise<{
+    totalGuides: number;
+    publishedGuides: number;
+    pendingApprovals: number;
+    activeAssignments: number;
+    completedAssignments: number;
+    recentActivity: TeamActivity[];
+  }> {
+    const [guideStats] = await db.select({ 
+      total: sql<number>`count(*)::int`,
+      published: sql<number>`count(*) filter (where status = 'published')::int`
+    }).from(guides).where(eq(guides.workspaceId, workspaceId));
+
+    const [approvalStats] = await db.select({ 
+      pending: sql<number>`count(*) filter (where status = 'pending')::int`
+    }).from(guideApprovals).where(eq(guideApprovals.workspaceId, workspaceId));
+
+    const [assignmentStats] = await db.select({ 
+      active: sql<number>`count(*) filter (where status in ('pending', 'in_progress'))::int`,
+      completed: sql<number>`count(*) filter (where status = 'completed')::int`
+    }).from(stepAssignments).where(eq(stepAssignments.workspaceId, workspaceId));
+
+    const recentActivity = await this.getTeamActivityByWorkspace(workspaceId, 10);
+
+    return {
+      totalGuides: guideStats?.total ?? 0,
+      publishedGuides: guideStats?.published ?? 0,
+      pendingApprovals: approvalStats?.pending ?? 0,
+      activeAssignments: assignmentStats?.active ?? 0,
+      completedAssignments: assignmentStats?.completed ?? 0,
+      recentActivity,
+    };
   }
 }
 

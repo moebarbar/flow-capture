@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles, Moon, Sun } from "lucide-react";
+import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles, Moon, Sun, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useTheme } from "@/components/ThemeProvider";
@@ -53,6 +53,7 @@ export function Sidebar() {
     { href: "/studio", label: "Screenshot Studio", icon: Sparkles },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/templates", label: "Templates", icon: LayoutTemplate },
+    ...(activeWorkspace ? [{ href: `/workspaces/${activeWorkspace.id}/team`, label: "Team", icon: Users }] : []),
     { href: "/workspace-settings", label: "Workspace Settings", icon: Cog },
     { href: "/settings", label: "Account", icon: Settings },
   ];

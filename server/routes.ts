@@ -10,7 +10,8 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { openai } from "./replit_integrations/image/client";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
-import { insertBlogPostSchema, users } from "@shared/schema";
+import { insertBlogPostSchema, users, steps } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import helmet from "helmet";
@@ -1198,7 +1199,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         allowedSchemes: ['http', 'https', 'mailto'],
       });
 
-      const page = await storage.createContentPage({
+      let page = await storage.createContentPage({
         title,
         slug: slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
         content: sanitizedContent,
@@ -1208,8 +1209,11 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         footerOrder: footerOrder || 0,
         createdById: userId,
         updatedById: userId,
-        publishedAt: status === 'published' ? new Date() : null,
       });
+
+      if (status === 'published') {
+        page = await storage.updateContentPage(page.id, { publishedAt: new Date() } as any);
+      }
 
       res.status(201).json(page);
     } catch (error: any) {
@@ -1976,6 +1980,580 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     } catch (err: any) {
       console.error("Decline invitation error:", err);
       res.status(400).json({ message: err.message || 'Failed to decline invitation' });
+    }
+  });
+
+  // === COLLABORATION & TEAM MANAGEMENT ENDPOINTS ===
+
+  // Helper to check workspace membership and role
+  async function checkWorkspaceAccess(userId: string, workspaceId: number, requiredRoles?: string[]): Promise<{ allowed: boolean; role?: string }> {
+    const members = await storage.getWorkspaceMembers(workspaceId);
+    const member = members.find(m => m.userId === userId);
+    if (!member) return { allowed: false };
+    if (requiredRoles && !requiredRoles.includes(member.role)) return { allowed: false };
+    return { allowed: true, role: member.role };
+  }
+
+  // --- Step Assignments ---
+  app.get('/api/workspaces/:workspaceId/assignments', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const assignments = await storage.getAssignmentsByWorkspace(workspaceId);
+      res.json({ data: assignments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get assignments' });
+    }
+  });
+
+  app.get('/api/guides/:guideId/assignments', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const guideId = parseInt(req.params.guideId);
+
+    try {
+      const guide = await storage.getGuide(guideId);
+      if (!guide) return res.status(404).json({ message: 'Guide not found' });
+
+      const assignments = await storage.getAssignmentsByGuide(guideId);
+      res.json({ data: assignments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get assignments' });
+    }
+  });
+
+  app.get('/api/my-assignments', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+
+    try {
+      const assignments = await storage.getAssignmentsByUser(user.claims.sub);
+      res.json({ data: assignments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get assignments' });
+    }
+  });
+
+  app.post('/api/steps/:stepId/assignments', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const stepId = parseInt(req.params.stepId);
+    const { assigneeId, dueDate, notes } = req.body;
+
+    try {
+      const step = await storage.getStepsByGuide(0).then(steps => steps.find(s => s.id === stepId));
+      if (!step) {
+        const allSteps = await db.select().from(steps).where(eq(steps.id, stepId));
+        if (!allSteps[0]) return res.status(404).json({ message: 'Step not found' });
+      }
+      
+      const [stepData] = await db.select().from(steps).where(eq(steps.id, stepId));
+      if (!stepData) return res.status(404).json({ message: 'Step not found' });
+
+      const guide = await storage.getGuide(stepData.guideId);
+      if (!guide) return res.status(404).json({ message: 'Guide not found' });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId, ['owner', 'admin', 'editor']);
+      if (!access.allowed) return res.status(403).json({ message: 'Must be editor or above to assign steps' });
+
+      const assignment = await storage.createStepAssignment({
+        stepId,
+        guideId: guide.id,
+        workspaceId: guide.workspaceId,
+        assigneeId,
+        assignedById: user.claims.sub,
+        status: 'pending',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        notes: notes || null,
+      });
+
+      // Create notification for assignee
+      await storage.createNotification({
+        userId: assigneeId,
+        type: 'assignment_created',
+        title: 'New Step Assignment',
+        message: `You have been assigned a step in "${guide.title}"`,
+        workspaceId: guide.workspaceId,
+        guideId: guide.id,
+        stepId,
+        referenceId: assignment.id,
+        actorId: user.claims.sub,
+        isRead: false,
+      });
+
+      // Log activity
+      await storage.createTeamActivity({
+        workspaceId: guide.workspaceId,
+        userId: user.claims.sub,
+        actionType: 'step_assigned',
+        resourceType: 'assignment',
+        resourceId: assignment.id,
+        metadata: { assigneeId, guideTitle: guide.title },
+      });
+
+      res.status(201).json(assignment);
+    } catch (error) {
+      console.error('Create assignment error:', error);
+      res.status(500).json({ message: 'Failed to create assignment' });
+    }
+  });
+
+  app.patch('/api/assignments/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const assignmentId = parseInt(req.params.id);
+    const { status, notes, dueDate } = req.body;
+
+    try {
+      const assignment = await storage.getStepAssignment(assignmentId);
+      if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
+
+      const isAssignee = assignment.assigneeId === user.claims.sub;
+      const access = await checkWorkspaceAccess(user.claims.sub, assignment.workspaceId, ['owner', 'admin', 'editor']);
+
+      if (!isAssignee && !access.allowed) {
+        return res.status(403).json({ message: 'Not authorized to update this assignment' });
+      }
+
+      const updateData: any = {};
+      if (status !== undefined) {
+        updateData.status = status;
+        if (status === 'completed') {
+          updateData.completedAt = new Date();
+        }
+      }
+      if (notes !== undefined) updateData.notes = notes;
+      if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null;
+
+      const updated = await storage.updateStepAssignment(assignmentId, updateData);
+
+      // Notify relevant parties
+      if (status === 'completed') {
+        await storage.createNotification({
+          userId: assignment.assignedById,
+          type: 'assignment_completed',
+          title: 'Assignment Completed',
+          message: `Step assignment has been completed`,
+          workspaceId: assignment.workspaceId,
+          guideId: assignment.guideId,
+          stepId: assignment.stepId,
+          referenceId: assignment.id,
+          actorId: user.claims.sub,
+          isRead: false,
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update assignment' });
+    }
+  });
+
+  app.delete('/api/assignments/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const assignmentId = parseInt(req.params.id);
+
+    try {
+      const assignment = await storage.getStepAssignment(assignmentId);
+      if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, assignment.workspaceId, ['owner', 'admin']);
+      if (!access.allowed) return res.status(403).json({ message: 'Must be admin to delete assignments' });
+
+      await storage.deleteStepAssignment(assignmentId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete assignment' });
+    }
+  });
+
+  // --- Guide Approvals ---
+  app.get('/api/workspaces/:workspaceId/approvals', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const approvals = await storage.getPendingApprovalsByWorkspace(workspaceId);
+      res.json({ data: approvals });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get approvals' });
+    }
+  });
+
+  app.get('/api/my-approvals', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+
+    try {
+      const approvals = await storage.getPendingApprovalsByReviewer(user.claims.sub);
+      res.json({ data: approvals });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get approvals' });
+    }
+  });
+
+  app.post('/api/guides/:guideId/request-approval', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const guideId = parseInt(req.params.guideId);
+    const { reviewerId, requestNotes } = req.body;
+
+    try {
+      const guide = await storage.getGuide(guideId);
+      if (!guide) return res.status(404).json({ message: 'Guide not found' });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const approval = await storage.createGuideApproval({
+        guideId,
+        workspaceId: guide.workspaceId,
+        requestedById: user.claims.sub,
+        reviewerId: reviewerId || null,
+        status: 'pending',
+        requestNotes: requestNotes || null,
+        reviewNotes: null,
+      });
+
+      // Notify reviewer(s)
+      if (reviewerId) {
+        await storage.createNotification({
+          userId: reviewerId,
+          type: 'approval_requested',
+          title: 'Approval Request',
+          message: `"${guide.title}" needs your approval`,
+          workspaceId: guide.workspaceId,
+          guideId,
+          referenceId: approval.id,
+          actorId: user.claims.sub,
+          isRead: false,
+        });
+      }
+
+      await storage.createTeamActivity({
+        workspaceId: guide.workspaceId,
+        userId: user.claims.sub,
+        actionType: 'approval_requested',
+        resourceType: 'approval',
+        resourceId: approval.id,
+        metadata: { guideTitle: guide.title },
+      });
+
+      res.status(201).json(approval);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to request approval' });
+    }
+  });
+
+  app.post('/api/approvals/:id/review', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const approvalId = parseInt(req.params.id);
+    const { status, reviewNotes } = req.body;
+
+    if (!['approved', 'rejected', 'revision_requested'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    try {
+      const approval = await storage.getGuideApproval(approvalId);
+      if (!approval) return res.status(404).json({ message: 'Approval not found' });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, approval.workspaceId, ['owner', 'admin']);
+      if (!access.allowed) return res.status(403).json({ message: 'Must be admin to review approvals' });
+
+      const updated = await storage.updateGuideApproval(approvalId, {
+        status,
+        reviewerId: user.claims.sub,
+        reviewNotes: reviewNotes || null,
+        reviewedAt: new Date(),
+      } as any);
+
+      // If approved, publish the guide
+      if (status === 'approved') {
+        await storage.updateGuide(approval.guideId, { status: 'published' });
+      }
+
+      // Notify requester
+      const notificationType = status === 'approved' ? 'approval_approved' : 
+                               status === 'rejected' ? 'approval_rejected' : 'approval_revision';
+      const guide = await storage.getGuide(approval.guideId);
+      await storage.createNotification({
+        userId: approval.requestedById,
+        type: notificationType,
+        title: status === 'approved' ? 'Guide Approved' : status === 'rejected' ? 'Guide Rejected' : 'Revision Requested',
+        message: `"${guide?.title}" has been ${status.replace('_', ' ')}`,
+        workspaceId: approval.workspaceId,
+        guideId: approval.guideId,
+        referenceId: approval.id,
+        actorId: user.claims.sub,
+        isRead: false,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to review approval' });
+    }
+  });
+
+  // --- Step Comments ---
+  app.get('/api/steps/:stepId/comments', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const stepId = parseInt(req.params.stepId);
+
+    try {
+      const comments = await storage.getCommentsByStep(stepId);
+      res.json({ data: comments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get comments' });
+    }
+  });
+
+  app.get('/api/guides/:guideId/comments', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const guideId = parseInt(req.params.guideId);
+
+    try {
+      const comments = await storage.getCommentsByGuide(guideId);
+      res.json({ data: comments });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get comments' });
+    }
+  });
+
+  app.post('/api/steps/:stepId/comments', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const stepId = parseInt(req.params.stepId);
+    const { content, parentId, isEditProposal, proposedContent } = req.body;
+
+    try {
+      const [stepData] = await db.select().from(steps).where(eq(steps.id, stepId));
+      if (!stepData) return res.status(404).json({ message: 'Step not found' });
+
+      const guide = await storage.getGuide(stepData.guideId);
+      if (!guide) return res.status(404).json({ message: 'Guide not found' });
+
+      const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const comment = await storage.createStepComment({
+        stepId,
+        guideId: guide.id,
+        workspaceId: guide.workspaceId,
+        authorId: user.claims.sub,
+        parentId: parentId || null,
+        content,
+        isEditProposal: isEditProposal || false,
+        proposedContent: proposedContent || null,
+        proposalStatus: isEditProposal ? 'pending' : null,
+      });
+
+      // Notify guide creator or parent comment author
+      const notifyUserId = parentId ? 
+        (await storage.getStepComment(parentId))?.authorId : 
+        guide.createdById;
+
+      if (notifyUserId && notifyUserId !== user.claims.sub) {
+        await storage.createNotification({
+          userId: notifyUserId,
+          type: parentId ? 'comment_reply' : 'comment_added',
+          title: parentId ? 'New Reply' : 'New Comment',
+          message: `New ${parentId ? 'reply' : 'comment'} on "${guide.title}"`,
+          workspaceId: guide.workspaceId,
+          guideId: guide.id,
+          stepId,
+          referenceId: comment.id,
+          actorId: user.claims.sub,
+          isRead: false,
+        });
+      }
+
+      // Check for @mentions
+      const mentions = content.match(/@\[([^\]]+)\]\(([^)]+)\)/g);
+      if (mentions) {
+        for (const mention of mentions) {
+          const userId = mention.match(/\(([^)]+)\)/)?.[1];
+          if (userId && userId !== user.claims.sub) {
+            await storage.createNotification({
+              userId,
+              type: 'comment_mention',
+              title: 'You were mentioned',
+              message: `You were mentioned in a comment on "${guide.title}"`,
+              workspaceId: guide.workspaceId,
+              guideId: guide.id,
+              stepId,
+              referenceId: comment.id,
+              actorId: user.claims.sub,
+              isRead: false,
+            });
+          }
+        }
+      }
+
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error('Create comment error:', error);
+      res.status(500).json({ message: 'Failed to create comment' });
+    }
+  });
+
+  app.patch('/api/comments/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const commentId = parseInt(req.params.id);
+    const { content, proposalStatus } = req.body;
+
+    try {
+      const comment = await storage.getStepComment(commentId);
+      if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+      const isAuthor = comment.authorId === user.claims.sub;
+      const access = await checkWorkspaceAccess(user.claims.sub, comment.workspaceId, ['owner', 'admin', 'editor']);
+
+      // Authors can edit content, editors+ can update proposal status
+      if (!isAuthor && !access.allowed) {
+        return res.status(403).json({ message: 'Not authorized' });
+      }
+
+      const updateData: any = {};
+      if (content !== undefined && isAuthor) updateData.content = content;
+      if (proposalStatus !== undefined && access.allowed) {
+        updateData.proposalStatus = proposalStatus;
+        if (proposalStatus === 'accepted' || proposalStatus === 'rejected') {
+          updateData.resolvedAt = new Date();
+        }
+      }
+
+      const updated = await storage.updateStepComment(commentId, updateData);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update comment' });
+    }
+  });
+
+  app.delete('/api/comments/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const commentId = parseInt(req.params.id);
+
+    try {
+      const comment = await storage.getStepComment(commentId);
+      if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+      const isAuthor = comment.authorId === user.claims.sub;
+      const access = await checkWorkspaceAccess(user.claims.sub, comment.workspaceId, ['owner', 'admin']);
+
+      if (!isAuthor && !access.allowed) {
+        return res.status(403).json({ message: 'Not authorized' });
+      }
+
+      await storage.deleteStepComment(commentId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete comment' });
+    }
+  });
+
+  // --- Notifications ---
+  app.get('/api/notifications', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    try {
+      const notifications = await storage.getNotificationsByUser(user.claims.sub, limit);
+      const unreadCount = await storage.getUnreadNotificationCount(user.claims.sub);
+      res.json({ data: notifications, unreadCount });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get notifications' });
+    }
+  });
+
+  app.post('/api/notifications/:id/read', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const notificationId = parseInt(req.params.id);
+
+    try {
+      await storage.markNotificationRead(notificationId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to mark notification read' });
+    }
+  });
+
+  app.post('/api/notifications/read-all', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+
+    try {
+      await storage.markAllNotificationsRead(user.claims.sub);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to mark notifications read' });
+    }
+  });
+
+  // --- Team Dashboard ---
+  app.get('/api/workspaces/:workspaceId/team-dashboard', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const stats = await storage.getTeamDashboardStats(workspaceId);
+      const members = await storage.getWorkspaceMembers(workspaceId);
+
+      // Get per-user stats
+      const memberStats = await Promise.all(members.map(async (member) => {
+        const assignments = await storage.getAssignmentsByUser(member.userId);
+        const workspaceAssignments = assignments.filter(a => a.workspaceId === workspaceId);
+        return {
+          userId: member.userId,
+          user: member.user,
+          role: member.role,
+          totalAssignments: workspaceAssignments.length,
+          completedAssignments: workspaceAssignments.filter(a => a.status === 'completed').length,
+          pendingAssignments: workspaceAssignments.filter(a => a.status === 'pending' || a.status === 'in_progress').length,
+        };
+      }));
+
+      res.json({
+        ...stats,
+        members: memberStats,
+      });
+    } catch (error) {
+      console.error('Team dashboard error:', error);
+      res.status(500).json({ message: 'Failed to get team dashboard' });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/activity', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const activity = await storage.getTeamActivityByWorkspace(workspaceId, limit);
+      res.json({ data: activity });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get activity' });
     }
   });
 

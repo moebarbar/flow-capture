@@ -289,7 +289,198 @@ export const workspaceInvitations = pgTable("workspace_invitations", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// === COLLABORATION & TEAM MANAGEMENT ===
+
+export const assignmentStatusEnum = pgEnum("assignment_status", ["pending", "in_progress", "completed", "overdue"]);
+export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approved", "rejected", "revision_requested"]);
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "assignment_created", "assignment_updated", "assignment_completed",
+  "approval_requested", "approval_approved", "approval_rejected", "approval_revision",
+  "comment_added", "comment_reply", "comment_mention",
+  "workspace_invitation", "guide_shared"
+]);
+
+// Step Assignments - Assign specific steps to team members
+export const stepAssignments = pgTable("step_assignments", {
+  id: serial("id").primaryKey(),
+  stepId: integer("step_id").references(() => steps.id).notNull(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  assigneeId: text("assignee_id").references(() => users.id).notNull(),
+  assignedById: text("assigned_by_id").references(() => users.id).notNull(),
+  status: assignmentStatusEnum("status").default("pending").notNull(),
+  dueDate: timestamp("due_date"),
+  notes: text("notes"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Guide Approvals - Approval workflow for guides
+export const guideApprovals = pgTable("guide_approvals", {
+  id: serial("id").primaryKey(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  requestedById: text("requested_by_id").references(() => users.id).notNull(),
+  reviewerId: text("reviewer_id").references(() => users.id), // Assigned reviewer (manager/admin)
+  status: approvalStatusEnum("status").default("pending").notNull(),
+  requestNotes: text("request_notes"),
+  reviewNotes: text("review_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Step Comments - Comments and annotations on steps
+export const stepComments = pgTable("step_comments", {
+  id: serial("id").primaryKey(),
+  stepId: integer("step_id").references(() => steps.id).notNull(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  authorId: text("author_id").references(() => users.id).notNull(),
+  parentId: integer("parent_id"), // For threaded replies
+  content: text("content").notNull(),
+  isEditProposal: boolean("is_edit_proposal").default(false).notNull(), // Proposed edit vs regular comment
+  proposedContent: jsonb("proposed_content"), // For edit proposals: { title?, description? }
+  proposalStatus: text("proposal_status"), // 'pending', 'accepted', 'rejected'
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Notifications - User notifications
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  type: notificationTypeEnum("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id),
+  guideId: integer("guide_id").references(() => guides.id),
+  stepId: integer("step_id").references(() => steps.id),
+  referenceId: integer("reference_id"), // Generic reference (comment ID, assignment ID, etc.)
+  actorId: text("actor_id").references(() => users.id), // Who triggered the notification
+  isRead: boolean("is_read").default(false).notNull(),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Team Activity Log - Track team actions for dashboard
+export const teamActivity = pgTable("team_activity", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  actionType: text("action_type").notNull(), // 'guide_created', 'step_completed', 'comment_added', etc.
+  resourceType: text("resource_type").notNull(), // 'guide', 'step', 'assignment', 'approval', 'comment'
+  resourceId: integer("resource_id").notNull(),
+  metadata: jsonb("metadata"), // Additional action details
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // === RELATIONS ===
+
+export const stepAssignmentsRelations = relations(stepAssignments, ({ one }) => ({
+  step: one(steps, {
+    fields: [stepAssignments.stepId],
+    references: [steps.id],
+  }),
+  guide: one(guides, {
+    fields: [stepAssignments.guideId],
+    references: [guides.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [stepAssignments.workspaceId],
+    references: [workspaces.id],
+  }),
+  assignee: one(users, {
+    fields: [stepAssignments.assigneeId],
+    references: [users.id],
+  }),
+  assignedBy: one(users, {
+    fields: [stepAssignments.assignedById],
+    references: [users.id],
+  }),
+}));
+
+export const guideApprovalsRelations = relations(guideApprovals, ({ one }) => ({
+  guide: one(guides, {
+    fields: [guideApprovals.guideId],
+    references: [guides.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [guideApprovals.workspaceId],
+    references: [workspaces.id],
+  }),
+  requestedBy: one(users, {
+    fields: [guideApprovals.requestedById],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [guideApprovals.reviewerId],
+    references: [users.id],
+  }),
+}));
+
+export const stepCommentsRelations = relations(stepComments, ({ one, many }) => ({
+  step: one(steps, {
+    fields: [stepComments.stepId],
+    references: [steps.id],
+  }),
+  guide: one(guides, {
+    fields: [stepComments.guideId],
+    references: [guides.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [stepComments.workspaceId],
+    references: [workspaces.id],
+  }),
+  author: one(users, {
+    fields: [stepComments.authorId],
+    references: [users.id],
+  }),
+  parent: one(stepComments, {
+    fields: [stepComments.parentId],
+    references: [stepComments.id],
+    relationName: "comment_replies",
+  }),
+  replies: many(stepComments, {
+    relationName: "comment_replies",
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [notifications.workspaceId],
+    references: [workspaces.id],
+  }),
+  guide: one(guides, {
+    fields: [notifications.guideId],
+    references: [guides.id],
+  }),
+  step: one(steps, {
+    fields: [notifications.stepId],
+    references: [steps.id],
+  }),
+  actor: one(users, {
+    fields: [notifications.actorId],
+    references: [users.id],
+  }),
+}));
+
+export const teamActivityRelations = relations(teamActivity, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [teamActivity.workspaceId],
+    references: [workspaces.id],
+  }),
+  user: one(users, {
+    fields: [teamActivity.userId],
+    references: [users.id],
+  }),
+}));
 
 export const userSubscriptionsRelations = relations(userSubscriptions, ({ one }) => ({
   user: one(users, {
@@ -533,3 +724,75 @@ export type CreateFolderRequest = InsertFolder;
 // Response types including relations
 export type GuideWithSteps = Guide & { steps: Step[] };
 export type WorkspaceWithMembers = Workspace & { members: (typeof workspaceMembers.$inferSelect & { user: typeof users.$inferSelect })[] };
+
+// === COLLABORATION SCHEMAS ===
+
+export const insertStepAssignmentSchema = createInsertSchema(stepAssignments).omit({
+  id: true,
+  completedAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertGuideApprovalSchema = createInsertSchema(guideApprovals).omit({
+  id: true,
+  reviewedAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertStepCommentSchema = createInsertSchema(stepComments).omit({
+  id: true,
+  resolvedAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  readAt: true,
+  createdAt: true
+});
+
+export const insertTeamActivitySchema = createInsertSchema(teamActivity).omit({
+  id: true,
+  createdAt: true
+});
+
+// === COLLABORATION TYPES ===
+
+export type StepAssignment = typeof stepAssignments.$inferSelect;
+export type InsertStepAssignment = z.infer<typeof insertStepAssignmentSchema>;
+
+export type GuideApproval = typeof guideApprovals.$inferSelect;
+export type InsertGuideApproval = z.infer<typeof insertGuideApprovalSchema>;
+
+export type StepComment = typeof stepComments.$inferSelect;
+export type InsertStepComment = z.infer<typeof insertStepCommentSchema>;
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+
+export type TeamActivity = typeof teamActivity.$inferSelect;
+export type InsertTeamActivity = z.infer<typeof insertTeamActivitySchema>;
+
+// Extended types with user info
+export type StepAssignmentWithUsers = StepAssignment & {
+  assignee: { id: string; email: string; firstName: string | null; lastName: string | null };
+  assignedBy: { id: string; email: string; firstName: string | null; lastName: string | null };
+};
+
+export type StepCommentWithAuthor = StepComment & {
+  author: { id: string; email: string; firstName: string | null; lastName: string | null };
+  replies?: StepCommentWithAuthor[];
+};
+
+export type GuideApprovalWithUsers = GuideApproval & {
+  requestedBy: { id: string; email: string; firstName: string | null; lastName: string | null };
+  reviewer?: { id: string; email: string; firstName: string | null; lastName: string | null } | null;
+  guide?: { id: number; title: string };
+};
+
+export type NotificationWithActor = Notification & {
+  actor?: { id: string; email: string; firstName: string | null; lastName: string | null } | null;
+};

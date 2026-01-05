@@ -245,7 +245,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   autoRedactPhones: boolean("auto_redact_phones").default(false).notNull(),
   autoRedactCustomPatterns: jsonb("auto_redact_custom_patterns"), // Array of regex patterns
   defaultLanguage: text("default_language").default("en"),
+  enabledLanguages: text("enabled_languages").array().default(["en"]), // Languages for auto-translation
   enableAiDescriptions: boolean("enable_ai_descriptions").default(true).notNull(),
+  enableAiTranslations: boolean("enable_ai_translations").default(true).notNull(),
   enableAiVoiceover: boolean("enable_ai_voiceover").default(false).notNull(),
   brandColor: text("brand_color"),
   customDomain: text("custom_domain"),
@@ -375,6 +377,59 @@ export const teamActivity = pgTable("team_activity", {
   resourceId: integer("resource_id").notNull(),
   metadata: jsonb("metadata"), // Additional action details
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// === TRANSLATIONS ===
+
+export const translationStatusEnum = pgEnum("translation_status", ["pending", "processing", "completed", "failed"]);
+
+// Supported language list - ISO 639-1 codes
+export const SUPPORTED_LANGUAGES = [
+  { code: "en", name: "English" },
+  { code: "es", name: "Spanish" },
+  { code: "fr", name: "French" },
+  { code: "de", name: "German" },
+  { code: "pt", name: "Portuguese" },
+  { code: "it", name: "Italian" },
+  { code: "nl", name: "Dutch" },
+  { code: "pl", name: "Polish" },
+  { code: "ru", name: "Russian" },
+  { code: "ja", name: "Japanese" },
+  { code: "ko", name: "Korean" },
+  { code: "zh", name: "Chinese (Simplified)" },
+  { code: "ar", name: "Arabic" },
+  { code: "hi", name: "Hindi" },
+  { code: "tr", name: "Turkish" },
+] as const;
+
+// Guide translations - Store translated guide title/description per locale
+export const guideTranslations = pgTable("guide_translations", {
+  id: serial("id").primaryKey(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  locale: text("locale").notNull(), // e.g., 'es', 'fr', 'de'
+  title: text("title").notNull(),
+  description: text("description"),
+  status: translationStatusEnum("status").default("pending").notNull(),
+  translatedAt: timestamp("translated_at"),
+  sourceHash: text("source_hash"), // Hash of source content for change detection
+  aiModel: text("ai_model"), // Model used for translation (e.g., 'gpt-4o')
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Step translations - Store translated step title/description per locale
+export const stepTranslations = pgTable("step_translations", {
+  id: serial("id").primaryKey(),
+  stepId: integer("step_id").references(() => steps.id).notNull(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  locale: text("locale").notNull(), // e.g., 'es', 'fr', 'de'
+  title: text("title"),
+  description: text("description"),
+  status: translationStatusEnum("status").default("pending").notNull(),
+  translatedAt: timestamp("translated_at"),
+  sourceHash: text("source_hash"), // Hash of source content for change detection
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // === INTEGRATIONS & AUTOMATION ===
@@ -668,11 +723,31 @@ export const guidesRelations = relations(guides, ({ one, many }) => ({
     references: [users.id],
   }),
   steps: many(steps),
+  translations: many(guideTranslations),
 }));
 
-export const stepsRelations = relations(steps, ({ one }) => ({
+export const stepsRelations = relations(steps, ({ one, many }) => ({
   guide: one(guides, {
     fields: [steps.guideId],
+    references: [guides.id],
+  }),
+  translations: many(stepTranslations),
+}));
+
+export const guideTranslationsRelations = relations(guideTranslations, ({ one }) => ({
+  guide: one(guides, {
+    fields: [guideTranslations.guideId],
+    references: [guides.id],
+  }),
+}));
+
+export const stepTranslationsRelations = relations(stepTranslations, ({ one }) => ({
+  step: one(steps, {
+    fields: [stepTranslations.stepId],
+    references: [steps.id],
+  }),
+  guide: one(guides, {
+    fields: [stepTranslations.guideId],
     references: [guides.id],
   }),
 }));
@@ -913,6 +988,34 @@ export type GuideApprovalWithUsers = GuideApproval & {
 export type NotificationWithActor = Notification & {
   actor?: { id: string; email: string; firstName: string | null; lastName: string | null } | null;
 };
+
+// === TRANSLATION SCHEMAS ===
+
+export const insertGuideTranslationSchema = createInsertSchema(guideTranslations).omit({
+  id: true,
+  translatedAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertStepTranslationSchema = createInsertSchema(stepTranslations).omit({
+  id: true,
+  translatedAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+// === TRANSLATION TYPES ===
+
+export type GuideTranslation = typeof guideTranslations.$inferSelect;
+export type InsertGuideTranslation = z.infer<typeof insertGuideTranslationSchema>;
+
+export type StepTranslation = typeof stepTranslations.$inferSelect;
+export type InsertStepTranslation = z.infer<typeof insertStepTranslationSchema>;
+
+// Extended types for translations
+export type GuideWithTranslations = Guide & { translations: GuideTranslation[] };
+export type StepWithTranslations = Step & { translations: StepTranslation[] };
 
 // === INTEGRATION SCHEMAS ===
 

@@ -18,8 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
-  Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText
+  Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages
 } from "lucide-react";
+import { TranslationDialog } from "@/components/TranslationDialog";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -43,6 +44,7 @@ export default function GuideEditor() {
   const [sharePassword, setSharePassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
+  const [translationDialogOpen, setTranslationDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -233,6 +235,14 @@ export default function GuideEditor() {
           <div className="text-sm text-muted-foreground mr-4">
             {guide.status === 'draft' ? 'Unsaved changes' : 'All changes saved'}
           </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setTranslationDialogOpen(true)}
+            data-testid="button-translate-guide"
+          >
+            <Languages className="h-4 w-4 mr-2" /> Translate
+          </Button>
           <Button 
             variant="outline" 
             size="sm" 
@@ -722,6 +732,13 @@ export default function GuideEditor() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Translation Dialog */}
+      <TranslationDialog 
+        guideId={guideId} 
+        open={translationDialogOpen} 
+        onOpenChange={setTranslationDialogOpen} 
+      />
     </div>
   );
 }

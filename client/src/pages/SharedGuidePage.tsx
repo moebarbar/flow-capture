@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRoute } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Lock, Eye, EyeOff, AlertCircle, FileText, Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Lock, Eye, EyeOff, AlertCircle, FileText, Loader2, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 type SharedGuideInfo = {
   title: string;
   requiresPassword: boolean;
+  guideId?: number;
+  availableLanguages?: Array<{ code: string; name: string }>;
 };
 
 type SharedGuideContent = {
@@ -29,6 +32,35 @@ type SharedGuideContent = {
     actionType: string;
     metadata: any;
   }>;
+  translations?: {
+    guide?: {
+      title: string;
+      description: string | null;
+    };
+    steps?: Array<{
+      stepId: number;
+      title: string | null;
+      description: string | null;
+    }>;
+  };
+};
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  pt: "Portuguese",
+  it: "Italian",
+  nl: "Dutch",
+  pl: "Polish",
+  ru: "Russian",
+  ja: "Japanese",
+  ko: "Korean",
+  zh: "Chinese",
+  ar: "Arabic",
+  hi: "Hindi",
+  tr: "Turkish",
 };
 
 export default function SharedGuidePage() {
@@ -36,10 +68,12 @@ export default function SharedGuidePage() {
   const token = params?.token || "";
 
   const [password, setPassword] = useState("");
+  const [verifiedPassword, setVerifiedPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guideContent, setGuideContent] = useState<SharedGuideContent | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
+  const [selectedLocale, setSelectedLocale] = useState<string>("en");
 
   const { data: shareInfo, isLoading: infoLoading, isError: infoError } = useQuery<SharedGuideInfo>({
     queryKey: ['/api/share', token],
@@ -53,11 +87,11 @@ export default function SharedGuidePage() {
   });
 
   const verifyMutation = useMutation({
-    mutationFn: async (password: string) => {
+    mutationFn: async ({ password, locale }: { password: string; locale?: string }) => {
       const res = await fetch(`/api/share/${token}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, locale }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -65,23 +99,33 @@ export default function SharedGuidePage() {
       }
       return res.json() as Promise<SharedGuideContent>;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       setGuideContent(data);
       setError(null);
+      if (variables.password) {
+        setVerifiedPassword(variables.password);
+      }
     },
     onError: (err: Error) => {
       setError(err.message);
     },
   });
 
+  const handleLocaleChange = (locale: string) => {
+    setSelectedLocale(locale);
+    if (guideContent) {
+      verifyMutation.mutate({ password: verifiedPassword, locale });
+    }
+  };
+
   const handleSubmitPassword = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    verifyMutation.mutate(password);
+    verifyMutation.mutate({ password, locale: selectedLocale !== 'en' ? selectedLocale : undefined });
   };
 
   const handleAccessNoPassword = () => {
-    verifyMutation.mutate("");
+    verifyMutation.mutate({ password: "", locale: selectedLocale !== 'en' ? selectedLocale : undefined });
   };
 
   if (infoLoading) {
@@ -200,6 +244,30 @@ export default function SharedGuidePage() {
 
   const sortedSteps = [...guideContent.steps].sort((a, b) => a.order - b.order);
   const currentStepData = sortedSteps[currentStep];
+  
+  const displayContent = useMemo(() => {
+    const translations = guideContent.translations;
+    const guideTitle = translations?.guide?.title || guideContent.guide.title;
+    const guideDesc = translations?.guide?.description ?? guideContent.guide.description;
+    
+    const getStepContent = (step: typeof sortedSteps[0]) => {
+      const stepTranslation = translations?.steps?.find(t => t.stepId === step.id);
+      return {
+        ...step,
+        title: stepTranslation?.title || step.title,
+        description: stepTranslation?.description ?? step.description,
+      };
+    };
+    
+    return {
+      guideTitle,
+      guideDesc,
+      getStepContent,
+    };
+  }, [guideContent, selectedLocale]);
+
+  const availableLanguages = shareInfo?.availableLanguages || [];
+  const hasTranslations = availableLanguages.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -207,59 +275,80 @@ export default function SharedGuidePage() {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-lg font-bold truncate" data-testid="text-guide-title">
-              {guideContent.guide.title}
+              {displayContent.guideTitle}
             </h1>
-            {guideContent.guide.description && (
+            {displayContent.guideDesc && (
               <p className="text-sm text-muted-foreground truncate">
-                {guideContent.guide.description}
+                {displayContent.guideDesc}
               </p>
             )}
           </div>
-          <div className="shrink-0 text-sm text-muted-foreground">
-            Step {currentStep + 1} of {sortedSteps.length}
+          <div className="flex items-center gap-4 shrink-0">
+            {hasTranslations && (
+              <Select value={selectedLocale} onValueChange={handleLocaleChange}>
+                <SelectTrigger className="w-36" data-testid="select-language">
+                  <Globe className="h-4 w-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  {availableLanguages.map(lang => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      {lang.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="text-sm text-muted-foreground">
+              Step {currentStep + 1} of {sortedSteps.length}
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
-        {currentStepData && (
-          <motion.div
-            key={currentStepData.id}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="overflow-hidden">
-              {currentStepData.imageUrl && (
-                <div className="aspect-video bg-muted relative">
-                  <img 
-                    src={currentStepData.imageUrl} 
-                    alt={currentStepData.title || "Step screenshot"}
-                    className="w-full h-full object-contain"
-                    data-testid={`img-step-${currentStepData.id}`}
-                  />
-                </div>
-              )}
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0">
-                    {currentStep + 1}
+        {currentStepData && (() => {
+          const translatedStep = displayContent.getStepContent(currentStepData);
+          return (
+            <motion.div
+              key={`${currentStepData.id}-${selectedLocale}`}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="overflow-hidden">
+                {currentStepData.imageUrl && (
+                  <div className="aspect-video bg-muted relative">
+                    <img 
+                      src={currentStepData.imageUrl} 
+                      alt={translatedStep.title || "Step screenshot"}
+                      className="w-full h-full object-contain"
+                      data-testid={`img-step-${currentStepData.id}`}
+                    />
                   </div>
-                  <div className="flex-1">
-                    <h2 className="text-xl font-semibold mb-2" data-testid={`text-step-title-${currentStepData.id}`}>
-                      {currentStepData.title || `Step ${currentStep + 1}`}
-                    </h2>
-                    {currentStepData.description && (
-                      <p className="text-muted-foreground" data-testid={`text-step-desc-${currentStepData.id}`}>
-                        {currentStepData.description}
-                      </p>
-                    )}
+                )}
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary text-sm font-bold shrink-0">
+                      {currentStep + 1}
+                    </div>
+                    <div className="flex-1">
+                      <h2 className="text-xl font-semibold mb-2" data-testid={`text-step-title-${currentStepData.id}`}>
+                        {translatedStep.title || `Step ${currentStep + 1}`}
+                      </h2>
+                      {translatedStep.description && (
+                        <p className="text-muted-foreground" data-testid={`text-step-desc-${currentStepData.id}`}>
+                          {translatedStep.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          );
+        })()}
 
         <div className="flex items-center justify-between mt-8 gap-4">
           <Button

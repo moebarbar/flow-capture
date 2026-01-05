@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plug, Webhook, Zap, Plus, Settings, Trash2, Play, Pause, 
   CheckCircle, XCircle, Clock, Activity, BarChart3, Mail,
-  MessageSquare, Calendar, FileText, ExternalLink
+  MessageSquare, Calendar, FileText, ExternalLink, Sparkles, Bot
 } from "lucide-react";
 import { SiSlack, SiNotion, SiJira, SiGoogleanalytics } from "react-icons/si";
 import { cn } from "@/lib/utils";
@@ -77,6 +77,13 @@ export default function IntegrationsPage() {
   const { data: automationsData, isLoading: automationsLoading } = useQuery<{ data: any[] }>({
     queryKey: ['/api/workspaces', workspaceId, 'automations'],
     enabled: !!workspaceId,
+  });
+
+  const { data: aiStatus, isLoading: aiStatusLoading } = useQuery<{
+    openai: { configured: boolean; model: string };
+    translation: { enabled: boolean; supportedLanguages: number };
+  }>({
+    queryKey: ['/api/integrations/ai-status'],
   });
 
   const createWebhookMutation = useMutation({
@@ -141,10 +148,14 @@ export default function IntegrationsPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+            <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
               <TabsTrigger value="integrations" className="gap-2" data-testid="tab-integrations">
                 <Plug className="h-4 w-4 hidden sm:block" />
                 Integrations
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="gap-2" data-testid="tab-ai-services">
+                <Sparkles className="h-4 w-4 hidden sm:block" />
+                AI Services
               </TabsTrigger>
               <TabsTrigger value="webhooks" className="gap-2" data-testid="tab-webhooks">
                 <Webhook className="h-4 w-4 hidden sm:block" />
@@ -252,6 +263,133 @@ export default function IntegrationsPage() {
                   ))}
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="ai" className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold">AI Services Status</h2>
+                <p className="text-sm text-muted-foreground">View the status of AI-powered features</p>
+              </div>
+
+              {aiStatusLoading ? (
+                <div className="space-y-4">
+                  {[1, 2].map(i => (
+                    <div key={i} className="h-24 bg-muted/30 rounded-xl animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-muted">
+                            <Bot className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-base">OpenAI Integration</CardTitle>
+                            <CardDescription>AI-powered features</CardDescription>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant={aiStatus?.openai?.configured ? "default" : "secondary"}
+                          className={aiStatus?.openai?.configured 
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
+                            : ""}
+                        >
+                          {aiStatus?.openai?.configured ? (
+                            <><CheckCircle className="h-3 w-3 mr-1" /> Active</>
+                          ) : (
+                            <><XCircle className="h-3 w-3 mr-1" /> Not Configured</>
+                          )}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="text-sm space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Model</span>
+                          <span className="font-medium">{aiStatus?.openai?.model || "gpt-4o"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Features</span>
+                          <span className="font-medium">Step descriptions, Translations</span>
+                        </div>
+                      </div>
+                      {!aiStatus?.openai?.configured && (
+                        <div className="p-3 bg-muted/50 rounded-lg text-sm">
+                          <p className="text-muted-foreground">
+                            The OpenAI API key is managed securely through Replit secrets. 
+                            Contact your administrator to configure this integration.
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-muted">
+                            <Sparkles className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-base">Translation Service</CardTitle>
+                            <CardDescription>Multi-language support</CardDescription>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant={aiStatus?.translation?.enabled ? "default" : "secondary"}
+                          className={aiStatus?.translation?.enabled 
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
+                            : ""}
+                        >
+                          {aiStatus?.translation?.enabled ? (
+                            <><CheckCircle className="h-3 w-3 mr-1" /> Enabled</>
+                          ) : (
+                            <><Clock className="h-3 w-3 mr-1" /> Requires OpenAI</>
+                          )}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="text-sm space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Supported Languages</span>
+                          <span className="font-medium">{aiStatus?.translation?.supportedLanguages || 15}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Translation Quality</span>
+                          <span className="font-medium">High (GPT-4o)</span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Translations are powered by OpenAI and support Spanish, French, German, Portuguese, 
+                        Italian, Dutch, Polish, Russian, Japanese, Korean, Chinese, Arabic, Hindi, and Turkish.
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              <Card>
+                <CardContent className="py-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 rounded-lg bg-muted">
+                      <Settings className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold mb-1">Security Note</h3>
+                      <p className="text-sm text-muted-foreground">
+                        AI service credentials are managed through Replit's secure secrets system. 
+                        API keys are never exposed in the application interface for security reasons. 
+                        All AI operations are processed server-side with encrypted connections.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="webhooks" className="space-y-6">

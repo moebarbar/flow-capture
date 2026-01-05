@@ -458,9 +458,18 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Guide not found" });
       }
       
+      const translations = await storage.getGuideTranslations(share.guideId);
+      const completedTranslations = translations.filter(t => t.status === 'completed');
+      const availableLanguages = completedTranslations.map(t => ({
+        code: t.locale,
+        name: SUPPORTED_LANGUAGES.find(l => l.code === t.locale)?.name || t.locale,
+      }));
+      
       res.json({
         title: guide.title,
         requiresPassword: !!share.passwordHash,
+        guideId: guide.id,
+        availableLanguages,
       });
     } catch (error) {
       console.error("Share lookup error:", error);
@@ -472,7 +481,7 @@ export async function registerRoutes(
   app.post('/api/share/:token/verify', async (req, res) => {
     try {
       const { token } = req.params;
-      const { password } = req.body;
+      const { password, locale } = req.body;
       
       const share = await storage.getGuideShareByToken(token);
       if (!share || !share.enabled) {
@@ -499,6 +508,28 @@ export async function registerRoutes(
       
       const steps = await storage.getStepsByGuide(share.guideId);
       
+      let translations = undefined;
+      if (locale && locale !== 'en') {
+        const guideTranslation = await storage.getGuideTranslation(share.guideId, locale);
+        const stepTranslations = await storage.getStepTranslationsByGuide(share.guideId, locale);
+        
+        if (guideTranslation && guideTranslation.status === 'completed') {
+          translations = {
+            guide: {
+              title: guideTranslation.title,
+              description: guideTranslation.description,
+            },
+            steps: stepTranslations
+              .filter(t => t.status === 'completed')
+              .map(t => ({
+                stepId: t.stepId,
+                title: t.title,
+                description: t.description,
+              })),
+          };
+        }
+      }
+      
       res.json({
         guide: {
           id: guide.id,
@@ -515,6 +546,7 @@ export async function registerRoutes(
           actionType: s.actionType,
           metadata: s.metadata,
         })),
+        translations,
       });
     } catch (error) {
       console.error("Share verification error:", error);
@@ -807,6 +839,128 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     } catch (error) {
       console.error("AI Improve Guide error:", error);
       res.status(500).json({ message: "Failed to improve guide" });
+    }
+  });
+
+  // === TRANSLATION ENDPOINTS ===
+  
+  // Get supported languages
+  app.get("/api/translations/languages", async (req, res) => {
+    const { getSupportedLanguages } = await import("./services/translationService");
+    res.json(getSupportedLanguages());
+  });
+
+  // Get AI integrations status
+  app.get("/api/integrations/ai-status", async (req, res) => {
+    const openaiConfigured = !!(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+    
+    res.json({
+      openai: {
+        configured: openaiConfigured,
+        model: "gpt-4o",
+      },
+      translation: {
+        enabled: openaiConfigured,
+        supportedLanguages: 15,
+      },
+    });
+  });
+
+  // Get translations for a guide
+  app.get("/api/guides/:guideId/translations", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.guideId);
+      const { getGuideTranslations, getStepTranslations } = await import("./services/translationService");
+      
+      const guideTranslations = await getGuideTranslations(guideId);
+      
+      const translationsWithSteps = await Promise.all(
+        guideTranslations.map(async (gt) => ({
+          ...gt,
+          stepTranslations: await getStepTranslations(guideId, gt.locale)
+        }))
+      );
+      
+      res.json(translationsWithSteps);
+    } catch (error) {
+      console.error("Error fetching translations:", error);
+      res.status(500).json({ message: "Failed to fetch translations" });
+    }
+  });
+
+  // Translate a guide to target languages
+  app.post("/api/guides/:guideId/translate", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.guideId);
+      const { locales } = req.body;
+      
+      if (!locales || !Array.isArray(locales) || locales.length === 0) {
+        return res.status(400).json({ message: "At least one target locale is required" });
+      }
+      
+      const { translateGuideWithSteps, isValidLocale } = await import("./services/translationService");
+      
+      const invalidLocales = locales.filter((l: string) => !isValidLocale(l));
+      if (invalidLocales.length > 0) {
+        return res.status(400).json({ message: `Invalid locales: ${invalidLocales.join(', ')}` });
+      }
+      
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const isMember = members.some(m => m.userId === userId);
+      if (workspace.ownerId !== userId && !isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const result = await translateGuideWithSteps(guideId, locales);
+      res.json(result);
+    } catch (error) {
+      console.error("Translation error:", error);
+      res.status(500).json({ message: "Failed to translate guide" });
+    }
+  });
+
+  // Delete all translations for a guide
+  app.delete("/api/guides/:guideId/translations", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.guideId);
+      
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      if (workspace.ownerId !== userId) {
+        return res.status(403).json({ message: "Only workspace owner can delete translations" });
+      }
+      
+      const { deleteGuideTranslations } = await import("./services/translationService");
+      await deleteGuideTranslations(guideId);
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete translations error:", error);
+      res.status(500).json({ message: "Failed to delete translations" });
     }
   });
 

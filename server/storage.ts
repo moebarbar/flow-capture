@@ -2,6 +2,7 @@ import {
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
   guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares, contentPages,
   stepAssignments, guideApprovals, stepComments, notifications, teamActivity,
+  guideTranslations, stepTranslations,
   type User, type UpsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
@@ -18,7 +19,9 @@ import {
   type GuideApproval, type InsertGuideApproval,
   type StepComment, type InsertStepComment,
   type Notification, type InsertNotification,
-  type TeamActivity, type InsertTeamActivity
+  type TeamActivity, type InsertTeamActivity,
+  type GuideTranslation, type InsertGuideTranslation,
+  type StepTranslation, type InsertStepTranslation
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
@@ -147,6 +150,18 @@ export interface IStorage {
     completedAssignments: number;
     recentActivity: TeamActivity[];
   }>;
+
+  // Translations
+  getGuideTranslations(guideId: number): Promise<GuideTranslation[]>;
+  getGuideTranslation(guideId: number, locale: string): Promise<GuideTranslation | undefined>;
+  createGuideTranslation(translation: InsertGuideTranslation): Promise<GuideTranslation>;
+  updateGuideTranslation(id: number, translation: Partial<InsertGuideTranslation>): Promise<GuideTranslation>;
+  deleteGuideTranslation(guideId: number, locale: string): Promise<void>;
+  getStepTranslationsByGuide(guideId: number, locale: string): Promise<StepTranslation[]>;
+  getStepTranslation(stepId: number, locale: string): Promise<StepTranslation | undefined>;
+  createStepTranslation(translation: InsertStepTranslation): Promise<StepTranslation>;
+  updateStepTranslation(id: number, translation: Partial<InsertStepTranslation>): Promise<StepTranslation>;
+  deleteStepTranslations(guideId: number, locale: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -899,6 +914,80 @@ export class DatabaseStorage implements IStorage {
       completedAssignments: assignmentStats?.completed ?? 0,
       recentActivity,
     };
+  }
+
+  // Translation methods
+  async getGuideTranslations(guideId: number): Promise<GuideTranslation[]> {
+    return db.select().from(guideTranslations)
+      .where(eq(guideTranslations.guideId, guideId));
+  }
+
+  async getGuideTranslation(guideId: number, locale: string): Promise<GuideTranslation | undefined> {
+    const [translation] = await db.select().from(guideTranslations)
+      .where(and(
+        eq(guideTranslations.guideId, guideId),
+        eq(guideTranslations.locale, locale)
+      ));
+    return translation;
+  }
+
+  async createGuideTranslation(translation: InsertGuideTranslation): Promise<GuideTranslation> {
+    const [newTranslation] = await db.insert(guideTranslations).values(translation).returning();
+    return newTranslation;
+  }
+
+  async updateGuideTranslation(id: number, translation: Partial<InsertGuideTranslation>): Promise<GuideTranslation> {
+    const [updated] = await db.update(guideTranslations)
+      .set({ ...translation, updatedAt: new Date() })
+      .where(eq(guideTranslations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGuideTranslation(guideId: number, locale: string): Promise<void> {
+    await db.delete(guideTranslations)
+      .where(and(
+        eq(guideTranslations.guideId, guideId),
+        eq(guideTranslations.locale, locale)
+      ));
+  }
+
+  async getStepTranslationsByGuide(guideId: number, locale: string): Promise<StepTranslation[]> {
+    return db.select().from(stepTranslations)
+      .where(and(
+        eq(stepTranslations.guideId, guideId),
+        eq(stepTranslations.locale, locale)
+      ));
+  }
+
+  async getStepTranslation(stepId: number, locale: string): Promise<StepTranslation | undefined> {
+    const [translation] = await db.select().from(stepTranslations)
+      .where(and(
+        eq(stepTranslations.stepId, stepId),
+        eq(stepTranslations.locale, locale)
+      ));
+    return translation;
+  }
+
+  async createStepTranslation(translation: InsertStepTranslation): Promise<StepTranslation> {
+    const [newTranslation] = await db.insert(stepTranslations).values(translation).returning();
+    return newTranslation;
+  }
+
+  async updateStepTranslation(id: number, translation: Partial<InsertStepTranslation>): Promise<StepTranslation> {
+    const [updated] = await db.update(stepTranslations)
+      .set({ ...translation, updatedAt: new Date() })
+      .where(eq(stepTranslations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteStepTranslations(guideId: number, locale: string): Promise<void> {
+    await db.delete(stepTranslations)
+      .where(and(
+        eq(stepTranslations.guideId, guideId),
+        eq(stepTranslations.locale, locale)
+      ));
   }
 }
 

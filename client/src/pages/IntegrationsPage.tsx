@@ -81,10 +81,7 @@ export default function IntegrationsPage() {
 
   const createWebhookMutation = useMutation({
     mutationFn: async (data: { name: string; url: string; events: string[] }) => {
-      return apiRequest(`/api/workspaces/${workspaceId}/webhooks`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('POST', `/api/workspaces/${workspaceId}/webhooks`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'webhooks'] });
@@ -94,7 +91,7 @@ export default function IntegrationsPage() {
 
   const deleteWebhookMutation = useMutation({
     mutationFn: async (id: number) => {
-      return apiRequest(`/api/workspaces/${workspaceId}/webhooks/${id}`, { method: 'DELETE' });
+      return apiRequest('DELETE', `/api/workspaces/${workspaceId}/webhooks/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'webhooks'] });
@@ -103,10 +100,7 @@ export default function IntegrationsPage() {
 
   const createAutomationMutation = useMutation({
     mutationFn: async (data: { name: string; trigger: string; actions: unknown[] }) => {
-      return apiRequest(`/api/workspaces/${workspaceId}/automations`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return apiRequest('POST', `/api/workspaces/${workspaceId}/automations`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'automations'] });
@@ -116,10 +110,7 @@ export default function IntegrationsPage() {
 
   const toggleAutomationMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
-      return apiRequest(`/api/workspaces/${workspaceId}/automations/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ isActive }),
-      });
+      return apiRequest('PUT', `/api/workspaces/${workspaceId}/automations/${id}`, { isActive });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'automations'] });

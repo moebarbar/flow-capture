@@ -10,6 +10,10 @@ import Dashboard from "@/pages/Dashboard";
 import GuideEditor from "@/pages/GuideEditor";
 import GuidesList from "@/pages/GuidesList";
 import AuthPage from "@/pages/AuthPage";
+import AdminPage from "@/pages/admin";
+import PricingPage from "@/pages/pricing";
+import CheckoutSuccessPage from "@/pages/checkout-success";
+import SettingsPage from "@/pages/settings";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -48,12 +52,22 @@ function Router() {
       <Route path="/" component={user ? Dashboard : LandingPage} />
       <Route path="/auth" component={AuthPage} />
       
+      {/* Public Routes */}
+      <Route path="/pricing" component={PricingPage} />
+      <Route path="/checkout/success" component={CheckoutSuccessPage} />
+      
       {/* Protected Routes */}
       <Route path="/guides">
         {() => <ProtectedRoute component={GuidesList} />}
       </Route>
       <Route path="/guides/:id/edit">
         {() => <ProtectedRoute component={GuideEditor} />}
+      </Route>
+      <Route path="/settings">
+        {() => <ProtectedRoute component={SettingsPage} />}
+      </Route>
+      <Route path="/admin">
+        {() => <ProtectedRoute component={AdminPage} />}
       </Route>
 
       <Route component={NotFound} />

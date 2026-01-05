@@ -445,8 +445,8 @@ export default function GuideEditor() {
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Top Bar */}
-      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 shrink-0 z-30">
-        <div className="flex items-center gap-4">
+      <header className="min-h-16 border-b border-border bg-card flex flex-wrap items-center justify-between px-2 sm:px-4 py-2 shrink-0 z-30 gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <Button 
             variant="ghost" 
             size="icon" 
@@ -462,23 +462,23 @@ export default function GuideEditor() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="h-8 w-px bg-border" />
+          <div className="h-8 w-px bg-border hidden sm:block" />
           <Input 
             value={guide.title} 
             onChange={(e) => updateGuide({ id: guideId, title: e.target.value })}
-            className="text-lg font-bold border-none bg-transparent shadow-none focus-visible:ring-0 px-0 w-96 font-display"
+            className="text-base sm:text-lg font-bold border-none bg-transparent shadow-none focus-visible:ring-0 px-0 min-w-0 flex-1 max-w-xs sm:max-w-sm lg:max-w-md font-display"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
           {isRecording && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full mr-2">
+            <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full mr-1 sm:mr-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
-              <span className="text-sm text-red-600 font-medium">Recording</span>
+              <span className="text-xs sm:text-sm text-red-600 font-medium">Recording</span>
               {captureStatus?.eventsReceived > 0 && (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline">
                   ({captureStatus.eventsReceived} steps)
                 </span>
               )}
@@ -494,11 +494,11 @@ export default function GuideEditor() {
               data-testid="button-stop-capture"
             >
               {stopCaptureMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
               ) : (
-                <Square className="h-4 w-4 mr-2" />
+                <Square className="h-4 w-4 sm:mr-2" />
               )}
-              Stop Recording
+              <span className="hidden sm:inline">Stop</span>
             </Button>
           ) : (
             <Button 
@@ -509,39 +509,42 @@ export default function GuideEditor() {
               data-testid="button-start-capture"
             >
               {startCaptureMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
               ) : (
-                <Video className="h-4 w-4 mr-2" />
+                <Video className="h-4 w-4 sm:mr-2" />
               )}
-              Start Capture
+              <span className="hidden sm:inline">Capture</span>
             </Button>
           )}
           
-          <div className="h-6 w-px bg-border mx-1" />
+          <div className="h-6 w-px bg-border mx-1 hidden lg:block" />
           
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => setTranslationDialogOpen(true)}
             data-testid="button-translate-guide"
+            className="hidden xl:flex"
           >
-            <Languages className="h-4 w-4 mr-2" /> Translate
+            <Languages className="h-4 w-4 xl:mr-2" /> <span className="hidden xl:inline">Translate</span>
           </Button>
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => setVoiceoverDialogOpen(true)}
             data-testid="button-voiceover-guide"
+            className="hidden xl:flex"
           >
-            <Volume2 className="h-4 w-4 mr-2" /> Voice
+            <Volume2 className="h-4 w-4 xl:mr-2" /> <span className="hidden xl:inline">Voice</span>
           </Button>
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => setRedactionDialogOpen(true)}
             data-testid="button-redact-guide"
+            className="hidden xl:flex"
           >
-            <EyeOff className="h-4 w-4 mr-2" /> Redact
+            <EyeOff className="h-4 w-4 xl:mr-2" /> <span className="hidden xl:inline">Redact</span>
           </Button>
           <Button 
             variant="outline" 
@@ -549,7 +552,7 @@ export default function GuideEditor() {
             onClick={() => setShareDialogOpen(true)}
             data-testid="button-share-guide"
           >
-            <Share2 className="h-4 w-4 mr-2" /> Share
+            <Share2 className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Share</span>
           </Button>
           <Button 
             variant="outline" 
@@ -557,20 +560,17 @@ export default function GuideEditor() {
             onClick={() => setSettingsDialogOpen(true)}
             data-testid="button-settings-guide"
           >
-            <Settings className="h-4 w-4 mr-2" /> Settings
-          </Button>
-          <Button variant="outline" size="sm">
-            <ExternalLink className="h-4 w-4 mr-2" /> Preview
+            <Settings className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Settings</span>
           </Button>
           <Button size="sm" className="bg-brand-600 hover:bg-brand-700">
-            <Save className="h-4 w-4 mr-2" /> Publish
+            <Save className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Publish</span>
           </Button>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel: Step List */}
-        <div className="w-72 border-r border-border bg-muted/10 flex flex-col shrink-0">
+        <div className="hidden md:flex w-56 lg:w-72 border-r border-border bg-muted/10 flex-col shrink-0">
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h3 className="font-semibold text-sm">Steps ({sortedSteps.length})</h3>
             <Button size="sm" variant="ghost" onClick={handleAddStep} className="h-8 w-8 p-0">

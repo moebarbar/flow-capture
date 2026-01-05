@@ -377,6 +377,123 @@ export const teamActivity = pgTable("team_activity", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// === INTEGRATIONS & AUTOMATION ===
+
+export const integrationProviderEnum = pgEnum("integration_provider", [
+  "slack", "microsoft_teams", "email", "jira", "clickup", "monday",
+  "notion", "confluence", "google_drive", "dropbox",
+  "zapier", "make", "webhook", "google_analytics", "mixpanel", "amplitude"
+]);
+
+export const integrationStatusEnum = pgEnum("integration_status", ["active", "inactive", "error"]);
+
+export const automationTriggerEnum = pgEnum("automation_trigger", [
+  "guide_created", "guide_published", "guide_completed", "guide_viewed",
+  "step_completed", "step_assigned", "assignment_overdue",
+  "approval_requested", "approval_approved", "approval_rejected",
+  "comment_added", "user_invited", "user_joined"
+]);
+
+export const automationActionEnum = pgEnum("automation_action", [
+  "send_email", "send_slack", "send_teams", "create_jira_task",
+  "trigger_webhook", "assign_guide", "notify_user", "update_field"
+]);
+
+// Integration configurations per workspace
+export const integrations = pgTable("integrations", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  provider: integrationProviderEnum("provider").notNull(),
+  name: text("name").notNull(),
+  status: integrationStatusEnum("status").default("inactive").notNull(),
+  credentials: jsonb("credentials"), // Encrypted API keys, tokens, etc.
+  settings: jsonb("settings"), // Provider-specific settings
+  lastSyncAt: timestamp("last_sync_at"),
+  errorMessage: text("error_message"),
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Webhooks - Outgoing webhook configurations
+export const webhooks = pgTable("webhooks", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  secret: text("secret"), // HMAC secret for signing
+  events: text("events").array().notNull(), // Array of trigger events
+  headers: jsonb("headers"), // Custom headers to send
+  isActive: boolean("is_active").default(true).notNull(),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  failureCount: integer("failure_count").default(0).notNull(),
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Automations - Workflow automation definitions
+export const automations = pgTable("automations", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  trigger: automationTriggerEnum("trigger").notNull(),
+  conditions: jsonb("conditions"), // Filter conditions (e.g., { guideStatus: 'published' })
+  actions: jsonb("actions").notNull(), // Array of actions to execute
+  isActive: boolean("is_active").default(true).notNull(),
+  runCount: integer("run_count").default(0).notNull(),
+  lastRunAt: timestamp("last_run_at"),
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Automation execution logs
+export const automationLogs = pgTable("automation_logs", {
+  id: serial("id").primaryKey(),
+  automationId: integer("automation_id").references(() => automations.id).notNull(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  triggeredBy: text("triggered_by"), // Event or user ID that triggered
+  triggerEvent: text("trigger_event").notNull(),
+  triggerData: jsonb("trigger_data"), // Input data from trigger
+  actionsExecuted: jsonb("actions_executed"), // Results of each action
+  status: text("status").notNull(), // 'success', 'partial', 'failed'
+  errorMessage: text("error_message"),
+  executionTimeMs: integer("execution_time_ms"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Webhook delivery logs
+export const webhookLogs = pgTable("webhook_logs", {
+  id: serial("id").primaryKey(),
+  webhookId: integer("webhook_id").references(() => webhooks.id).notNull(),
+  event: text("event").notNull(),
+  payload: jsonb("payload").notNull(),
+  statusCode: integer("status_code"),
+  responseBody: text("response_body"),
+  success: boolean("success").default(false).notNull(),
+  attemptCount: integer("attempt_count").default(1).notNull(),
+  executionTimeMs: integer("execution_time_ms"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Analytics events for tracking
+export const analyticsEvents = pgTable("analytics_events", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id),
+  userId: text("user_id").references(() => users.id),
+  sessionId: text("session_id"),
+  eventName: text("event_name").notNull(),
+  eventCategory: text("event_category"), // 'guide', 'user', 'billing', 'feature'
+  eventData: jsonb("event_data"),
+  source: text("source"), // 'web', 'extension', 'api'
+  referrer: text("referrer"),
+  userAgent: text("user_agent"),
+  ipHash: text("ip_hash"), // Hashed IP for privacy
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // === RELATIONS ===
 
 export const stepAssignmentsRelations = relations(stepAssignments, ({ one }) => ({
@@ -796,3 +913,69 @@ export type GuideApprovalWithUsers = GuideApproval & {
 export type NotificationWithActor = Notification & {
   actor?: { id: string; email: string; firstName: string | null; lastName: string | null } | null;
 };
+
+// === INTEGRATION SCHEMAS ===
+
+export const insertIntegrationSchema = createInsertSchema(integrations).omit({
+  id: true,
+  lastSyncAt: true,
+  errorMessage: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertWebhookSchema = createInsertSchema(webhooks).omit({
+  id: true,
+  lastTriggeredAt: true,
+  failureCount: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertAutomationSchema = createInsertSchema(automations).omit({
+  id: true,
+  runCount: true,
+  lastRunAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertAutomationLogSchema = createInsertSchema(automationLogs).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertWebhookLogSchema = createInsertSchema(webhookLogs).omit({
+  id: true,
+  createdAt: true
+});
+
+export const insertAnalyticsEventSchema = createInsertSchema(analyticsEvents).omit({
+  id: true,
+  createdAt: true
+});
+
+// === INTEGRATION TYPES ===
+
+export type Integration = typeof integrations.$inferSelect;
+export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
+
+export type Webhook = typeof webhooks.$inferSelect;
+export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
+
+export type Automation = typeof automations.$inferSelect;
+export type InsertAutomation = z.infer<typeof insertAutomationSchema>;
+
+export type AutomationLog = typeof automationLogs.$inferSelect;
+export type InsertAutomationLog = z.infer<typeof insertAutomationLogSchema>;
+
+export type WebhookLog = typeof webhookLogs.$inferSelect;
+export type InsertWebhookLog = z.infer<typeof insertWebhookLogSchema>;
+
+export type AnalyticsEvent = typeof analyticsEvents.$inferSelect;
+export type InsertAnalyticsEvent = z.infer<typeof insertAnalyticsEventSchema>;
+
+// Integration provider type
+export type IntegrationProvider = typeof integrationProviderEnum.enumValues[number];
+export type AutomationTrigger = typeof automationTriggerEnum.enumValues[number];
+export type AutomationAction = typeof automationActionEnum.enumValues[number];

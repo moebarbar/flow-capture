@@ -19,6 +19,7 @@ import rateLimit from "express-rate-limit";
 import { emailService } from "./services/emailService";
 import { billingService } from "./services/billingService";
 import { invitationService } from "./services/invitationService";
+import { integrationsService } from "./services/integrationsService";
 import { db } from "./db";
 import sanitizeHtml from "sanitize-html"; 
 
@@ -2594,6 +2595,323 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       res.json({ data: activity });
     } catch (error) {
       res.status(500).json({ message: 'Failed to get activity' });
+    }
+  });
+
+  // === INTEGRATIONS ===
+  
+  app.get('/api/workspaces/:workspaceId/integrations', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const integrationsList = await integrationsService.getIntegrationsByWorkspace(workspaceId);
+      res.json({ data: integrationsList });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get integrations' });
+    }
+  });
+
+  app.post('/api/workspaces/:workspaceId/integrations', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const integration = await integrationsService.createIntegration({
+        ...req.body,
+        workspaceId,
+        createdById: user.claims.sub
+      });
+      res.status(201).json(integration);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to create integration' });
+    }
+  });
+
+  app.put('/api/workspaces/:workspaceId/integrations/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const integrationId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const integration = await integrationsService.updateIntegration(integrationId, req.body);
+      res.json(integration);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update integration' });
+    }
+  });
+
+  app.delete('/api/workspaces/:workspaceId/integrations/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const integrationId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      await integrationsService.deleteIntegration(integrationId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete integration' });
+    }
+  });
+
+  // === WEBHOOKS ===
+
+  app.get('/api/workspaces/:workspaceId/webhooks', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const webhooksList = await integrationsService.getWebhooksByWorkspace(workspaceId);
+      res.json({ data: webhooksList });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get webhooks' });
+    }
+  });
+
+  app.post('/api/workspaces/:workspaceId/webhooks', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const webhook = await integrationsService.createWebhook({
+        ...req.body,
+        workspaceId,
+        createdById: user.claims.sub
+      });
+      res.status(201).json(webhook);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to create webhook' });
+    }
+  });
+
+  app.put('/api/workspaces/:workspaceId/webhooks/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const webhookId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const webhook = await integrationsService.updateWebhook(webhookId, req.body);
+      res.json(webhook);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update webhook' });
+    }
+  });
+
+  app.delete('/api/workspaces/:workspaceId/webhooks/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const webhookId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      await integrationsService.deleteWebhook(webhookId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete webhook' });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/webhooks/:id/logs', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const webhookId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const logs = await integrationsService.getWebhookLogs(webhookId);
+      res.json({ data: logs });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get webhook logs' });
+    }
+  });
+
+  // === AUTOMATIONS ===
+
+  app.get('/api/workspaces/:workspaceId/automations', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const automationsList = await integrationsService.getAutomationsByWorkspace(workspaceId);
+      res.json({ data: automationsList });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get automations' });
+    }
+  });
+
+  app.post('/api/workspaces/:workspaceId/automations', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const automation = await integrationsService.createAutomation({
+        ...req.body,
+        workspaceId,
+        createdById: user.claims.sub
+      });
+      res.status(201).json(automation);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to create automation' });
+    }
+  });
+
+  app.put('/api/workspaces/:workspaceId/automations/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const automationId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const automation = await integrationsService.updateAutomation(automationId, req.body);
+      res.json(automation);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update automation' });
+    }
+  });
+
+  app.delete('/api/workspaces/:workspaceId/automations/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const automationId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      await integrationsService.deleteAutomation(automationId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to delete automation' });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/automations/:id/logs', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const automationId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const logs = await integrationsService.getAutomationLogs(automationId);
+      res.json({ data: logs });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get automation logs' });
+    }
+  });
+
+  // === ANALYTICS EVENTS ===
+
+  app.post('/api/analytics/track', async (req, res) => {
+    try {
+      const user = req.isAuthenticated() ? (req.user as any) : null;
+      
+      await integrationsService.trackEvent({
+        workspaceId: req.body.workspaceId || null,
+        userId: user?.claims?.sub || null,
+        sessionId: req.body.sessionId || null,
+        eventName: req.body.eventName,
+        eventCategory: req.body.eventCategory || null,
+        eventData: req.body.eventData || null,
+        source: req.body.source || 'web',
+        referrer: req.headers.referer || null,
+        userAgent: req.headers['user-agent'] || null,
+        ipHash: null // Would hash IP for privacy
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to track event' });
+    }
+  });
+
+  app.get('/api/workspaces/:workspaceId/analytics', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const limit = parseInt(req.query.limit as string) || 100;
+    const eventName = req.query.eventName as string | undefined;
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
+
+      const events = await integrationsService.getAnalyticsEvents(workspaceId, { limit, eventName });
+      res.json({ data: events });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get analytics' });
     }
   });
 

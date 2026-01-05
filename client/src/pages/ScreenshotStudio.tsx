@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, Image as ImageIcon, Sparkles, Chrome, Camera } from "lucide-react";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
+import { Sidebar } from "@/components/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 
@@ -102,22 +103,24 @@ export default function ScreenshotStudio() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Sparkles className="w-6 h-6 text-primary" />
+    <div className="min-h-screen bg-background flex">
+      <Sidebar />
+      <main className="flex-1 ml-64 p-8 overflow-y-auto">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Sparkles className="w-6 h-6 text-primary" />
+              </div>
+              <h1 className="text-2xl font-semibold" data-testid="text-page-title">
+                Screenshot Studio
+              </h1>
             </div>
-            <h1 className="text-2xl font-semibold" data-testid="text-page-title">
-              Screenshot Studio
-            </h1>
+            <p className="text-muted-foreground">
+              Transform your screenshots into beautiful visuals with backgrounds, device mockups, and effects.
+            </p>
           </div>
-          <p className="text-muted-foreground">
-            Transform your screenshots into beautiful visuals with backgrounds, device mockups, and effects.
-          </p>
-        </div>
 
         <AnimatePresence mode="wait">
           {!imageUrl ? (
@@ -242,7 +245,8 @@ export default function ScreenshotStudio() {
             </CardContent>
           </Card>
         </div>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

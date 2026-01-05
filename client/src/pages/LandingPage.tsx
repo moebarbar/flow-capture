@@ -147,10 +147,10 @@ export default function LandingPage() {
                 Stop documenting.
               </span>
               <br />
-              <span className="relative inline-block pb-4 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
+              <span className="relative inline-block pb-8 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
                 Start capturing.
-                <svg className="absolute left-0 top-full -mt-2 w-full h-3" viewBox="0 0 300 12" fill="none" preserveAspectRatio="none">
-                  <path d="M2 10C50 4 100 2 150 6C200 10 250 8 298 4" stroke="url(#hero-underline-gradient)" strokeWidth="3" strokeLinecap="round"/>
+                <svg className="absolute left-0 top-full mt-2 w-full h-4" viewBox="0 0 300 12" fill="none" preserveAspectRatio="none">
+                  <path d="M2 10C50 4 100 2 150 6C200 10 250 8 298 4" stroke="url(#hero-underline-gradient)" strokeWidth="5" strokeLinecap="round"/>
                   <defs>
                     <linearGradient id="hero-underline-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                       <stop offset="0%" stopColor="hsl(var(--brand-500))" />

@@ -13,6 +13,7 @@ export const workspaceRoleEnum = pgEnum("workspace_role", ["owner", "admin", "ed
 export const guideStatusEnum = pgEnum("guide_status", ["draft", "published", "archived"]);
 export const stepTypeEnum = pgEnum("step_type", ["click", "input", "navigation", "wait", "scroll", "custom"]);
 export const blogPostStatusEnum = pgEnum("blog_post_status", ["draft", "published", "archived"]);
+export const contentPageStatusEnum = pgEnum("content_page_status", ["draft", "published"]);
 export const tokenTypeEnum = pgEnum("token_type", ["email_verification", "password_reset"]);
 
 // === TABLE DEFINITIONS ===
@@ -94,6 +95,23 @@ export const blogPosts = pgTable("blog_posts", {
   featuredImageUrl: text("featured_image_url"),
   status: blogPostStatusEnum("status").default("draft").notNull(),
   authorId: text("author_id").references(() => users.id).notNull(),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Content pages (Privacy Policy, Terms, etc. - admin managed)
+export const contentPages = pgTable("content_pages", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").unique().notNull(),
+  content: text("content").notNull(),
+  metaDescription: text("meta_description"),
+  status: contentPageStatusEnum("status").default("draft").notNull(),
+  showInFooter: boolean("show_in_footer").default(true).notNull(),
+  footerOrder: integer("footer_order").default(0).notNull(),
+  createdById: text("created_by_id").references(() => users.id).notNull(),
+  updatedById: text("updated_by_id").references(() => users.id),
   publishedAt: timestamp("published_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -404,6 +422,13 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
   updatedAt: true
 });
 
+export const insertContentPageSchema = createInsertSchema(contentPages).omit({
+  id: true,
+  publishedAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 export const insertSiteSettingsSchema = createInsertSchema(siteSettings).omit({
   id: true,
   updatedAt: true
@@ -458,6 +483,9 @@ export type InsertGuideShare = z.infer<typeof insertGuideShareSchema>;
 
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
+
+export type ContentPage = typeof contentPages.$inferSelect;
+export type InsertContentPage = z.infer<typeof insertContentPageSchema>;
 
 export type SiteSettings = typeof siteSettings.$inferSelect;
 export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;

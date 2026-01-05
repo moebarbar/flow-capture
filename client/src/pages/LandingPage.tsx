@@ -31,6 +31,12 @@ interface SiteSettings {
   docsLink?: string | null;
 }
 
+interface FooterPage {
+  id: number;
+  title: string;
+  slug: string;
+}
+
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
   whileInView: { opacity: 1, y: 0 },
@@ -53,7 +59,12 @@ export default function LandingPage() {
     queryKey: ['/api/settings/public'],
   });
 
+  const { data: footerPagesData } = useQuery<{ data: FooterPage[] }>({
+    queryKey: ['/api/pages/footer'],
+  });
+
   const siteName = branding?.siteName || "FlowCapture";
+  const footerPages = footerPagesData?.data || [];
 
   useEffect(() => {
     if (user) {
@@ -1155,8 +1166,17 @@ export default function LandingPage() {
                 <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-about">About</a></li>
                 <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-blog">Blog</a></li>
                 <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-careers">Careers</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy">Privacy</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-terms">Terms</a></li>
+                {footerPages.map((page) => (
+                  <li key={page.id}>
+                    <a 
+                      href={`/pages/${page.slug}`} 
+                      className="hover:text-foreground transition-colors" 
+                      data-testid={`link-footer-page-${page.slug}`}
+                    >
+                      {page.title}
+                    </a>
+                  </li>
+                ))}
               </ul>
             </div>
           </div>

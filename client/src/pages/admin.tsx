@@ -92,6 +92,20 @@ interface FinanceOverview {
   paidInvoices: number;
 }
 
+interface ContentPage {
+  id: number;
+  title: string;
+  slug: string;
+  content: string;
+  metaDescription: string | null;
+  status: string;
+  showInFooter: boolean;
+  footerOrder: number;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 function generateSlug(title: string): string {
   return title
     .toLowerCase()
@@ -260,6 +274,152 @@ function BlogPostEditor({ post, onClose }: { post?: BlogPost; onClose: () => voi
         </Button>
         <Button onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save-post">
           {saveMutation.isPending ? 'Saving...' : (post ? 'Update Post' : 'Create Post')}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
+function ContentPageEditor({ page, onClose }: { page?: ContentPage; onClose: () => void }) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState(page?.title || '');
+  const [content, setContent] = useState(page?.content || '');
+  const [slug, setSlug] = useState(page?.slug || '');
+  const [metaDescription, setMetaDescription] = useState(page?.metaDescription || '');
+  const [status, setStatus] = useState(page?.status || 'draft');
+  const [showInFooter, setShowInFooter] = useState(page?.showInFooter ?? true);
+  const [footerOrder, setFooterOrder] = useState(page?.footerOrder || 0);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (page) {
+        return apiRequest('PATCH', `/api/admin/content-pages/${page.id}`, data);
+      } else {
+        return apiRequest('POST', '/api/admin/content-pages', data);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/content-pages'] });
+      toast({ title: page ? "Page updated" : "Page created" });
+      onClose();
+    },
+    onError: (error: any) => {
+      toast({ title: error?.message || "Failed to save page", variant: "destructive" });
+    },
+  });
+
+  const handleSave = () => {
+    if (!title || !slug || !content) {
+      toast({ title: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
+    saveMutation.mutate({
+      title,
+      slug,
+      content,
+      metaDescription: metaDescription || null,
+      status,
+      showInFooter,
+      footerOrder,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="page-title">Title</Label>
+        <Input
+          id="page-title"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            if (!page) setSlug(generateSlug(e.target.value));
+          }}
+          placeholder="Enter page title"
+          data-testid="input-page-title"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="page-slug">URL Slug</Label>
+        <Input
+          id="page-slug"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="page-url-slug"
+          data-testid="input-page-slug"
+        />
+        <p className="text-xs text-muted-foreground">This will appear as: /pages/{slug || 'your-slug'}</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="page-meta">Meta Description (SEO)</Label>
+        <Textarea
+          id="page-meta"
+          value={metaDescription}
+          onChange={(e) => setMetaDescription(e.target.value)}
+          placeholder="Brief description for search engines..."
+          className="min-h-[60px]"
+          data-testid="input-page-meta"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="page-content">Content (HTML)</Label>
+        <Textarea
+          id="page-content"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Enter page content (HTML supported)..."
+          className="min-h-[200px] font-mono text-sm"
+          data-testid="input-page-content"
+        />
+        <p className="text-xs text-muted-foreground">HTML is supported. Common tags: h1, h2, p, ul, li, strong, em, a</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="page-status">Status</Label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger data-testid="select-page-status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="published">Published</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="footer-order">Footer Order</Label>
+          <Input
+            id="footer-order"
+            type="number"
+            value={footerOrder}
+            onChange={(e) => setFooterOrder(parseInt(e.target.value) || 0)}
+            placeholder="0"
+            data-testid="input-footer-order"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="show-in-footer"
+          checked={showInFooter}
+          onCheckedChange={setShowInFooter}
+          data-testid="switch-show-in-footer"
+        />
+        <Label htmlFor="show-in-footer">Show in footer navigation</Label>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} data-testid="button-cancel-page">
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={saveMutation.isPending} data-testid="button-save-page">
+          {saveMutation.isPending ? 'Saving...' : (page ? 'Update Page' : 'Create Page')}
         </Button>
       </DialogFooter>
     </div>
@@ -1449,6 +1609,150 @@ function PromotionsTab() {
   );
 }
 
+function PagesTab() {
+  const { toast } = useToast();
+  const [editingPage, setEditingPage] = useState<ContentPage | undefined>();
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+
+  const { data: pagesData, isLoading } = useQuery<{ data: ContentPage[] }>({
+    queryKey: ['/api/admin/content-pages'],
+  });
+
+  const deletePageMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('DELETE', `/api/admin/content-pages/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/content-pages'] });
+      toast({ title: "Page deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete page", variant: "destructive" });
+    },
+  });
+
+  const openEditor = (page?: ContentPage) => {
+    setEditingPage(page);
+    setIsEditorOpen(true);
+  };
+
+  const closeEditor = () => {
+    setEditingPage(undefined);
+    setIsEditorOpen(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Content Pages
+          </CardTitle>
+          <CardDescription>Create and manage static pages like Privacy Policy, Terms, etc.</CardDescription>
+        </div>
+        <Dialog open={isEditorOpen} onOpenChange={(open) => !open && closeEditor()}>
+          <DialogTrigger asChild>
+            <Button onClick={() => openEditor()} data-testid="button-new-page">
+              <Plus className="h-4 w-4 mr-2" />
+              New Page
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{editingPage ? 'Edit Page' : 'Create New Page'}</DialogTitle>
+              <DialogDescription>
+                {editingPage ? 'Update your content page' : 'Create a new page for your site (Privacy Policy, Terms, etc.)'}
+              </DialogDescription>
+            </DialogHeader>
+            <ContentPageEditor page={editingPage} onClose={closeEditor} />
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Slug</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Footer</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pagesData?.data?.length ? (
+                pagesData.data.map((page) => (
+                  <TableRow key={page.id} data-testid={`row-page-${page.id}`}>
+                    <TableCell className="font-medium">{page.title}</TableCell>
+                    <TableCell className="text-muted-foreground">/pages/{page.slug}</TableCell>
+                    <TableCell>
+                      <Badge variant={page.status === 'published' ? 'default' : 'secondary'}>
+                        {page.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {page.showInFooter ? (
+                        <Badge variant="outline">Order: {page.footerOrder}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">Hidden</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => window.open(`/pages/${page.slug}`, '_blank')}
+                          disabled={page.status !== 'published'}
+                          data-testid={`button-view-page-${page.id}`}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => openEditor(page)}
+                          data-testid={`button-edit-page-${page.id}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this page?')) {
+                              deletePageMutation.mutate(page.id);
+                            }
+                          }}
+                          data-testid={`button-delete-page-${page.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No content pages yet. Create your first page to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -1590,6 +1894,7 @@ export default function AdminPage() {
             <TabsTrigger value="finance" data-testid="tab-finance">Finance</TabsTrigger>
             <TabsTrigger value="promotions" data-testid="tab-promotions">Promotions</TabsTrigger>
             <TabsTrigger value="blog" data-testid="tab-blog">Blog</TabsTrigger>
+            <TabsTrigger value="pages" data-testid="tab-pages">Pages</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -1797,6 +2102,10 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="pages">
+            <PagesTab />
           </TabsContent>
         </Tabs>
       </div>

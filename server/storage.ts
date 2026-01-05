@@ -1,12 +1,13 @@
 import { 
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
-  guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares,
+  guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares, contentPages,
   type User, type UpsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
   type Step, type InsertStep,
   type Folder, type InsertFolder,
   type BlogPost, type InsertBlogPost,
+  type ContentPage, type InsertContentPage,
   type SiteSettings, type InsertSiteSettings,
   type DiscountCode, type InsertDiscountCode,
   type WorkspaceWithMembers,
@@ -83,6 +84,16 @@ export interface IStorage {
   updateGuideShare(id: number, share: Partial<InsertGuideShare>): Promise<GuideShare>;
   deleteGuideShare(id: number): Promise<void>;
   incrementShareAccessCount(id: number): Promise<void>;
+
+  // Content Pages (admin-managed pages like Privacy Policy, Terms)
+  createContentPage(page: InsertContentPage): Promise<ContentPage>;
+  getContentPage(id: number): Promise<ContentPage | undefined>;
+  getContentPageBySlug(slug: string): Promise<ContentPage | undefined>;
+  getAllContentPages(limit?: number, offset?: number): Promise<ContentPage[]>;
+  getPublishedContentPages(): Promise<ContentPage[]>;
+  getFooterContentPages(): Promise<ContentPage[]>;
+  updateContentPage(id: number, page: Partial<InsertContentPage>): Promise<ContentPage>;
+  deleteContentPage(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -564,6 +575,59 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(guideShares.id, id));
     }
+  }
+
+  // Content Pages methods
+  async createContentPage(page: InsertContentPage): Promise<ContentPage> {
+    const [newPage] = await db.insert(contentPages).values(page).returning();
+    return newPage;
+  }
+
+  async getContentPage(id: number): Promise<ContentPage | undefined> {
+    const [page] = await db.select().from(contentPages).where(eq(contentPages.id, id));
+    return page;
+  }
+
+  async getContentPageBySlug(slug: string): Promise<ContentPage | undefined> {
+    const [page] = await db.select().from(contentPages).where(eq(contentPages.slug, slug));
+    return page;
+  }
+
+  async getAllContentPages(limit = 50, offset = 0): Promise<ContentPage[]> {
+    return db.select()
+      .from(contentPages)
+      .orderBy(desc(contentPages.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getPublishedContentPages(): Promise<ContentPage[]> {
+    return db.select()
+      .from(contentPages)
+      .where(eq(contentPages.status, 'published'))
+      .orderBy(asc(contentPages.footerOrder));
+  }
+
+  async getFooterContentPages(): Promise<ContentPage[]> {
+    return db.select()
+      .from(contentPages)
+      .where(and(
+        eq(contentPages.status, 'published'),
+        eq(contentPages.showInFooter, true)
+      ))
+      .orderBy(asc(contentPages.footerOrder));
+  }
+
+  async updateContentPage(id: number, update: Partial<InsertContentPage>): Promise<ContentPage> {
+    const [updated] = await db.update(contentPages)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(contentPages.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteContentPage(id: number): Promise<void> {
+    await db.delete(contentPages).where(eq(contentPages.id, id));
   }
 }
 

@@ -18,7 +18,8 @@ import rateLimit from "express-rate-limit";
 import { emailService } from "./services/emailService";
 import { billingService } from "./services/billingService";
 import { invitationService } from "./services/invitationService";
-import { db } from "./db"; 
+import { db } from "./db";
+import sanitizeHtml from "sanitize-html"; 
 
 export async function registerRoutes(
   httpServer: Server,
@@ -1146,6 +1147,143 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     }
   });
 
+  // === ADMIN CONTENT PAGES ===
+  app.get('/api/admin/content-pages', requireAdmin, async (req, res) => {
+    try {
+      const pages = await storage.getAllContentPages();
+      res.json({ data: pages });
+    } catch (error) {
+      console.error('Get content pages error:', error);
+      res.status(500).json({ message: 'Failed to get content pages' });
+    }
+  });
+
+  app.get('/api/admin/content-pages/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const page = await storage.getContentPage(id);
+      if (!page) {
+        return res.status(404).json({ message: 'Content page not found' });
+      }
+      res.json(page);
+    } catch (error) {
+      console.error('Get content page error:', error);
+      res.status(500).json({ message: 'Failed to get content page' });
+    }
+  });
+
+  app.post('/api/admin/content-pages', requireAdmin, async (req, res) => {
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const { title, slug, content, metaDescription, status, showInFooter, footerOrder } = req.body;
+      
+      if (!title || !slug || !content) {
+        return res.status(400).json({ message: 'Title, slug, and content are required' });
+      }
+
+      const existingPage = await storage.getContentPageBySlug(slug);
+      if (existingPage) {
+        return res.status(400).json({ message: 'A page with this slug already exists' });
+      }
+
+      const sanitizedContent = sanitizeHtml(content, {
+        allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1', 'h2', 'img']),
+        allowedAttributes: {
+          ...sanitizeHtml.defaults.allowedAttributes,
+          img: ['src', 'alt', 'title', 'width', 'height'],
+          a: ['href', 'target', 'rel'],
+        },
+        allowedSchemes: ['http', 'https', 'mailto'],
+      });
+
+      const page = await storage.createContentPage({
+        title,
+        slug: slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        content: sanitizedContent,
+        metaDescription: metaDescription || null,
+        status: status || 'draft',
+        showInFooter: showInFooter !== undefined ? showInFooter : true,
+        footerOrder: footerOrder || 0,
+        createdById: userId,
+        updatedById: userId,
+        publishedAt: status === 'published' ? new Date() : null,
+      });
+
+      res.status(201).json(page);
+    } catch (error: any) {
+      console.error('Create content page error:', error);
+      res.status(400).json({ message: error.message || 'Failed to create content page' });
+    }
+  });
+
+  app.patch('/api/admin/content-pages/:id', requireAdmin, async (req, res) => {
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const id = parseInt(req.params.id);
+
+    try {
+      const existingPage = await storage.getContentPage(id);
+      if (!existingPage) {
+        return res.status(404).json({ message: 'Content page not found' });
+      }
+
+      const { title, slug, content, metaDescription, status, showInFooter, footerOrder } = req.body;
+
+      if (slug && slug !== existingPage.slug) {
+        const slugPage = await storage.getContentPageBySlug(slug);
+        if (slugPage && slugPage.id !== id) {
+          return res.status(400).json({ message: 'A page with this slug already exists' });
+        }
+      }
+
+      const updateData: any = { updatedById: userId };
+      if (title !== undefined) updateData.title = title;
+      if (slug !== undefined) updateData.slug = slug.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      if (content !== undefined) {
+        updateData.content = sanitizeHtml(content, {
+          allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1', 'h2', 'img']),
+          allowedAttributes: {
+            ...sanitizeHtml.defaults.allowedAttributes,
+            img: ['src', 'alt', 'title', 'width', 'height'],
+            a: ['href', 'target', 'rel'],
+          },
+          allowedSchemes: ['http', 'https', 'mailto'],
+        });
+      }
+      if (metaDescription !== undefined) updateData.metaDescription = metaDescription;
+      if (showInFooter !== undefined) updateData.showInFooter = showInFooter;
+      if (footerOrder !== undefined) updateData.footerOrder = footerOrder;
+      
+      if (status !== undefined) {
+        updateData.status = status;
+        if (status === 'published' && existingPage.status !== 'published') {
+          updateData.publishedAt = new Date();
+        } else if (status !== 'published' && existingPage.status === 'published') {
+          updateData.publishedAt = null;
+        }
+      }
+
+      const updated = await storage.updateContentPage(id, updateData);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Update content page error:', error);
+      res.status(400).json({ message: error.message || 'Failed to update content page' });
+    }
+  });
+
+  app.delete('/api/admin/content-pages/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteContentPage(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete content page error:', error);
+      res.status(500).json({ message: 'Failed to delete content page' });
+    }
+  });
+
   // Public Blog Endpoints
   app.get('/api/blog', async (req, res) => {
     try {
@@ -1166,6 +1304,34 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       res.json(post);
     } catch (error) {
       res.status(500).json({ message: 'Failed to get post' });
+    }
+  });
+
+  // === PUBLIC CONTENT PAGES ENDPOINTS ===
+  app.get('/api/pages/footer', async (req, res) => {
+    try {
+      const pages = await storage.getFooterContentPages();
+      res.json({ data: pages.map(p => ({ id: p.id, title: p.title, slug: p.slug })) });
+    } catch (error) {
+      res.json({ data: [] });
+    }
+  });
+
+  app.get('/api/pages/:slug', async (req, res) => {
+    try {
+      const page = await storage.getContentPageBySlug(req.params.slug);
+      if (!page || page.status !== 'published') {
+        return res.status(404).json({ message: 'Page not found' });
+      }
+      res.json({
+        id: page.id,
+        title: page.title,
+        slug: page.slug,
+        content: page.content,
+        metaDescription: page.metaDescription,
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get page' });
     }
   });
 

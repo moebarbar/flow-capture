@@ -19,6 +19,7 @@ import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
 import TemplateLibrary from "@/pages/TemplateLibrary";
 import WorkspaceSettingsPage from "@/pages/WorkspaceSettingsPage";
 import ScreenshotStudio from "@/pages/ScreenshotStudio";
+import SharedGuidePage from "@/pages/SharedGuidePage";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -60,6 +61,7 @@ function Router() {
       {/* Public Routes */}
       <Route path="/pricing" component={PricingPage} />
       <Route path="/checkout/success" component={CheckoutSuccessPage} />
+      <Route path="/share/:token" component={SharedGuidePage} />
       
       {/* Protected Routes */}
       <Route path="/guides">

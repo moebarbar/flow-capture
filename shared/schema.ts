@@ -71,6 +71,19 @@ export const steps = pgTable("steps", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Guide sharing with password protection
+export const guideShares = pgTable("guide_shares", {
+  id: serial("id").primaryKey(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  shareToken: text("share_token").unique().notNull(), // Unique token for the shareable link
+  passwordHash: text("password_hash"), // bcrypt hashed password (null = no password required)
+  enabled: boolean("enabled").default(true).notNull(),
+  accessCount: integer("access_count").default(0).notNull(),
+  lastAccessedAt: timestamp("last_accessed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const blogPosts = pgTable("blog_posts", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -251,6 +264,13 @@ export const stepsRelations = relations(steps, ({ one }) => ({
   }),
 }));
 
+export const guideSharesRelations = relations(guideShares, ({ one }) => ({
+  guide: one(guides, {
+    fields: [guideShares.guideId],
+    references: [guides.id],
+  }),
+}));
+
 export const blogPostsRelations = relations(blogPosts, ({ one }) => ({
   author: one(users, {
     fields: [blogPosts.authorId],
@@ -281,6 +301,14 @@ export const insertStepSchema = createInsertSchema(steps).omit({
 export const insertFolderSchema = createInsertSchema(folders).omit({
   id: true,
   createdAt: true
+});
+
+export const insertGuideShareSchema = createInsertSchema(guideShares).omit({
+  id: true,
+  accessCount: true,
+  lastAccessedAt: true,
+  createdAt: true,
+  updatedAt: true
 });
 
 export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
@@ -314,6 +342,9 @@ export type InsertStep = z.infer<typeof insertStepSchema>;
 
 export type Folder = typeof folders.$inferSelect;
 export type InsertFolder = z.infer<typeof insertFolderSchema>;
+
+export type GuideShare = typeof guideShares.$inferSelect;
+export type InsertGuideShare = z.infer<typeof insertGuideShareSchema>;
 
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;

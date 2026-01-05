@@ -10,7 +10,9 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { openai } from "./replit_integrations/image/client";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
-import { insertBlogPostSchema } from "@shared/schema"; 
+import { insertBlogPostSchema } from "@shared/schema";
+import bcrypt from "bcrypt";
+import crypto from "crypto"; 
 
 export async function registerRoutes(
   httpServer: Server,
@@ -234,6 +236,209 @@ export async function registerRoutes(
       }
       throw err;
     }
+  });
+
+  // === GUIDE SHARING (Password-Protected) ===
+  
+  // Helper to check if user can manage guide sharing
+  async function canManageGuideShare(userId: string, guideId: number): Promise<boolean> {
+    const guide = await storage.getGuide(guideId);
+    if (!guide) return false;
+    
+    const workspace = await storage.getWorkspace(guide.workspaceId);
+    if (!workspace) return false;
+    
+    // Owner can always manage
+    if (workspace.ownerId === userId) return true;
+    
+    // Check if user is a member with edit permissions
+    const members = await storage.getWorkspaceMembers(guide.workspaceId);
+    const member = members.find(m => m.userId === userId);
+    if (member && ['owner', 'admin', 'editor'].includes(member.role)) return true;
+    
+    return false;
+  }
+  
+  // Get share settings for a guide (owner/editor only)
+  app.get('/api/guides/:guideId/share', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.guideId);
+    
+    const guide = await storage.getGuide(guideId);
+    if (!guide) return res.status(404).json({ message: "Guide not found" });
+    
+    // Authorization check
+    const canManage = await canManageGuideShare(userId, guideId);
+    if (!canManage) return res.status(403).json({ message: "Access denied" });
+    
+    const share = await storage.getGuideShareByGuideId(guideId);
+    if (!share) {
+      return res.json({ enabled: false, hasPassword: false, shareUrl: null });
+    }
+    
+    const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}`;
+    res.json({
+      id: share.id,
+      enabled: share.enabled,
+      hasPassword: !!share.passwordHash,
+      shareUrl: `${baseUrl}/share/${share.shareToken}`,
+      shareToken: share.shareToken,
+      accessCount: share.accessCount,
+      lastAccessedAt: share.lastAccessedAt,
+    });
+  });
+
+  // Create or update share settings for a guide
+  app.post('/api/guides/:guideId/share', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.guideId);
+    
+    const guide = await storage.getGuide(guideId);
+    if (!guide) return res.status(404).json({ message: "Guide not found" });
+    
+    // Authorization check
+    const canManage = await canManageGuideShare(userId, guideId);
+    if (!canManage) return res.status(403).json({ message: "Access denied" });
+    
+    const { password, enabled = true } = req.body;
+    
+    const existingShare = await storage.getGuideShareByGuideId(guideId);
+    
+    let passwordHash = existingShare?.passwordHash || null;
+    if (password !== undefined) {
+      if (password === null || password === '') {
+        passwordHash = null;
+      } else {
+        passwordHash = await bcrypt.hash(password, 10);
+      }
+    }
+    
+    const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}`;
+    
+    if (existingShare) {
+      const updated = await storage.updateGuideShare(existingShare.id, {
+        passwordHash,
+        enabled,
+      });
+      return res.json({
+        id: updated.id,
+        enabled: updated.enabled,
+        hasPassword: !!updated.passwordHash,
+        shareUrl: `${baseUrl}/share/${updated.shareToken}`,
+        shareToken: updated.shareToken,
+      });
+    }
+    
+    const shareToken = crypto.randomBytes(16).toString('hex');
+    const created = await storage.createGuideShare({
+      guideId,
+      shareToken,
+      passwordHash,
+      enabled,
+    });
+    
+    res.status(201).json({
+      id: created.id,
+      enabled: created.enabled,
+      hasPassword: !!created.passwordHash,
+      shareUrl: `${baseUrl}/share/${shareToken}`,
+      shareToken: shareToken,
+    });
+  });
+
+  // Delete share settings (disable sharing)
+  app.delete('/api/guides/:guideId/share', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.guideId);
+    
+    const guide = await storage.getGuide(guideId);
+    if (!guide) return res.status(404).json({ message: "Guide not found" });
+    
+    // Authorization check
+    const canManage = await canManageGuideShare(userId, guideId);
+    if (!canManage) return res.status(403).json({ message: "Access denied" });
+    
+    const share = await storage.getGuideShareByGuideId(guideId);
+    if (share) {
+      await storage.deleteGuideShare(share.id);
+    }
+    
+    res.status(204).send();
+  });
+
+  // Public: Get shared guide info (no password required)
+  app.get('/api/share/:token', async (req, res) => {
+    const { token } = req.params;
+    
+    const share = await storage.getGuideShareByToken(token);
+    if (!share || !share.enabled) {
+      return res.status(404).json({ message: "Guide not found or sharing is disabled" });
+    }
+    
+    const guide = await storage.getGuide(share.guideId);
+    if (!guide) {
+      return res.status(404).json({ message: "Guide not found" });
+    }
+    
+    res.json({
+      title: guide.title,
+      requiresPassword: !!share.passwordHash,
+    });
+  });
+
+  // Public: Verify password and get shared guide content
+  app.post('/api/share/:token/verify', async (req, res) => {
+    const { token } = req.params;
+    const { password } = req.body;
+    
+    const share = await storage.getGuideShareByToken(token);
+    if (!share || !share.enabled) {
+      return res.status(404).json({ message: "Guide not found or sharing is disabled" });
+    }
+    
+    if (share.passwordHash) {
+      if (!password) {
+        return res.status(401).json({ message: "Password required" });
+      }
+      
+      const isValid = await bcrypt.compare(password, share.passwordHash);
+      if (!isValid) {
+        return res.status(401).json({ message: "Invalid password" });
+      }
+    }
+    
+    await storage.incrementShareAccessCount(share.id);
+    
+    const guide = await storage.getGuide(share.guideId);
+    if (!guide) {
+      return res.status(404).json({ message: "Guide not found" });
+    }
+    
+    const steps = await storage.getStepsByGuide(share.guideId);
+    
+    res.json({
+      guide: {
+        id: guide.id,
+        title: guide.title,
+        description: guide.description,
+        coverImageUrl: guide.coverImageUrl,
+      },
+      steps: steps.map(s => ({
+        id: s.id,
+        order: s.order,
+        title: s.title,
+        description: s.description,
+        imageUrl: s.imageUrl,
+        actionType: s.actionType,
+        metadata: s.metadata,
+      })),
+    });
   });
 
   // === AI ===

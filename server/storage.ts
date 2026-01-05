@@ -1,6 +1,6 @@
 import { 
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
-  guideAnalytics, guideTemplates, guideVersions, workspaceSettings,
+  guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares,
   type User, type InsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
@@ -10,7 +10,8 @@ import {
   type SiteSettings, type InsertSiteSettings,
   type DiscountCode, type InsertDiscountCode,
   type WorkspaceWithMembers,
-  type GuideTemplate, type GuideVersion, type WorkspaceSettingsType
+  type GuideTemplate, type GuideVersion, type WorkspaceSettingsType,
+  type GuideShare, type InsertGuideShare
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc } from "drizzle-orm";
@@ -74,6 +75,14 @@ export interface IStorage {
   updateDiscountCode(id: number, code: Partial<InsertDiscountCode>): Promise<DiscountCode>;
   deleteDiscountCode(id: number): Promise<void>;
   incrementRedemption(id: number): Promise<void>;
+
+  // Guide Shares (password-protected sharing)
+  createGuideShare(share: InsertGuideShare): Promise<GuideShare>;
+  getGuideShareByToken(token: string): Promise<GuideShare | undefined>;
+  getGuideShareByGuideId(guideId: number): Promise<GuideShare | undefined>;
+  updateGuideShare(id: number, share: Partial<InsertGuideShare>): Promise<GuideShare>;
+  deleteGuideShare(id: number): Promise<void>;
+  incrementShareAccessCount(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -515,6 +524,46 @@ export class DatabaseStorage implements IStorage {
       .from(guideVersions)
       .where(eq(guideVersions.guideId, guideId))
       .orderBy(desc(guideVersions.versionNumber));
+  }
+
+  // Guide Shares methods
+  async createGuideShare(share: InsertGuideShare): Promise<GuideShare> {
+    const [created] = await db.insert(guideShares).values(share).returning();
+    return created;
+  }
+
+  async getGuideShareByToken(token: string): Promise<GuideShare | undefined> {
+    const [share] = await db.select().from(guideShares).where(eq(guideShares.shareToken, token));
+    return share;
+  }
+
+  async getGuideShareByGuideId(guideId: number): Promise<GuideShare | undefined> {
+    const [share] = await db.select().from(guideShares).where(eq(guideShares.guideId, guideId));
+    return share;
+  }
+
+  async updateGuideShare(id: number, update: Partial<InsertGuideShare>): Promise<GuideShare> {
+    const [updated] = await db.update(guideShares)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(guideShares.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteGuideShare(id: number): Promise<void> {
+    await db.delete(guideShares).where(eq(guideShares.id, id));
+  }
+
+  async incrementShareAccessCount(id: number): Promise<void> {
+    const [share] = await db.select().from(guideShares).where(eq(guideShares.id, id));
+    if (share) {
+      await db.update(guideShares)
+        .set({ 
+          accessCount: share.accessCount + 1, 
+          lastAccessedAt: new Date() 
+        })
+        .where(eq(guideShares.id, id));
+    }
   }
 }
 

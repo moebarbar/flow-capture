@@ -24,8 +24,10 @@ export const users = pgTable("users", {
   passwordHash: varchar("password_hash"), // For email/password auth (null for OAuth users)
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
+  businessName: varchar("business_name"), // For GDPR export
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").default("user").notNull(),
+  emailVerifiedAt: timestamp("email_verified_at"), // null = not verified
   stripeCustomerId: varchar("stripe_customer_id"),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   subscriptionStatus: subscriptionStatusEnum("subscription_status").default("inactive"),

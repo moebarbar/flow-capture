@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
@@ -10,14 +10,40 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { openai } from "./replit_integrations/image/client";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
-import { insertBlogPostSchema } from "@shared/schema";
+import { insertBlogPostSchema, users } from "@shared/schema";
 import bcrypt from "bcrypt";
-import crypto from "crypto"; 
+import crypto from "crypto";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import { emailService } from "./services/emailService";
+import { db } from "./db"; 
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // === SECURITY MIDDLEWARE ===
+  // Helmet for secure headers (XSS protection, etc.)
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP for development
+    crossOriginEmbedderPolicy: false,
+  }));
+
+  // Rate limiting for auth endpoints
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // 10 requests per window
+    message: { message: "Too many attempts, please try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Apply rate limiting to sensitive auth endpoints
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/register', authLimiter);
+  app.use('/api/auth/forgot-password', authLimiter);
+  app.use('/api/auth/reset-password', authLimiter);
+
   // Setup Replit Auth
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -1193,6 +1219,81 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: 'Failed to delete discount code' });
+    }
+  });
+
+  // === EMAIL SETTINGS ENDPOINTS ===
+  
+  app.get('/api/admin/email-settings', requireAdmin, async (req, res) => {
+    try {
+      const settings = await emailService.getSettings();
+      // Don't expose API key to frontend - only show if configured
+      res.json({
+        ...settings,
+        sendgridApiKey: settings?.sendgridApiKey ? '***configured***' : null,
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to fetch email settings' });
+    }
+  });
+
+  app.put('/api/admin/email-settings', requireAdmin, async (req, res) => {
+    try {
+      const updated = await emailService.updateSettings(req.body);
+      res.json({
+        ...updated,
+        sendgridApiKey: updated?.sendgridApiKey ? '***configured***' : null,
+      });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to update email settings' });
+    }
+  });
+
+  app.post('/api/admin/email-settings/test', requireAdmin, async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: 'Email address required' });
+      }
+      const success = await emailService.sendTestEmail(email);
+      if (success) {
+        res.json({ message: 'Test email sent successfully' });
+      } else {
+        res.status(500).json({ message: 'Failed to send test email - check your SendGrid configuration' });
+      }
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to send test email' });
+    }
+  });
+
+  // === USER DATA EXPORT (GDPR COMPLIANT) ===
+  
+  app.get('/api/admin/users/export', requireAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      
+      // CSV header
+      const csvHeader = 'ID,Email,First Name,Last Name,Business Name,Role,Email Verified,Subscription Status,Created At\n';
+      
+      // CSV rows
+      const csvRows = allUsers.map(u => {
+        const firstName = (u.firstName || '').replace(/,/g, ' ');
+        const lastName = (u.lastName || '').replace(/,/g, ' ');
+        const businessName = (u.businessName || '').replace(/,/g, ' ');
+        const emailVerified = u.emailVerifiedAt ? 'Yes' : 'No';
+        const createdAt = u.createdAt ? new Date(u.createdAt).toISOString() : '';
+        
+        return `${u.id},${u.email || ''},${firstName},${lastName},${businessName},${u.role},${emailVerified},${u.subscriptionStatus || 'inactive'},${createdAt}`;
+      }).join('\n');
+      
+      const csv = csvHeader + csvRows;
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=users_export_${new Date().toISOString().split('T')[0]}.csv`);
+      res.send(csv);
+    } catch (error) {
+      console.error('User export error:', error);
+      res.status(500).json({ message: 'Failed to export users' });
     }
   });
 

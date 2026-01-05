@@ -11,8 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Users, CreditCard, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, BookOpen, Palette, Code, DollarSign, Tag, Image, ExternalLink } from "lucide-react";
+import { Users, CreditCard, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, BookOpen, Palette, Code, DollarSign, Tag, Image, ExternalLink, Mail, Download, Send, Settings } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -261,6 +262,181 @@ function BlogPostEditor({ post, onClose }: { post?: BlogPost; onClose: () => voi
           {saveMutation.isPending ? 'Saving...' : (post ? 'Update Post' : 'Create Post')}
         </Button>
       </DialogFooter>
+    </div>
+  );
+}
+
+interface EmailSettings {
+  id?: number;
+  sendgridApiKey?: string | null;
+  fromEmail?: string | null;
+  fromName?: string | null;
+  enableEmailVerification?: boolean;
+  welcomeEmailEnabled?: boolean;
+  welcomeEmailSubject?: string | null;
+  welcomeEmailBody?: string | null;
+  verificationEmailSubject?: string | null;
+  verificationEmailBody?: string | null;
+  passwordResetEmailSubject?: string | null;
+  passwordResetEmailBody?: string | null;
+}
+
+function EmailSettingsTab() {
+  const { toast } = useToast();
+  const [testEmail, setTestEmail] = useState('');
+  const [formData, setFormData] = useState<Partial<EmailSettings>>({});
+
+  const { data: settings, isLoading } = useQuery<EmailSettings>({
+    queryKey: ['/api/admin/email-settings'],
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: Partial<EmailSettings>) => {
+      return apiRequest('PUT', '/api/admin/email-settings', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/email-settings'] });
+      toast({ title: "Email settings saved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save settings", variant: "destructive" });
+    },
+  });
+
+  const testEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return apiRequest('POST', '/api/admin/email-settings/test', { email });
+    },
+    onSuccess: () => {
+      toast({ title: "Test email sent successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to send test email", variant: "destructive" });
+    },
+  });
+
+  const currentData = { ...settings, ...formData };
+
+  if (isLoading) {
+    return <div className="space-y-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            SendGrid Configuration
+          </CardTitle>
+          <CardDescription>Configure your SendGrid API key and sender details</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>SendGrid API Key</Label>
+              <Input
+                type="password"
+                value={formData.sendgridApiKey !== undefined ? formData.sendgridApiKey || '' : (settings?.sendgridApiKey === '***configured***' ? '' : settings?.sendgridApiKey || '')}
+                onChange={(e) => setFormData(prev => ({ ...prev, sendgridApiKey: e.target.value }))}
+                placeholder={settings?.sendgridApiKey === '***configured***' ? 'API key configured (enter new to change)' : 'SG.xxx...'}
+                data-testid="input-sendgrid-key"
+              />
+              <p className="text-sm text-muted-foreground">
+                {settings?.sendgridApiKey === '***configured***' ? 'API key is configured' : 'Enter your SendGrid API key'}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>From Email</Label>
+              <Input
+                value={currentData.fromEmail || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, fromEmail: e.target.value }))}
+                placeholder="noreply@example.com"
+                data-testid="input-from-email"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>From Name</Label>
+            <Input
+              value={currentData.fromName || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, fromName: e.target.value }))}
+              placeholder="FlowCapture"
+              data-testid="input-from-name"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Email Features
+          </CardTitle>
+          <CardDescription>Toggle email features on or off</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Email Verification</Label>
+              <p className="text-sm text-muted-foreground">Require users to verify their email after registration</p>
+            </div>
+            <Switch
+              checked={currentData.enableEmailVerification ?? false}
+              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, enableEmailVerification: checked }))}
+              data-testid="switch-email-verification"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Welcome Email</Label>
+              <p className="text-sm text-muted-foreground">Send a welcome email when users register</p>
+            </div>
+            <Switch
+              checked={currentData.welcomeEmailEnabled ?? false}
+              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, welcomeEmailEnabled: checked }))}
+              data-testid="switch-welcome-email"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Send className="h-5 w-5" />
+            Test Email
+          </CardTitle>
+          <CardDescription>Send a test email to verify your configuration</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="test@example.com"
+              data-testid="input-test-email"
+            />
+            <Button
+              onClick={() => testEmailMutation.mutate(testEmail)}
+              disabled={testEmailMutation.isPending || !testEmail}
+              data-testid="button-send-test"
+            >
+              {testEmailMutation.isPending ? 'Sending...' : 'Send Test'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button 
+        onClick={() => saveMutation.mutate(formData)} 
+        disabled={saveMutation.isPending || Object.keys(formData).length === 0}
+        data-testid="button-save-email-settings"
+      >
+        {saveMutation.isPending ? 'Saving...' : 'Save Email Settings'}
+      </Button>
     </div>
   );
 }
@@ -1129,6 +1305,7 @@ export default function AdminPage() {
         <Tabs defaultValue="users" className="space-y-4">
           <TabsList className="flex-wrap">
             <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
+            <TabsTrigger value="email" data-testid="tab-email">Email</TabsTrigger>
             <TabsTrigger value="branding" data-testid="tab-branding">Branding</TabsTrigger>
             <TabsTrigger value="integrations" data-testid="tab-integrations">Integrations</TabsTrigger>
             <TabsTrigger value="finance" data-testid="tab-finance">Finance</TabsTrigger>
@@ -1138,9 +1315,21 @@ export default function AdminPage() {
 
           <TabsContent value="users">
             <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>View and manage all registered users</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle>User Management</CardTitle>
+                  <CardDescription>View and manage all registered users</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = '/api/admin/users/export';
+                  }}
+                  data-testid="button-export-users"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
+                </Button>
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
@@ -1201,6 +1390,10 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="email">
+            <EmailSettingsTab />
           </TabsContent>
 
           <TabsContent value="branding">

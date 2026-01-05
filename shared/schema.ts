@@ -13,6 +13,7 @@ export const workspaceRoleEnum = pgEnum("workspace_role", ["owner", "admin", "ed
 export const guideStatusEnum = pgEnum("guide_status", ["draft", "published", "archived"]);
 export const stepTypeEnum = pgEnum("step_type", ["click", "input", "navigation", "wait", "scroll", "custom"]);
 export const blogPostStatusEnum = pgEnum("blog_post_status", ["draft", "published", "archived"]);
+export const tokenTypeEnum = pgEnum("token_type", ["email_verification", "password_reset"]);
 
 // === TABLE DEFINITIONS ===
 
@@ -121,6 +122,37 @@ export const siteSettings = pgTable("site_settings", {
 });
 
 export const discountCodeStatusEnum = pgEnum("discount_code_status", ["active", "inactive", "expired"]);
+
+// Auth tokens for email verification and password reset
+export const authTokens = pgTable("auth_tokens", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  tokenHash: text("token_hash").notNull(), // Hashed token for security
+  tokenType: tokenTypeEnum("token_type").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"), // null = not used, set when used
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Email settings for SendGrid configuration (admin-managed)
+export const emailSettings = pgTable("email_settings", {
+  id: serial("id").primaryKey(),
+  sendgridApiKey: text("sendgrid_api_key"), // Encrypted in production
+  fromEmail: text("from_email").default("noreply@flowcapture.com"),
+  fromName: text("from_name").default("FlowCapture"),
+  replyToEmail: text("reply_to_email"),
+  // Email templates
+  verificationSubject: text("verification_subject").default("Verify your email address"),
+  verificationTemplate: text("verification_template"),
+  passwordResetSubject: text("password_reset_subject").default("Reset your password"),
+  passwordResetTemplate: text("password_reset_template"),
+  welcomeSubject: text("welcome_subject").default("Welcome to FlowCapture!"),
+  welcomeTemplate: text("welcome_template"),
+  // Feature toggles
+  enableEmailVerification: boolean("enable_email_verification").default(true).notNull(),
+  enableWelcomeEmail: boolean("enable_welcome_email").default(true).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 export const discountCodes = pgTable("discount_codes", {
   id: serial("id").primaryKey(),
@@ -329,6 +361,17 @@ export const insertDiscountCodeSchema = createInsertSchema(discountCodes).omit({
   updatedAt: true
 });
 
+export const insertAuthTokenSchema = createInsertSchema(authTokens).omit({
+  id: true,
+  usedAt: true,
+  createdAt: true
+});
+
+export const insertEmailSettingsSchema = createInsertSchema(emailSettings).omit({
+  id: true,
+  updatedAt: true
+});
+
 // === TYPES ===
 
 export type Workspace = typeof workspaces.$inferSelect;
@@ -366,6 +409,12 @@ export type InsertGuideVersion = typeof guideVersions.$inferInsert;
 
 export type WorkspaceSettingsType = typeof workspaceSettings.$inferSelect;
 export type InsertWorkspaceSettings = typeof workspaceSettings.$inferInsert;
+
+export type AuthToken = typeof authTokens.$inferSelect;
+export type InsertAuthToken = z.infer<typeof insertAuthTokenSchema>;
+
+export type EmailSettingsType = typeof emailSettings.$inferSelect;
+export type InsertEmailSettings = z.infer<typeof insertEmailSettingsSchema>;
 
 // API Request/Response Types
 export type CreateWorkspaceRequest = InsertWorkspace;

@@ -4,6 +4,7 @@ import { isAuthenticated } from "./replitAuth";
 import bcrypt from "bcrypt";
 import { z } from "zod";
 import crypto from "crypto";
+import { emailService } from "../../services/emailService";
 
 // Validation schemas
 const registerSchema = z.object({
@@ -182,5 +183,107 @@ export function registerAuthRoutes(app: Express): void {
       }
       res.json({ message: "Logged out successfully" });
     });
+  });
+
+  // Forgot Password - Request reset email
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const user = await authStorage.getUserByEmail(email);
+      
+      // Always return success to prevent email enumeration
+      if (!user) {
+        return res.json({ message: "If an account exists with this email, you will receive a password reset link" });
+      }
+
+      // Only allow reset for users with password auth
+      if (!user.passwordHash) {
+        return res.json({ message: "If an account exists with this email, you will receive a password reset link" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      await emailService.sendPasswordResetEmail(user.email!, user.id, baseUrl);
+
+      res.json({ message: "If an account exists with this email, you will receive a password reset link" });
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      res.status(500).json({ message: "Failed to process request" });
+    }
+  });
+
+  // Reset Password - Use token to set new password
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      
+      if (!token || !password) {
+        return res.status(400).json({ message: "Token and password are required" });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
+      }
+
+      const result = await emailService.resetPassword(token, password);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.message });
+      }
+
+      res.json({ message: result.message });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({ message: "Failed to reset password" });
+    }
+  });
+
+  // Verify Email - Use token to verify email address
+  app.post("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ message: "Verification token is required" });
+      }
+
+      const result = await emailService.verifyUserEmail(token);
+      
+      if (!result.success) {
+        return res.status(400).json({ message: result.message });
+      }
+
+      res.json({ message: result.message });
+    } catch (error) {
+      console.error("Verify email error:", error);
+      res.status(500).json({ message: "Failed to verify email" });
+    }
+  });
+
+  // Resend verification email
+  app.post("/api/auth/resend-verification", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await authStorage.getUser(userId);
+      
+      if (!user || !user.email) {
+        return res.status(400).json({ message: "User not found" });
+      }
+
+      if (user.emailVerifiedAt) {
+        return res.status(400).json({ message: "Email already verified" });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      await emailService.sendVerificationEmail(user.email, user.id, baseUrl);
+
+      res.json({ message: "Verification email sent" });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      res.status(500).json({ message: "Failed to send verification email" });
+    }
   });
 }

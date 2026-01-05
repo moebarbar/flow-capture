@@ -19,7 +19,7 @@ import {
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
-  Video, Square, Loader2
+  Video, Square, Loader2, Settings, LayoutGrid, Plus
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -50,8 +50,11 @@ export default function GuideEditor() {
   const [translationDialogOpen, setTranslationDialogOpen] = useState(false);
   const [voiceoverDialogOpen, setVoiceoverDialogOpen] = useState(false);
   const [redactionDialogOpen, setRedactionDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [captureToken, setCaptureToken] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // Capture session status
@@ -331,6 +334,62 @@ export default function GuideEditor() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setThumbnailUploading(true);
+    try {
+      const res = await fetch('/api/uploads/request-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to get upload URL');
+      
+      const { uploadURL, objectPath } = await res.json();
+      
+      const uploadRes = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      
+      if (!uploadRes.ok) throw new Error('Failed to upload file');
+      
+      updateGuide({ id: guideId, coverImageUrl: objectPath });
+      toast({ title: 'Thumbnail updated' });
+    } catch (error) {
+      console.error('Thumbnail upload error:', error);
+      toast({ title: 'Failed to upload thumbnail', variant: 'destructive' });
+    } finally {
+      setThumbnailUploading(false);
+      if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
+    }
+  };
+
+  const handleUseFirstScreenshot = () => {
+    const firstStep = sortedSteps[0];
+    if (firstStep?.imageUrl) {
+      updateGuide({ id: guideId, coverImageUrl: firstStep.imageUrl });
+      toast({ title: 'Thumbnail set to first step screenshot' });
+    } else {
+      toast({ title: 'No screenshot available in first step', variant: 'destructive' });
+    }
+  };
+
+  const handleClearThumbnail = () => {
+    updateGuide({ id: guideId, coverImageUrl: null });
+    toast({ title: 'Thumbnail removed' });
+  };
+
+  const currentThumbnail = guide?.coverImageUrl || sortedSteps[0]?.imageUrl || null;
+
   // Auto-select first step on load
   useEffect(() => {
     if (steps && steps.length > 0 && !selectedStepId) {
@@ -490,6 +549,14 @@ export default function GuideEditor() {
             data-testid="button-share-guide"
           >
             <Share2 className="h-4 w-4 mr-2" /> Share
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setSettingsDialogOpen(true)}
+            data-testid="button-settings-guide"
+          >
+            <Settings className="h-4 w-4 mr-2" /> Settings
           </Button>
           <Button variant="outline" size="sm">
             <ExternalLink className="h-4 w-4 mr-2" /> Preview
@@ -969,6 +1036,99 @@ export default function GuideEditor() {
                 </div>
               </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings Dialog */}
+      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Guide Settings
+            </DialogTitle>
+            <DialogDescription>
+              Configure your guide's thumbnail and display settings.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            <div>
+              <label className="text-sm font-semibold mb-3 block">Thumbnail</label>
+              <p className="text-xs text-muted-foreground mb-4">
+                Recommended size: 1280 x 720 pixels (16:9 aspect ratio). This image appears in guide lists and when sharing.
+              </p>
+              
+              <div className="aspect-video bg-muted rounded-lg overflow-hidden mb-4 relative">
+                {currentThumbnail ? (
+                  <img 
+                    src={currentThumbnail} 
+                    alt="Guide thumbnail" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <LayoutGrid className="h-12 w-12 mb-2" />
+                    <span className="text-sm">No thumbnail set</span>
+                  </div>
+                )}
+                {thumbnailUploading && (
+                  <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => thumbnailInputRef.current?.click()}
+                  disabled={thumbnailUploading}
+                  data-testid="button-upload-thumbnail"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Image
+                </Button>
+                
+                {sortedSteps.length > 0 && sortedSteps[0]?.imageUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUseFirstScreenshot}
+                    disabled={thumbnailUploading}
+                    data-testid="button-use-first-screenshot"
+                  >
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Use First Screenshot
+                  </Button>
+                )}
+                
+                {guide?.coverImageUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearThumbnail}
+                    disabled={thumbnailUploading}
+                    className="text-destructive"
+                    data-testid="button-clear-thumbnail"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+              
+              <input
+                ref={thumbnailInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleThumbnailUpload}
+                className="hidden"
+                data-testid="input-thumbnail-file"
+              />
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -10,7 +10,7 @@ import { registerImageRoutes } from "./replit_integrations/image";
 import { openai } from "./replit_integrations/image/client";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
-import { insertBlogPostSchema, users, steps } from "@shared/schema";
+import { insertBlogPostSchema, users, steps, SUPPORTED_LANGUAGES } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -961,6 +961,276 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     } catch (error) {
       console.error("Delete translations error:", error);
       res.status(500).json({ message: "Failed to delete translations" });
+    }
+  });
+
+  // === VOICEOVER ENDPOINTS ===
+
+  // Get available voices
+  app.get("/api/voiceover/voices", async (req, res) => {
+    const { voiceoverService } = await import("./services/voiceoverService");
+    res.json(voiceoverService.getAvailableVoices());
+  });
+
+  // Get voiceovers for a guide
+  app.get("/api/guides/:guideId/voiceovers", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.guideId);
+      const locale = req.query.locale as string || 'en';
+      
+      const { voiceoverService } = await import("./services/voiceoverService");
+      const voiceovers = await voiceoverService.getGuideVoiceovers(guideId, locale);
+      res.json(voiceovers);
+    } catch (error) {
+      console.error("Get voiceovers error:", error);
+      res.status(500).json({ message: "Failed to get voiceovers" });
+    }
+  });
+
+  // Generate voiceover for a step
+  app.post("/api/steps/:stepId/voiceover", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const stepId = Number(req.params.stepId);
+      const { voice, locale, text } = req.body;
+      
+      const step = await storage.getStep(stepId);
+      if (!step) {
+        return res.status(404).json({ message: "Step not found" });
+      }
+      
+      const guide = await storage.getGuide(step.guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const isMember = members.some(m => m.userId === userId);
+      if (workspace.ownerId !== userId && !isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { voiceoverService } = await import("./services/voiceoverService");
+      const voiceoverText = text || step.description || step.title || `Step ${step.order + 1}`;
+      const voiceover = await voiceoverService.generateVoiceover(
+        stepId,
+        step.guideId,
+        voiceoverText,
+        voice || 'alloy',
+        locale || 'en'
+      );
+      
+      res.json(voiceover);
+    } catch (error) {
+      console.error("Generate voiceover error:", error);
+      res.status(500).json({ message: "Failed to generate voiceover" });
+    }
+  });
+
+  // Generate voiceovers for entire guide
+  app.post("/api/guides/:guideId/voiceovers", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.guideId);
+      const { voice, locale } = req.body;
+      
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const isMember = members.some(m => m.userId === userId);
+      if (workspace.ownerId !== userId && !isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { voiceoverService } = await import("./services/voiceoverService");
+      const results = await voiceoverService.generateGuideVoiceovers(guideId, voice || 'alloy', locale || 'en');
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Generate guide voiceovers error:", error);
+      res.status(500).json({ message: "Failed to generate voiceovers" });
+    }
+  });
+
+  // === REDACTION ENDPOINTS ===
+
+  // Get redaction regions for a step
+  app.get("/api/steps/:stepId/redactions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const stepId = Number(req.params.stepId);
+      const { redactionService } = await import("./services/redactionService");
+      const regions = await redactionService.getRegionsByStep(stepId);
+      res.json(regions);
+    } catch (error) {
+      console.error("Get redactions error:", error);
+      res.status(500).json({ message: "Failed to get redaction regions" });
+    }
+  });
+
+  // Get all redaction regions for a guide
+  app.get("/api/guides/:guideId/redactions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.guideId);
+      const { redactionService } = await import("./services/redactionService");
+      const regions = await redactionService.getRegionsByGuide(guideId);
+      res.json(regions);
+    } catch (error) {
+      console.error("Get guide redactions error:", error);
+      res.status(500).json({ message: "Failed to get redaction regions" });
+    }
+  });
+
+  // Auto-detect sensitive data in a step
+  app.post("/api/steps/:stepId/detect-sensitive", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const stepId = Number(req.params.stepId);
+      
+      const step = await storage.getStep(stepId);
+      if (!step) {
+        return res.status(404).json({ message: "Step not found" });
+      }
+      
+      const guide = await storage.getGuide(step.guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const isMember = members.some(m => m.userId === userId);
+      if (workspace.ownerId !== userId && !isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { redactionService } = await import("./services/redactionService");
+      const regions = await redactionService.autoDetectAndSave(stepId, step.guideId);
+      res.json(regions);
+    } catch (error) {
+      console.error("Detect sensitive data error:", error);
+      res.status(500).json({ message: "Failed to detect sensitive data" });
+    }
+  });
+
+  // Create a manual redaction region
+  app.post("/api/steps/:stepId/redactions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const stepId = Number(req.params.stepId);
+      const { x, y, width, height, type } = req.body;
+      
+      const step = await storage.getStep(stepId);
+      if (!step) {
+        return res.status(404).json({ message: "Step not found" });
+      }
+      
+      const guide = await storage.getGuide(step.guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const userId = (req.user as any).id;
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const isMember = members.some(m => m.userId === userId);
+      if (workspace.ownerId !== userId && !isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { redactionService } = await import("./services/redactionService");
+      const region = await redactionService.createRegion({
+        stepId,
+        guideId: step.guideId,
+        x,
+        y,
+        width,
+        height,
+        type: type || 'blur',
+        detectedType: 'manual',
+      });
+      res.json(region);
+    } catch (error) {
+      console.error("Create redaction error:", error);
+      res.status(500).json({ message: "Failed to create redaction region" });
+    }
+  });
+
+  // Update a redaction region
+  app.patch("/api/redactions/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const id = Number(req.params.id);
+      const update = req.body;
+      
+      const { redactionService } = await import("./services/redactionService");
+      const updated = await redactionService.updateRegion(id, update);
+      res.json(updated);
+    } catch (error) {
+      console.error("Update redaction error:", error);
+      res.status(500).json({ message: "Failed to update redaction region" });
+    }
+  });
+
+  // Delete a redaction region
+  app.delete("/api/redactions/:id", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const id = Number(req.params.id);
+      
+      const { redactionService } = await import("./services/redactionService");
+      await redactionService.deleteRegion(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete redaction error:", error);
+      res.status(500).json({ message: "Failed to delete redaction region" });
+    }
+  });
+
+  // Toggle a redaction region enabled/disabled
+  app.post("/api/redactions/:id/toggle", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const id = Number(req.params.id);
+      
+      const { redactionService } = await import("./services/redactionService");
+      const updated = await redactionService.toggleRegion(id);
+      res.json(updated);
+    } catch (error) {
+      console.error("Toggle redaction error:", error);
+      res.status(500).json({ message: "Failed to toggle redaction region" });
     }
   });
 

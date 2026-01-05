@@ -432,6 +432,47 @@ export const stepTranslations = pgTable("step_translations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// === VOICEOVER & AUDIO ===
+
+export const voiceoverStatusEnum = pgEnum("voiceover_status", ["pending", "processing", "completed", "failed"]);
+
+// Step voiceovers - Store generated audio for steps
+export const stepVoiceovers = pgTable("step_voiceovers", {
+  id: serial("id").primaryKey(),
+  stepId: integer("step_id").references(() => steps.id).notNull(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  locale: text("locale").default("en").notNull(),
+  voice: text("voice").default("alloy").notNull(), // OpenAI voice: alloy, echo, fable, onyx, nova, shimmer
+  audioUrl: text("audio_url"), // URL to generated audio file
+  duration: integer("duration"), // Duration in seconds
+  status: voiceoverStatusEnum("status").default("pending").notNull(),
+  sourceText: text("source_text"), // Text used for generation
+  sourceHash: text("source_hash"), // Hash for change detection
+  errorMessage: text("error_message"),
+  generatedAt: timestamp("generated_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// === REDACTION ===
+
+// Redaction regions - Store detected/manual redaction regions on screenshots
+export const redactionRegions = pgTable("redaction_regions", {
+  id: serial("id").primaryKey(),
+  stepId: integer("step_id").references(() => steps.id).notNull(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  x: integer("x").notNull(), // X position as percentage (0-100)
+  y: integer("y").notNull(), // Y position as percentage (0-100)
+  width: integer("width").notNull(), // Width as percentage (0-100)
+  height: integer("height").notNull(), // Height as percentage (0-100)
+  type: text("type").default("blur").notNull(), // blur, box, pixelate
+  detectedType: text("detected_type"), // email, password, phone, custom, manual
+  isAutoDetected: boolean("is_auto_detected").default(false).notNull(),
+  isEnabled: boolean("is_enabled").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // === INTEGRATIONS & AUTOMATION ===
 
 export const integrationProviderEnum = pgEnum("integration_provider", [
@@ -1016,6 +1057,29 @@ export type InsertStepTranslation = z.infer<typeof insertStepTranslationSchema>;
 // Extended types for translations
 export type GuideWithTranslations = Guide & { translations: GuideTranslation[] };
 export type StepWithTranslations = Step & { translations: StepTranslation[] };
+
+// === VOICEOVER SCHEMAS ===
+
+export const insertStepVoiceoverSchema = createInsertSchema(stepVoiceovers).omit({
+  id: true,
+  generatedAt: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type StepVoiceover = typeof stepVoiceovers.$inferSelect;
+export type InsertStepVoiceover = z.infer<typeof insertStepVoiceoverSchema>;
+
+// === REDACTION SCHEMAS ===
+
+export const insertRedactionRegionSchema = createInsertSchema(redactionRegions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export type RedactionRegion = typeof redactionRegions.$inferSelect;
+export type InsertRedactionRegion = z.infer<typeof insertRedactionRegionSchema>;
 
 // === INTEGRATION SCHEMAS ===
 

@@ -28,6 +28,7 @@ const EmbedGuidePage = lazy(() => import("@/pages/EmbedGuidePage"));
 const ContentPage = lazy(() => import("@/pages/ContentPage"));
 const TeamDashboard = lazy(() => import("@/pages/TeamDashboard"));
 const IntegrationsPage = lazy(() => import("@/pages/IntegrationsPage"));
+const AcceptInvitation = lazy(() => import("@/pages/AcceptInvitation"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -99,6 +100,13 @@ function Router() {
         {() => (
           <Suspense fallback={<PageLoader />}>
             <CheckoutSuccessPage />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/invite/accept">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <AcceptInvitation />
           </Suspense>
         )}
       </Route>

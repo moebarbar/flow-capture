@@ -1,5 +1,5 @@
-import { memo, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { memo, useMemo, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,14 +7,31 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Users, FileText, CheckCircle, Clock, AlertCircle, 
-  Activity, TrendingUp, ClipboardList
+  Activity, TrendingUp, ClipboardList, UserPlus, X, Send, RotateCw, Mail
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+
+interface WorkspaceInvitation {
+  id: number;
+  workspaceId: number;
+  email: string;
+  role: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  createdAt: string;
+  expiresAt: string;
+}
 
 interface TeamDashboardStats {
   totalGuides: number;
@@ -258,6 +275,11 @@ export default function TeamDashboard() {
   const params = useParams();
   const workspaceId = useMemo(() => parseInt(params.workspaceId || "0"), [params.workspaceId]);
   const { isCollapsed } = useSidebarState();
+  const { toast } = useToast();
+  
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<string>("editor");
 
   const { data: stats, isLoading } = useQuery<TeamDashboardStats>({
     queryKey: ['/api/workspaces', workspaceId, 'team-dashboard'],
@@ -276,6 +298,50 @@ export default function TeamDashboard() {
     enabled: workspaceId > 0,
     staleTime: 30000,
   });
+
+  const { data: invitations } = useQuery<WorkspaceInvitation[]>({
+    queryKey: ['/api/workspaces', workspaceId, 'invitations'],
+    enabled: workspaceId > 0,
+    staleTime: 30000,
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: async ({ email, role }: { email: string; role: string }) => {
+      return await apiRequest('POST', `/api/workspaces/${workspaceId}/invitations`, { email, role });
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation sent", description: "Team member has been invited" });
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'invitations'] });
+      setInviteDialogOpen(false);
+      setInviteEmail("");
+      setInviteRole("editor");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to send invitation", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const cancelInviteMutation = useMutation({
+    mutationFn: async (invitationId: number) => {
+      return await apiRequest('DELETE', `/api/invitations/${invitationId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation cancelled" });
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'invitations'] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to cancel invitation", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleInvite = () => {
+    if (!inviteEmail.trim()) return;
+    inviteMutation.mutate({ email: inviteEmail, role: inviteRole });
+  };
+
+  const pendingInvitations = useMemo(() => {
+    return invitations?.filter(inv => inv.status === 'pending') || [];
+  }, [invitations]);
 
   const completionRate = useMemo(() => {
     if (!stats || stats.totalGuides === 0) return 0;
@@ -315,7 +381,68 @@ export default function TeamDashboard() {
                   <p className="text-muted-foreground text-sm">Track team progress and collaboration</p>
                 </div>
               </div>
-              <NotificationBell />
+              <div className="flex items-center gap-2">
+                <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-invite-member">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Invite Member
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Invite Team Member</DialogTitle>
+                      <DialogDescription>
+                        Send an invitation to join your workspace. They will be billed $7/month starting from today.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-email">Email address</Label>
+                        <Input
+                          id="invite-email"
+                          type="email"
+                          placeholder="colleague@company.com"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          data-testid="input-invite-email"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-role">Role</Label>
+                        <Select value={inviteRole} onValueChange={setInviteRole}>
+                          <SelectTrigger id="invite-role" data-testid="select-invite-role">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="viewer">Viewer - Can view guides only</SelectItem>
+                            <SelectItem value="editor">Editor - Can create and edit guides</SelectItem>
+                            <SelectItem value="admin">Admin - Full workspace access</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={handleInvite} 
+                        disabled={inviteMutation.isPending || !inviteEmail.trim()}
+                        data-testid="button-send-invite"
+                      >
+                        {inviteMutation.isPending ? (
+                          <RotateCw className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Send className="h-4 w-4 mr-2" />
+                        )}
+                        Send Invitation
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <NotificationBell />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -404,6 +531,9 @@ export default function TeamDashboard() {
             <Tabs defaultValue="members" className="space-y-4">
               <TabsList className="w-full sm:w-auto overflow-x-auto">
                 <TabsTrigger value="members" data-testid="tab-members" className="text-xs sm:text-sm">Team Members</TabsTrigger>
+                <TabsTrigger value="invitations" data-testid="tab-invitations" className="text-xs sm:text-sm">
+                  Pending Invites {pendingInvitations.length > 0 && `(${pendingInvitations.length})`}
+                </TabsTrigger>
                 <TabsTrigger value="assignments" data-testid="tab-assignments" className="text-xs sm:text-sm">Assignments</TabsTrigger>
                 <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-xs sm:text-sm">Pending Approvals</TabsTrigger>
               </TabsList>
@@ -422,6 +552,64 @@ export default function TeamDashboard() {
                         <div className="text-center text-muted-foreground py-6 sm:py-8">
                           <Users className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-50" />
                           <p className="text-sm">No team members yet</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="invitations">
+                <Card>
+                  <CardHeader className="pb-2 sm:pb-4">
+                    <CardTitle className="text-base sm:text-lg">Pending Invitations</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3 sm:space-y-4">
+                      {pendingInvitations.map((invitation) => (
+                        <div 
+                          key={invitation.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 p-3 rounded-md border"
+                          data-testid={`card-invitation-${invitation.id}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="rounded-full bg-muted p-2">
+                              <Mail className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm sm:text-base truncate">{invitation.email}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Invited {formatDistanceToNow(new Date(invitation.createdAt), { addSuffix: true })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 pl-11 sm:pl-0">
+                            <Badge variant="outline" className="text-xs">{invitation.role}</Badge>
+                            <Badge variant="secondary" className="text-xs">Pending</Badge>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => cancelInviteMutation.mutate(invitation.id)}
+                              disabled={cancelInviteMutation.isPending}
+                              data-testid={`button-cancel-invite-${invitation.id}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {pendingInvitations.length === 0 && (
+                        <div className="text-center text-muted-foreground py-6 sm:py-8">
+                          <Mail className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No pending invitations</p>
+                          <Button 
+                            variant="outline" 
+                            className="mt-4"
+                            onClick={() => setInviteDialogOpen(true)}
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Invite Someone
+                          </Button>
                         </div>
                       )}
                     </div>

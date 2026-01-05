@@ -18,9 +18,11 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
-  Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages
+  Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
+import { VoiceoverPanel } from "@/components/VoiceoverPanel";
+import { RedactionPanel } from "@/components/RedactionPanel";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -45,6 +47,8 @@ export default function GuideEditor() {
   const [showPassword, setShowPassword] = useState(false);
   const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
   const [translationDialogOpen, setTranslationDialogOpen] = useState(false);
+  const [voiceoverDialogOpen, setVoiceoverDialogOpen] = useState(false);
+  const [redactionDialogOpen, setRedactionDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -242,6 +246,22 @@ export default function GuideEditor() {
             data-testid="button-translate-guide"
           >
             <Languages className="h-4 w-4 mr-2" /> Translate
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setVoiceoverDialogOpen(true)}
+            data-testid="button-voiceover-guide"
+          >
+            <Volume2 className="h-4 w-4 mr-2" /> Voice
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setRedactionDialogOpen(true)}
+            data-testid="button-redact-guide"
+          >
+            <EyeOff className="h-4 w-4 mr-2" /> Redact
           </Button>
           <Button 
             variant="outline" 
@@ -738,6 +758,33 @@ export default function GuideEditor() {
         guideId={guideId} 
         open={translationDialogOpen} 
         onOpenChange={setTranslationDialogOpen} 
+      />
+
+      {/* Voiceover Panel */}
+      <VoiceoverPanel 
+        guideId={guideId} 
+        steps={sortedSteps.map(s => ({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          order: s.order
+        }))}
+        open={voiceoverDialogOpen} 
+        onOpenChange={setVoiceoverDialogOpen} 
+      />
+
+      {/* Redaction Panel */}
+      <RedactionPanel 
+        guideId={guideId} 
+        steps={sortedSteps.map(s => ({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+          order: s.order,
+          imageUrl: s.imageUrl
+        }))}
+        open={redactionDialogOpen} 
+        onOpenChange={setRedactionDialogOpen} 
       />
     </div>
   );

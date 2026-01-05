@@ -98,7 +98,7 @@ export default function LandingPage() {
             <span className="inline-block py-1 px-3 rounded-full bg-brand-100 text-brand-700 font-medium text-sm mb-6 border border-brand-200 dark:bg-brand-900/30 dark:text-brand-300 dark:border-brand-800" data-testid="text-trust-badge">
               Trusted by 500+ teams worldwide
             </span>
-            <h1 className="text-5xl md:text-7xl font-display font-extrabold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
+            <h1 className="text-5xl md:text-7xl font-display font-extrabold tracking-tight mb-6 pb-2 leading-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
               Stop writing docs. <br /> Start capturing them.
             </h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-6 leading-relaxed">

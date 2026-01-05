@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
-  Share2, Copy, Lock, Eye, EyeOff
+  Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,6 +43,7 @@ export default function GuideEditor() {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharePassword, setSharePassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -55,6 +56,21 @@ export default function GuideEditor() {
       return res.json();
     },
     enabled: guideId > 0,
+  });
+
+  // Embed info query (only fetched when embed dialog opens)
+  const { data: embedInfo, isError: embedError, error: embedErrorData } = useQuery({
+    queryKey: ['/api/guides', guideId, 'embed'],
+    queryFn: async () => {
+      const res = await fetch(`/api/guides/${guideId}/embed`, { credentials: 'include' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw err;
+      }
+      return res.json();
+    },
+    enabled: embedDialogOpen && guideId > 0 && shareSettings?.enabled && !shareSettings?.hasPassword,
+    retry: false,
   });
 
   const updateShareMutation = useMutation({
@@ -89,6 +105,29 @@ export default function GuideEditor() {
 
   const handleToggleSharing = (enabled: boolean) => {
     updateShareMutation.mutate({ enabled });
+  };
+
+  const handleDownloadHtml = () => {
+    window.open(`/api/guides/${guideId}/export/html`, '_blank');
+    toast({ title: "Downloading HTML document..." });
+  };
+
+  const handleDownloadPdf = () => {
+    // Open a printable version that user can print to PDF
+    const printWindow = window.open(`/api/guides/${guideId}/export/html`, '_blank');
+    if (printWindow) {
+      printWindow.onload = () => {
+        setTimeout(() => printWindow.print(), 500);
+      };
+    }
+    toast({ title: "Opening print dialog for PDF..." });
+  };
+
+  const handleCopyEmbedCode = () => {
+    if (embedInfo?.embedCode) {
+      navigator.clipboard.writeText(embedInfo.embedCode);
+      toast({ title: "Embed code copied to clipboard" });
+    }
   };
 
   const openBeautifier = (imageUrl: string) => {
@@ -572,6 +611,113 @@ export default function GuideEditor() {
                     )}
                   </div>
                 )}
+              </>
+            )}
+
+            {/* Export & Embed Section */}
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="text-sm font-medium">Export & Embed</Label>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleDownloadPdf}
+                  className="justify-start"
+                  data-testid="button-export-pdf"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  PDF
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleDownloadHtml}
+                  className="justify-start"
+                  data-testid="button-export-html"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Word (HTML)
+                </Button>
+              </div>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => { setEmbedDialogOpen(true); setShareDialogOpen(false); }}
+                className="w-full justify-start"
+                data-testid="button-embed"
+              >
+                <Code className="h-4 w-4 mr-2" />
+                Embed on website
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Embed Dialog */}
+      <Dialog open={embedDialogOpen} onOpenChange={setEmbedDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Code className="h-5 w-5" />
+              Embed Guide
+            </DialogTitle>
+            <DialogDescription>
+              Add this guide to any platform that supports embeds or iframes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {!shareSettings?.enabled && (
+              <div className="flex items-start gap-2 p-3 bg-muted rounded-lg text-sm">
+                <Share2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="font-medium">Sharing must be enabled to embed</p>
+                  <p className="text-muted-foreground">Enable sharing in the Share dialog first, then come back to get the embed code.</p>
+                </div>
+              </div>
+            )}
+
+            {shareSettings?.enabled && shareSettings?.hasPassword && (
+              <div className="flex items-start gap-2 p-3 bg-muted rounded-lg text-sm">
+                <Lock className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="font-medium">Password-protected guides cannot be embedded</p>
+                  <p className="text-muted-foreground">Remove the password to enable embedding, or share the link instead.</p>
+                </div>
+              </div>
+            )}
+
+            {shareSettings?.enabled && !shareSettings?.hasPassword && (
+              <>
+                <div className="space-y-2">
+                  <Label>Embed Code</Label>
+                  <div className="relative">
+                    <Textarea 
+                      value={embedInfo?.embedCode || 'Loading...'} 
+                      readOnly 
+                      className="font-mono text-xs h-24 resize-none bg-muted"
+                      data-testid="textarea-embed-code"
+                    />
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={handleCopyEmbedCode}
+                      className="absolute right-2 top-2"
+                      disabled={!embedInfo?.embedCode}
+                      data-testid="button-copy-embed"
+                    >
+                      <Copy className="h-3 w-3 mr-1" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  For platforms that do not support embeds, try sharing a link instead.
+                </div>
               </>
             )}
           </div>

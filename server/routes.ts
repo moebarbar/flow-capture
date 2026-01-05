@@ -441,6 +441,146 @@ export async function registerRoutes(
     });
   });
 
+  // === GUIDE EXPORT ===
+  
+  // Export guide as HTML (Word-compatible)
+  app.get('/api/guides/:guideId/export/html', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.guideId);
+    
+    const guide = await storage.getGuide(guideId);
+    if (!guide) return res.status(404).json({ message: "Guide not found" });
+    
+    const canManage = await canManageGuideShare(userId, guideId);
+    if (!canManage) return res.status(403).json({ message: "Access denied" });
+    
+    const steps = await storage.getStepsByGuide(guideId);
+    const sortedSteps = [...steps].sort((a, b) => a.order - b.order);
+    
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${guide.title}</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; color: #333; }
+    h1 { color: #1a1a1a; border-bottom: 2px solid #eee; padding-bottom: 16px; }
+    .description { color: #666; margin-bottom: 32px; }
+    .step { margin-bottom: 40px; page-break-inside: avoid; }
+    .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .step-number { background: #4f46e5; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
+    .step-title { font-size: 18px; font-weight: 600; margin: 0; }
+    .step-description { color: #555; margin-left: 40px; }
+    .step-image { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; margin: 12px 0 12px 40px; }
+    @media print { .step { page-break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <h1>${guide.title}</h1>
+  ${guide.description ? `<p class="description">${guide.description}</p>` : ''}
+  
+  ${sortedSteps.map((step, index) => `
+  <div class="step">
+    <div class="step-header">
+      <div class="step-number">${index + 1}</div>
+      <h2 class="step-title">${step.title || `Step ${index + 1}`}</h2>
+    </div>
+    ${step.description ? `<p class="step-description">${step.description}</p>` : ''}
+    ${step.imageUrl ? `<img class="step-image" src="${step.imageUrl}" alt="${step.title || 'Step screenshot'}" />` : ''}
+  </div>
+  `).join('')}
+</body>
+</html>`;
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `attachment; filename="${guide.title.replace(/[^a-zA-Z0-9]/g, '_')}.html"`);
+    res.send(html);
+  });
+
+  // Get embed info for a guide (returns embed code)
+  app.get('/api/guides/:guideId/embed', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.guideId);
+    
+    const guide = await storage.getGuide(guideId);
+    if (!guide) return res.status(404).json({ message: "Guide not found" });
+    
+    const canManage = await canManageGuideShare(userId, guideId);
+    if (!canManage) return res.status(403).json({ message: "Access denied" });
+    
+    // Check if sharing is enabled and not password-protected
+    const share = await storage.getGuideShareByGuideId(guideId);
+    if (!share || !share.enabled) {
+      return res.status(400).json({ 
+        message: "Sharing must be enabled to embed this guide",
+        sharingDisabled: true
+      });
+    }
+    
+    if (share.passwordHash) {
+      return res.status(400).json({ 
+        message: "Password-protected guides cannot be embedded",
+        passwordProtected: true
+      });
+    }
+    
+    const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}`;
+    const embedUrl = `${baseUrl}/embed/${share.shareToken}`;
+    const embedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allow="fullscreen" style="border-radius: 8px; border: 1px solid #e5e7eb;"></iframe>`;
+    
+    res.json({
+      embedUrl,
+      embedCode,
+      shareToken: share.shareToken,
+    });
+  });
+
+  // Public: Get embed content (for iframe)
+  app.get('/api/embed/:token', async (req, res) => {
+    const { token } = req.params;
+    
+    const share = await storage.getGuideShareByToken(token);
+    if (!share || !share.enabled) {
+      return res.status(404).json({ message: "Guide not found or sharing is disabled" });
+    }
+    
+    // Password-protected guides cannot be embedded
+    if (share.passwordHash) {
+      return res.status(403).json({ message: "Password-protected guides cannot be embedded. Use the share link instead." });
+    }
+    
+    await storage.incrementShareAccessCount(share.id);
+    
+    const guide = await storage.getGuide(share.guideId);
+    if (!guide) {
+      return res.status(404).json({ message: "Guide not found" });
+    }
+    
+    const steps = await storage.getStepsByGuide(share.guideId);
+    
+    res.json({
+      guide: {
+        id: guide.id,
+        title: guide.title,
+        description: guide.description,
+        coverImageUrl: guide.coverImageUrl,
+      },
+      steps: steps.map(s => ({
+        id: s.id,
+        order: s.order,
+        title: s.title,
+        description: s.description,
+        imageUrl: s.imageUrl,
+        actionType: s.actionType,
+        metadata: s.metadata,
+      })),
+    });
+  });
+
   // === AI ===
   app.post(api.ai.generateDescription.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

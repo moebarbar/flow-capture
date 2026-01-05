@@ -226,6 +226,66 @@ export const api = {
       },
     },
   },
+
+  // === EXTENSION ===
+  extension: {
+    syncCapture: {
+      method: 'POST' as const,
+      path: '/api/extension/sync',
+      input: z.object({
+        workspaceId: z.number(),
+        title: z.string().optional(),
+        steps: z.array(z.object({
+          type: z.string(),
+          description: z.string(),
+          selector: z.string().optional(),
+          url: z.string(),
+          pageTitle: z.string(),
+          screenshot: z.string().optional(),
+          timestamp: z.number(),
+          element: z.object({
+            tagName: z.string(),
+            id: z.string().nullable(),
+            text: z.string().optional(),
+            type: z.string().nullable(),
+            ariaLabel: z.string().nullable(),
+          }).optional(),
+        })),
+      }),
+      responses: {
+        201: z.object({
+          guideId: z.number(),
+          stepsCreated: z.number(),
+        }),
+        400: errorSchemas.validation,
+        401: errorSchemas.unauthorized,
+      },
+    },
+    getUser: {
+      method: 'GET' as const,
+      path: '/api/extension/user',
+      responses: {
+        200: z.object({
+          id: z.string(),
+          username: z.string(),
+          profileImage: z.string().nullable(),
+        }),
+        401: errorSchemas.unauthorized,
+      },
+    },
+    listWorkspaces: {
+      method: 'GET' as const,
+      path: '/api/extension/workspaces',
+      responses: {
+        200: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+          slug: z.string(),
+        })),
+        401: errorSchemas.unauthorized,
+      },
+    },
+  },
 };
 
 // ============================================

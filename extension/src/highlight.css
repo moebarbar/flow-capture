@@ -1,0 +1,62 @@
+.flowcapture-overlay {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.flowcapture-highlight {
+  position: fixed;
+  border: 3px solid #8b5cf6;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.1);
+  pointer-events: none;
+  z-index: 2147483646;
+  transition: all 0.15s ease-out;
+}
+
+.flowcapture-recording-indicator {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+  z-index: 2147483647;
+  pointer-events: none;
+  animation: flowcapture-slideIn 0.3s ease-out;
+}
+
+.flowcapture-pulse {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: flowcapture-blink 1s ease-in-out infinite;
+}
+
+@keyframes flowcapture-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes flowcapture-slideIn {
+  from {
+    transform: translateX(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes flowcapture-pulse {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}

@@ -238,6 +238,86 @@ export async function registerRoutes(
     }
   });
 
+  // === EXTENSION ENDPOINTS ===
+  app.get(api.extension.getUser.path, async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    res.json({
+      id: user.claims.sub,
+      username: user.claims.name || user.claims.sub,
+      profileImage: user.claims.profile_image || null,
+    });
+  });
+
+  app.get(api.extension.listWorkspaces.path, async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const workspaces = await storage.getWorkspacesForUser(userId);
+    res.json(workspaces.map(w => ({
+      id: w.id,
+      name: w.name,
+      slug: w.slug,
+    })));
+  });
+
+  app.post(api.extension.syncCapture.path, async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const input = api.extension.syncCapture.input.parse(req.body);
+      const { workspaceId, title, steps } = input;
+
+      const guideTitle = title || `Captured Workflow - ${new Date().toLocaleDateString()}`;
+      const guide = await storage.createGuide({
+        workspaceId,
+        title: guideTitle,
+        description: `Automatically captured workflow with ${steps.length} steps`,
+        status: "draft",
+        createdById: userId,
+      });
+
+      let stepsCreated = 0;
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const actionType = step.type === 'click' ? 'click' :
+                          step.type === 'input' ? 'input' :
+                          step.type === 'change' ? 'click' :
+                          step.type === 'submit' ? 'click' :
+                          step.type === 'navigation' ? 'navigation' : 'custom';
+
+        await storage.createStep({
+          guideId: guide.id,
+          order: i + 1,
+          title: step.description,
+          description: step.description,
+          actionType: actionType as any,
+          selector: step.selector || null,
+          url: step.url,
+          imageUrl: step.screenshot || null,
+          metadata: {
+            element: step.element,
+            pageTitle: step.pageTitle,
+            capturedAt: step.timestamp,
+          },
+        });
+        stepsCreated++;
+      }
+
+      res.status(201).json({ guideId: guide.id, stepsCreated });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      throw err;
+    }
+  });
+
   return httpServer;
 }
 

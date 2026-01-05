@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown } from "lucide-react";
+import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, BarChart3, LayoutTemplate, Cog } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,10 @@ export function Sidebar() {
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/guides", label: "My Guides", icon: BookOpen },
-    { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/analytics", label: "Analytics", icon: BarChart3 },
+    { href: "/templates", label: "Templates", icon: LayoutTemplate },
+    { href: "/workspace-settings", label: "Workspace Settings", icon: Cog },
+    { href: "/settings", label: "Account", icon: Settings },
   ];
 
   return (

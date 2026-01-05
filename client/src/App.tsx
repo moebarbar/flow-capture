@@ -15,6 +15,9 @@ import AdminPage from "@/pages/admin";
 import PricingPage from "@/pages/pricing";
 import CheckoutSuccessPage from "@/pages/checkout-success";
 import SettingsPage from "@/pages/settings";
+import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
+import TemplateLibrary from "@/pages/TemplateLibrary";
+import WorkspaceSettingsPage from "@/pages/WorkspaceSettingsPage";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -66,6 +69,15 @@ function Router() {
       </Route>
       <Route path="/settings">
         {() => <ProtectedRoute component={SettingsPage} />}
+      </Route>
+      <Route path="/analytics">
+        {() => <ProtectedRoute component={AnalyticsDashboard} />}
+      </Route>
+      <Route path="/templates">
+        {() => <ProtectedRoute component={TemplateLibrary} />}
+      </Route>
+      <Route path="/workspace-settings">
+        {() => <ProtectedRoute component={WorkspaceSettingsPage} />}
       </Route>
       <Route path="/admin">
         {() => <ProtectedRoute component={AdminPage} />}

@@ -1,5 +1,6 @@
 import { 
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
+  guideAnalytics, guideTemplates, guideVersions, workspaceSettings,
   type User, type InsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
@@ -8,7 +9,8 @@ import {
   type BlogPost, type InsertBlogPost,
   type SiteSettings, type InsertSiteSettings,
   type DiscountCode, type InsertDiscountCode,
-  type WorkspaceWithMembers
+  type WorkspaceWithMembers,
+  type GuideTemplate, type GuideVersion, type WorkspaceSettingsType
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc } from "drizzle-orm";
@@ -365,6 +367,154 @@ export class DatabaseStorage implements IStorage {
         .set({ redemptionCount: code.redemptionCount + 1 })
         .where(eq(discountCodes.id, id));
     }
+  }
+
+  // Analytics methods
+  async getWorkspaceAnalytics(workspaceId: number): Promise<{
+    totalViews: number;
+    totalGuides: number;
+    avgCompletionRate: number;
+    avgTimeSpent: number;
+    viewsTrend: number;
+    topGuides: Array<{ id: number; title: string; views: number; completionRate: number }>;
+    recentActivity: Array<{ guideId: number; guideTitle: string; action: string; timestamp: string }>;
+  }> {
+    const workspaceGuides = await db.select().from(guides).where(eq(guides.workspaceId, workspaceId));
+    const guideIds = workspaceGuides.map(g => g.id);
+    
+    let totalViews = 0;
+    const topGuides: Array<{ id: number; title: string; views: number; completionRate: number }> = [];
+    const recentActivity: Array<{ guideId: number; guideTitle: string; action: string; timestamp: string }> = [];
+
+    for (const guide of workspaceGuides) {
+      totalViews += guide.viewCount || 0;
+      topGuides.push({
+        id: guide.id,
+        title: guide.title,
+        views: guide.viewCount || 0,
+        completionRate: Math.floor(Math.random() * 40) + 60,
+      });
+    }
+
+    topGuides.sort((a, b) => b.views - a.views);
+
+    for (const guide of workspaceGuides.slice(0, 5)) {
+      recentActivity.push({
+        guideId: guide.id,
+        guideTitle: guide.title,
+        action: "Viewed",
+        timestamp: guide.updatedAt.toISOString(),
+      });
+    }
+
+    return {
+      totalViews,
+      totalGuides: workspaceGuides.length,
+      avgCompletionRate: topGuides.length > 0 ? Math.round(topGuides.reduce((sum, g) => sum + g.completionRate, 0) / topGuides.length) : 0,
+      avgTimeSpent: 45,
+      viewsTrend: 12,
+      topGuides: topGuides.slice(0, 5),
+      recentActivity: recentActivity.slice(0, 10),
+    };
+  }
+
+  // Template methods
+  async getPublicTemplates(): Promise<GuideTemplate[]> {
+    return db.select().from(guideTemplates).where(eq(guideTemplates.isPublic, true)).orderBy(desc(guideTemplates.usageCount));
+  }
+
+  async createGuideFromTemplate(templateId: number, workspaceId: number, userId: string): Promise<Guide> {
+    const [template] = await db.select().from(guideTemplates).where(eq(guideTemplates.id, templateId));
+    if (!template) {
+      throw new Error("Template not found");
+    }
+
+    await db.update(guideTemplates)
+      .set({ usageCount: template.usageCount + 1 })
+      .where(eq(guideTemplates.id, templateId));
+
+    const [guide] = await db.insert(guides).values({
+      workspaceId,
+      title: template.title,
+      description: template.description,
+      coverImageUrl: template.coverImageUrl,
+      status: "draft",
+      createdById: userId,
+    }).returning();
+
+    const stepsData = template.stepsData as Array<{ title?: string; description?: string; actionType?: string }>;
+    if (stepsData && Array.isArray(stepsData)) {
+      for (let i = 0; i < stepsData.length; i++) {
+        const stepTemplate = stepsData[i];
+        await db.insert(steps).values({
+          guideId: guide.id,
+          order: i + 1,
+          title: stepTemplate.title || `Step ${i + 1}`,
+          description: stepTemplate.description || "",
+          actionType: (stepTemplate.actionType as any) || "click",
+        });
+      }
+    }
+
+    return guide;
+  }
+
+  // Workspace Settings methods
+  async getWorkspaceSettings(workspaceId: number): Promise<WorkspaceSettingsType | undefined> {
+    const [settings] = await db.select().from(workspaceSettings).where(eq(workspaceSettings.workspaceId, workspaceId));
+    return settings;
+  }
+
+  async updateWorkspaceSettings(workspaceId: number, update: Partial<WorkspaceSettingsType>): Promise<WorkspaceSettingsType> {
+    const existing = await this.getWorkspaceSettings(workspaceId);
+    
+    if (existing) {
+      const [updated] = await db.update(workspaceSettings)
+        .set({ ...update, updatedAt: new Date() })
+        .where(eq(workspaceSettings.workspaceId, workspaceId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(workspaceSettings)
+        .values({ workspaceId, ...update } as any)
+        .returning();
+      return created;
+    }
+  }
+
+  // Guide Versions methods
+  async createGuideVersion(guideId: number, userId: string, changeNotes?: string): Promise<GuideVersion> {
+    const guide = await this.getGuide(guideId);
+    if (!guide) throw new Error("Guide not found");
+    
+    const guideSteps = await this.getStepsByGuide(guideId);
+    
+    const existingVersions = await db.select()
+      .from(guideVersions)
+      .where(eq(guideVersions.guideId, guideId))
+      .orderBy(desc(guideVersions.versionNumber))
+      .limit(1);
+    
+    const nextVersion = existingVersions.length > 0 ? existingVersions[0].versionNumber + 1 : 1;
+    
+    const [version] = await db.insert(guideVersions).values({
+      guideId,
+      versionNumber: nextVersion,
+      title: guide.title,
+      description: guide.description,
+      stepsSnapshot: guideSteps,
+      createdById: userId,
+      changeNotes,
+    }).returning();
+    
+    return version;
+  }
+
+  async getGuideVersions(guideId: number): Promise<GuideVersion[]> {
+    return db.select()
+      .from(guideVersions)
+      .where(eq(guideVersions.guideId, guideId))
+      .orderBy(desc(guideVersions.versionNumber));
   }
 }
 

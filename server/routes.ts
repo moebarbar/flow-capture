@@ -838,6 +838,109 @@ export async function registerRoutes(
     }
   });
 
+  // === ANALYTICS API ===
+  app.get('/api/analytics', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const workspaceId = req.query.workspaceId ? Number(req.query.workspaceId) : undefined;
+    
+    if (!workspaceId) {
+      return res.json({
+        totalViews: 0,
+        totalGuides: 0,
+        avgCompletionRate: 0,
+        avgTimeSpent: 0,
+        viewsTrend: 0,
+        topGuides: [],
+        recentActivity: [],
+      });
+    }
+
+    try {
+      const analytics = await storage.getWorkspaceAnalytics(workspaceId);
+      res.json(analytics);
+    } catch (err) {
+      console.error("Analytics error:", err);
+      res.json({
+        totalViews: 0,
+        totalGuides: 0,
+        avgCompletionRate: 0,
+        avgTimeSpent: 0,
+        viewsTrend: 0,
+        topGuides: [],
+        recentActivity: [],
+      });
+    }
+  });
+
+  // === TEMPLATES API ===
+  app.get('/api/templates', async (req, res) => {
+    try {
+      const templates = await storage.getPublicTemplates();
+      res.json(templates);
+    } catch (err) {
+      console.error("Templates error:", err);
+      res.json([]);
+    }
+  });
+
+  app.post('/api/templates/:id/use', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const templateId = Number(req.params.id);
+    const { workspaceId } = req.body;
+
+    if (!workspaceId) {
+      return res.status(400).json({ message: "workspaceId is required" });
+    }
+
+    try {
+      const guide = await storage.createGuideFromTemplate(templateId, workspaceId, userId);
+      res.status(201).json(guide);
+    } catch (err) {
+      console.error("Use template error:", err);
+      res.status(500).json({ message: "Failed to create guide from template" });
+    }
+  });
+
+  // === WORKSPACE SETTINGS API ===
+  app.get('/api/workspaces/:id/settings', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const workspaceId = Number(req.params.id);
+
+    try {
+      const settings = await storage.getWorkspaceSettings(workspaceId);
+      res.json(settings || {
+        workspaceId,
+        autoRedactEmails: false,
+        autoRedactPasswords: true,
+        autoRedactPhones: false,
+        autoRedactCustomPatterns: null,
+        defaultLanguage: 'en',
+        enableAiDescriptions: true,
+        enableAiVoiceover: false,
+        brandColor: null,
+        customDomain: null,
+      });
+    } catch (err) {
+      console.error("Get workspace settings error:", err);
+      res.status(500).json({ message: "Failed to get settings" });
+    }
+  });
+
+  app.patch('/api/workspaces/:id/settings', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const workspaceId = Number(req.params.id);
+
+    try {
+      const settings = await storage.updateWorkspaceSettings(workspaceId, req.body);
+      res.json(settings);
+    } catch (err) {
+      console.error("Update workspace settings error:", err);
+      res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
   return httpServer;
 }
 

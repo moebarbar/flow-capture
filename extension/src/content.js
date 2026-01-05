@@ -139,9 +139,10 @@ if (window.__flowcaptureInitialized) {
       }
     } else if (event.data?.type === 'FLOWCAPTURE_CHECK_EXTENSION') {
       // Web app checking if extension is installed
+      const manifest = chrome.runtime.getManifest();
       window.postMessage({ 
         type: 'FLOWCAPTURE_EXTENSION_PRESENT', 
-        version: '1.0.0' 
+        version: manifest.version 
       }, responseOrigin);
     } else if (event.data?.type === 'FLOWCAPTURE_GET_SESSION') {
       // Web app checking current session status

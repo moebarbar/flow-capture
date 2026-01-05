@@ -489,16 +489,35 @@ export async function registerRoutes(
     }
   });
 
+  const updateBlogPostSchema = z.object({
+    title: z.string().min(1).optional(),
+    slug: z.string().min(1).optional(),
+    content: z.string().optional(),
+    excerpt: z.string().nullable().optional(),
+    featuredImageUrl: z.string().nullable().optional(),
+    status: z.enum(['draft', 'published', 'archived']).optional(),
+    publishedAt: z.string().nullable().optional(),
+  });
+
   app.patch('/api/admin/blog-posts/:id', requireAdmin, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const post = await storage.getBlogPost(id);
       if (!post) return res.status(404).json({ message: 'Post not found' });
 
-      const updated = await storage.updateBlogPost(id, req.body);
+      const parsed = updateBlogPostSchema.parse(req.body);
+      
+      if (Object.keys(parsed).length === 0) {
+        return res.status(400).json({ message: 'No valid update fields provided' });
+      }
+
+      const updated = await storage.updateBlogPost(id, parsed);
       res.json(updated);
     } catch (error: any) {
       console.error('Update blog post error:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: 'Validation error', errors: error.errors });
+      }
       res.status(400).json({ message: error.message || 'Failed to update blog post' });
     }
   });

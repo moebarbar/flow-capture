@@ -3605,17 +3605,17 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
       const stepsSnapshot = version.stepsSnapshot as any[];
       if (stepsSnapshot && Array.isArray(stepsSnapshot)) {
-        for (const stepData of stepsSnapshot) {
+        for (let idx = 0; idx < stepsSnapshot.length; idx++) {
+          const stepData = stepsSnapshot[idx];
           await storage.createStep({
             guideId,
-            order: stepData.order ?? 0,
+            order: typeof stepData.order === 'number' ? stepData.order : idx,
             title: stepData.title || null,
             description: stepData.description || null,
             actionType: stepData.actionType || 'click',
             selector: stepData.selector || null,
             url: stepData.url || stepData.pageUrl || null,
-            imageUrl: stepData.imageUrl || null,
-            metadata: stepData.metadata || null
+            imageUrl: stepData.imageUrl || null
           });
         }
       }

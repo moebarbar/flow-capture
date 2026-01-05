@@ -1009,7 +1009,20 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         return res.status(400).json({ message: 'No valid update fields provided' });
       }
 
-      const updated = await storage.updateBlogPost(id, parsed);
+      // Convert publishedAt string to Date if present
+      const updateData = {
+        ...parsed,
+        publishedAt: parsed.publishedAt ? new Date(parsed.publishedAt) : parsed.publishedAt === null ? null : undefined,
+      };
+      
+      // Remove undefined values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key as keyof typeof updateData] === undefined) {
+          delete updateData[key as keyof typeof updateData];
+        }
+      });
+
+      const updated = await storage.updateBlogPost(id, updateData as any);
       res.json(updated);
     } catch (error: any) {
       console.error('Update blog post error:', error);
@@ -1187,11 +1200,11 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
   
   app.get('/api/admin/finance/overview', requireAdmin, async (req, res) => {
     try {
-      const subscriptions = await stripeService.getSubscriptions();
+      const subscriptions = await stripeService.listSubscriptions();
       const invoices = await stripeService.getInvoices();
       
-      const activeSubscriptions = subscriptions.filter(s => s.status === 'active');
-      const totalMRR = activeSubscriptions.reduce((sum, sub: any) => {
+      const activeSubscriptions = subscriptions.filter((s: any) => s.status === 'active');
+      const totalMRR = activeSubscriptions.reduce((sum: number, sub: any) => {
         const amount = sub.items?.data?.[0]?.price?.unit_amount || 0;
         return sum + (amount / 100);
       }, 0);

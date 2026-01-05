@@ -270,7 +270,6 @@ export default function GuideEditor() {
 
               <div className="pt-6 border-t border-border mt-auto">
                  <Button 
-                  variant="destructive" 
                   variant="outline" 
                   className="w-full border-destructive/20 text-destructive hover:bg-destructive/10"
                   onClick={() => {

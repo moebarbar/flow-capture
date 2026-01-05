@@ -90,3 +90,18 @@ The extension communicates with these backend endpoints:
 - `storage`: Store captured steps locally
 - `tabs`: Query and message tabs
 - `<all_urls>`: Inject content script on any page
+
+## Troubleshooting
+
+**"Please log in to sync" error:**
+- Make sure you're logged into the FlowCapture web app in your browser
+- Verify the Dashboard URL in Settings matches your running app URL
+
+**Steps not capturing:**
+- Check that you're not on a chrome:// or extension page (these are restricted)
+- Try refreshing the page and starting a new recording
+
+**Sync failing:**
+- Ensure your FlowCapture web app is running
+- Check the Dashboard URL in Settings is correct (include https://)
+- Make sure you have at least one workspace created in the dashboard

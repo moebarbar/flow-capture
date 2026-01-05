@@ -10,21 +10,35 @@ interface ThemeProviderContextProps {
 
 const ThemeProviderContext = createContext<ThemeProviderContextProps | undefined>(undefined);
 
+const STORAGE_KEY = "flowcapture-theme";
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
+  const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme") as Theme | null;
-      return stored || "system";
+      const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
+      if (stored && ["light", "dark", "system"].includes(stored)) {
+        return stored;
+      }
     }
     return "system";
   });
 
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return "light";
+  });
+
+  const setTheme = (newTheme: Theme) => {
+    setThemeState(newTheme);
+    localStorage.setItem(STORAGE_KEY, newTheme);
+  };
 
   useEffect(() => {
     const root = document.documentElement;
     
-    const getSystemTheme = () => 
+    const getSystemTheme = (): "light" | "dark" => 
       window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
     const applyTheme = () => {
@@ -36,7 +50,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
 
     applyTheme();
-    localStorage.setItem("theme", theme);
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {

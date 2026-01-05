@@ -20,9 +20,6 @@ interface SiteSettings {
   primaryColor?: string;
   secondaryColor?: string;
   accentColor?: string;
-  headScripts?: string | null;
-  bodyScripts?: string | null;
-  customCss?: string | null;
 }
 
 export default function LandingPage() {
@@ -41,22 +38,17 @@ export default function LandingPage() {
   }, [user]);
 
   useEffect(() => {
-    if (branding?.faviconUrl) {
-      const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement || document.createElement('link');
-      link.rel = 'icon';
-      link.href = branding.faviconUrl;
-      document.head.appendChild(link);
-    }
+    const existingLink = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
     
-    if (branding?.customCss) {
-      const style = document.createElement('style');
-      style.id = 'custom-branding-css';
-      style.textContent = branding.customCss;
-      document.head.appendChild(style);
-      return () => {
-        const existing = document.getElementById('custom-branding-css');
-        if (existing) existing.remove();
-      };
+    if (branding?.faviconUrl) {
+      if (existingLink) {
+        existingLink.href = branding.faviconUrl;
+      } else {
+        const link = document.createElement('link');
+        link.rel = 'icon';
+        link.href = branding.faviconUrl;
+        document.head.appendChild(link);
+      }
     }
   }, [branding]);
 

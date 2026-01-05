@@ -558,7 +558,7 @@ export async function registerRoutes(
 
   // === SITE SETTINGS ENDPOINTS ===
   
-  // Public settings (for landing page)
+  // Public settings (for landing page) - only expose safe branding fields
   app.get('/api/settings/public', async (req, res) => {
     try {
       const settings = await storage.getSiteSettings();
@@ -579,10 +579,6 @@ export async function registerRoutes(
         primaryColor: settings.primaryColor,
         secondaryColor: settings.secondaryColor,
         accentColor: settings.accentColor,
-        headScripts: settings.headScripts,
-        bodyScripts: settings.bodyScripts,
-        customCss: settings.customCss,
-        socialLinks: settings.socialLinks,
       });
     } catch (error) {
       res.json({ siteName: 'FlowCapture' });
@@ -631,14 +627,22 @@ export async function registerRoutes(
   });
 
   const createDiscountCodeSchema = z.object({
-    code: z.string().min(1).max(50),
-    description: z.string().optional(),
+    code: z.string().min(1).max(50).transform(val => val.toUpperCase()),
+    description: z.string().max(200).optional(),
     discountType: z.enum(['percent', 'fixed']),
-    discountValue: z.number().min(1),
+    discountValue: z.number().min(1).max(10000),
     currency: z.string().default('usd'),
-    maxRedemptions: z.number().nullable().optional(),
+    maxRedemptions: z.number().min(1).nullable().optional(),
     expiresAt: z.string().nullable().optional(),
     status: z.enum(['active', 'inactive', 'expired']).default('active'),
+  }).refine((data) => {
+    if (data.discountType === 'percent' && data.discountValue > 100) {
+      return false;
+    }
+    return true;
+  }, {
+    message: "Percentage discount cannot exceed 100%",
+    path: ["discountValue"],
   });
 
   app.post('/api/admin/discount-codes', requireAdmin, async (req, res) => {

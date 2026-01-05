@@ -18,6 +18,7 @@ import SettingsPage from "@/pages/settings";
 import AnalyticsDashboard from "@/pages/AnalyticsDashboard";
 import TemplateLibrary from "@/pages/TemplateLibrary";
 import WorkspaceSettingsPage from "@/pages/WorkspaceSettingsPage";
+import ScreenshotStudio from "@/pages/ScreenshotStudio";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -81,6 +82,9 @@ function Router() {
       </Route>
       <Route path="/admin">
         {() => <ProtectedRoute component={AdminPage} />}
+      </Route>
+      <Route path="/studio">
+        {() => <ProtectedRoute component={ScreenshotStudio} />}
       </Route>
 
       <Route component={NotFound} />

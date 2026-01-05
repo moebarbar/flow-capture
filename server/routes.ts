@@ -244,7 +244,7 @@ export async function registerRoutes(
       const { stepTitle, actionType, context } = req.body;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-5.1",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -255,7 +255,7 @@ export async function registerRoutes(
             content: `Action: ${actionType}\nTitle/Element: ${stepTitle}\nContext: ${context || 'No context'}`
           }
         ],
-        max_completion_tokens: 100
+        max_tokens: 100
       });
 
       const description = completion.choices[0].message.content || "Description generated.";
@@ -263,6 +263,119 @@ export async function registerRoutes(
     } catch (error) {
       console.error("AI Generation error:", error);
       res.status(500).json({ message: "Failed to generate description" });
+    }
+  });
+
+  // AI Screenshot Analysis - analyze screenshot and generate step description
+  app.post("/api/ai/analyze-screenshot", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const { imageUrl, imageBase64, context } = req.body;
+      
+      if (!imageUrl && !imageBase64) {
+        return res.status(400).json({ message: "Either imageUrl or imageBase64 is required" });
+      }
+
+      const imageContent = imageBase64 
+        ? { type: "image_url" as const, image_url: { url: `data:image/png;base64,${imageBase64}` } }
+        : { type: "image_url" as const, image_url: { url: imageUrl } };
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert technical writer for a workflow documentation platform. Analyze the screenshot and provide:
+1. A concise title for this step (max 10 words)
+2. A clear description of what action the user should take (1-2 sentences)
+3. Any UI elements that should be highlighted or called out
+
+Format your response as JSON: { "title": "...", "description": "...", "highlights": ["..."] }`
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: `Analyze this screenshot and describe what action the user needs to take. ${context ? `Context: ${context}` : ""}` },
+              imageContent
+            ]
+          }
+        ],
+        max_tokens: 300,
+        response_format: { type: "json_object" }
+      });
+
+      const content = completion.choices[0].message.content;
+      const analysis = content ? JSON.parse(content) : { title: "Untitled Step", description: "No description", highlights: [] };
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error("AI Screenshot Analysis error:", error);
+      res.status(500).json({ message: "Failed to analyze screenshot" });
+    }
+  });
+
+  // AI Improve Guide - enhance all steps in a guide
+  app.post("/api/ai/improve-guide/:guideId", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.guideId);
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+
+      // Authorization: Check if user owns the guide's workspace
+      const userId = (req.user as any).id;
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const isMember = members.some(m => m.userId === userId);
+      if (workspace.ownerId !== userId && !isMember) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const steps = await storage.getStepsByGuide(guideId);
+      
+      const stepsInfo = steps.map((s, i) => ({
+        order: i + 1,
+        title: s.title,
+        description: s.description,
+        actionType: s.actionType
+      }));
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert technical writer. Review this workflow guide and suggest improvements:
+1. Make titles more action-oriented and clear
+2. Ensure descriptions are concise but complete
+3. Check for missing context or unclear steps
+4. Suggest a better overall title if needed
+
+Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "improvedTitle": "...", "improvedDescription": "..." }], "suggestions": ["..."] }`
+          },
+          {
+            role: "user",
+            content: `Guide Title: ${guide.title}\n\nSteps:\n${JSON.stringify(stepsInfo, null, 2)}`
+          }
+        ],
+        max_tokens: 1000,
+        response_format: { type: "json_object" }
+      });
+
+      const content = completion.choices[0].message.content;
+      const improvements = content ? JSON.parse(content) : { improvedTitle: guide.title, steps: [], suggestions: [] };
+      
+      res.json(improvements);
+    } catch (error) {
+      console.error("AI Improve Guide error:", error);
+      res.status(500).json({ message: "Failed to improve guide" });
     }
   });
 

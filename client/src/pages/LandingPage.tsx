@@ -71,7 +71,7 @@ export default function LandingPage() {
               <Button size="lg" className="rounded-full text-lg h-14 px-8 bg-brand-600 hover:bg-brand-700 text-white shadow-xl shadow-brand-500/30 transition-all hover:-translate-y-1" asChild>
                 <a href="#install-extension" data-testid="button-hero-install-extension">
                   <SiGooglechrome className="mr-2 h-5 w-5" />
-                  Install Chrome Extension
+                  Get the Extension, it's free
                 </a>
               </Button>
               <Button size="lg" variant="outline" className="rounded-full text-lg h-14 px-8 border-2 hover:bg-muted/50" asChild>
@@ -163,8 +163,8 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
               <Button size="lg" className="rounded-full text-lg h-14 px-10 bg-brand-600 hover:bg-brand-700 text-white shadow-xl shadow-brand-500/30 transition-all hover:-translate-y-1" asChild>
                 <a href="https://chrome.google.com/webstore" target="_blank" rel="noopener noreferrer" data-testid="button-install-extension-cta">
-                  <Download className="mr-2 h-5 w-5" />
-                  Add to Chrome - It's Free
+                  <SiGooglechrome className="mr-2 h-5 w-5" />
+                  Get the Extension, it's free
                 </a>
               </Button>
             </div>
@@ -334,7 +334,7 @@ export default function LandingPage() {
               <Button size="sm" className="rounded-full bg-brand-600 hover:bg-brand-700 text-white" asChild>
                 <a href="#install-extension" data-testid="button-step-install">
                   <SiGooglechrome className="mr-2 h-4 w-4" />
-                  Get Extension
+                  Get Extension, it's free
                 </a>
               </Button>
             </motion.div>

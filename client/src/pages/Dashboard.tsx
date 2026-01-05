@@ -3,6 +3,7 @@ import { useGuides, useCreateGuide } from "@/hooks/use-guides";
 import { Sidebar } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, TrendingUp, BookOpen, MoreVertical } from "lucide-react";
+import { SiGooglechrome } from "react-icons/si";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 import { EmptyState } from "@/components/EmptyState";
@@ -41,18 +42,31 @@ export default function Dashboard() {
       <main className="flex-1 ml-64 p-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-8">
             <div>
               <h1 className="text-3xl font-display font-bold text-foreground">Dashboard</h1>
               <p className="text-muted-foreground mt-1">Overview of your documentation activity</p>
             </div>
-            <Button 
-              onClick={handleCreateGuide} 
-              disabled={isCreating}
-              className="rounded-full px-6 bg-brand-600 hover:bg-brand-700 shadow-lg shadow-brand-500/20"
-            >
-              {isCreating ? "Creating..." : <><Plus className="mr-2 h-4 w-4" /> New Guide</>}
-            </Button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button 
+                variant="outline"
+                className="rounded-full px-5"
+                asChild
+              >
+                <a href="https://chrome.google.com/webstore" target="_blank" rel="noopener noreferrer" data-testid="button-dashboard-get-extension">
+                  <SiGooglechrome className="mr-2 h-4 w-4" />
+                  Get the Extension, it's free
+                </a>
+              </Button>
+              <Button 
+                onClick={handleCreateGuide} 
+                disabled={isCreating}
+                className="rounded-full px-6 bg-brand-600 hover:bg-brand-700 shadow-lg shadow-brand-500/20"
+                data-testid="button-dashboard-new-guide"
+              >
+                {isCreating ? "Creating..." : <><Plus className="mr-2 h-4 w-4" /> New Guide</>}
+              </Button>
+            </div>
           </div>
 
           {/* Stats Cards */}

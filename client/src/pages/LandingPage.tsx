@@ -5,8 +5,9 @@ import { motion } from "framer-motion";
 import { 
   Check, ArrowRight, Zap, Share2, Layers, Clock, DollarSign, 
   Users, GraduationCap, Headphones, TrendingUp, MousePointer, 
-  Camera, FileText, Send, Quote, Building2, Briefcase
+  Camera, FileText, Send, Quote, Building2, Briefcase, Download
 } from "lucide-react";
+import { SiGooglechrome } from "react-icons/si";
 import { useEffect } from "react";
 
 export default function LandingPage() {
@@ -68,7 +69,10 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button size="lg" className="rounded-full text-lg h-14 px-8 bg-brand-600 hover:bg-brand-700 text-white shadow-xl shadow-brand-500/30 transition-all hover:-translate-y-1" asChild>
-                <a href="/api/login" data-testid="button-hero-cta">Start Capturing Free</a>
+                <a href="#install-extension" data-testid="button-hero-install-extension">
+                  <SiGooglechrome className="mr-2 h-5 w-5" />
+                  Install Chrome Extension
+                </a>
               </Button>
               <Button size="lg" variant="outline" className="rounded-full text-lg h-14 px-8 border-2 hover:bg-muted/50" asChild>
                 <a href="#how-it-works" data-testid="link-how-it-works">See How It Works</a>
@@ -135,6 +139,41 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Install Extension CTA Section */}
+      <section id="install-extension" className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-brand-50 to-brand-100/50 dark:from-brand-950/50 dark:to-brand-900/30">
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <div className="inline-flex items-center justify-center h-20 w-20 rounded-2xl bg-brand-600 text-white mb-6 shadow-lg shadow-brand-500/30">
+              <SiGooglechrome className="h-10 w-10" />
+            </div>
+            <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">
+              Step 1: Install the Chrome Extension
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+              Get started in under 60 seconds. Install our free Chrome extension to begin capturing workflows instantly. 
+              No account required to try it out.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+              <Button size="lg" className="rounded-full text-lg h-14 px-10 bg-brand-600 hover:bg-brand-700 text-white shadow-xl shadow-brand-500/30 transition-all hover:-translate-y-1" asChild>
+                <a href="https://chrome.google.com/webstore" target="_blank" rel="noopener noreferrer" data-testid="button-install-extension-cta">
+                  <Download className="mr-2 h-5 w-5" />
+                  Add to Chrome - It's Free
+                </a>
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-6 text-muted-foreground text-sm">
+              <span className="flex items-center gap-2" data-testid="text-extension-free"><Check className="h-4 w-4 text-brand-600" /> 100% Free</span>
+              <span className="flex items-center gap-2" data-testid="text-extension-works"><Check className="h-4 w-4 text-brand-600" /> Works on any website</span>
+              <span className="flex items-center gap-2" data-testid="text-extension-private"><Check className="h-4 w-4 text-brand-600" /> Private & secure</span>
+            </div>
+          </motion.div>
         </div>
       </section>
 
@@ -275,44 +314,68 @@ export default function LandingPage() {
             {/* Connection Lines */}
             <div className="hidden md:block absolute top-16 left-1/4 right-1/4 h-0.5 bg-gradient-to-r from-brand-200 via-brand-400 to-brand-200 dark:from-brand-800 dark:via-brand-600 dark:to-brand-800" />
             
-            {[
-              {
-                step: "1",
-                icon: MousePointer,
-                title: "Click Record",
-                desc: "Install our Chrome extension and click the record button. That's it - you're ready to capture."
-              },
-              {
-                step: "2",
-                icon: Camera,
-                title: "Do Your Workflow",
-                desc: "Just use your app normally. We automatically capture every click, form fill, and navigation with screenshots."
-              },
-              {
-                step: "3",
-                icon: Send,
-                title: "Share Instantly",
-                desc: "Click stop and your guide is ready. Share a link, export to PDF, or embed in your docs. No editing required."
-              }
-            ].map((item, i) => (
-              <motion.div 
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.15 }}
-                viewport={{ once: true }}
-                className="text-center relative"
-              >
-                <div className="h-16 w-16 rounded-full bg-brand-600 text-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold shadow-lg shadow-brand-500/30 relative z-10">
-                  {item.step}
-                </div>
-                <div className="h-14 w-14 rounded-xl bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-4">
-                  <item.icon className="h-7 w-7" />
-                </div>
-                <h3 className="text-xl font-bold mb-3 font-display">{item.title}</h3>
-                <p className="text-muted-foreground">{item.desc}</p>
-              </motion.div>
-            ))}
+            {/* Step 1 - Install Extension */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0 }}
+              viewport={{ once: true }}
+              className="text-center relative"
+              data-testid="step-install"
+            >
+              <div className="h-16 w-16 rounded-full bg-brand-600 text-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold shadow-lg shadow-brand-500/30 relative z-10">
+                1
+              </div>
+              <div className="h-14 w-14 rounded-xl bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-4">
+                <Download className="h-7 w-7" />
+              </div>
+              <h3 className="text-xl font-bold mb-3 font-display">Install Extension</h3>
+              <p className="text-muted-foreground mb-4">Add our free Chrome extension in one click. Takes less than 10 seconds to get started.</p>
+              <Button size="sm" className="rounded-full bg-brand-600 hover:bg-brand-700 text-white" asChild>
+                <a href="#install-extension" data-testid="button-step-install">
+                  <SiGooglechrome className="mr-2 h-4 w-4" />
+                  Get Extension
+                </a>
+              </Button>
+            </motion.div>
+
+            {/* Step 2 - Record Workflow */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              viewport={{ once: true }}
+              className="text-center relative"
+              data-testid="step-record"
+            >
+              <div className="h-16 w-16 rounded-full bg-brand-600 text-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold shadow-lg shadow-brand-500/30 relative z-10">
+                2
+              </div>
+              <div className="h-14 w-14 rounded-xl bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-4">
+                <Camera className="h-7 w-7" />
+              </div>
+              <h3 className="text-xl font-bold mb-3 font-display">Record Your Workflow</h3>
+              <p className="text-muted-foreground">Click record and use your app normally. We capture every click, form fill, and navigation with screenshots.</p>
+            </motion.div>
+
+            {/* Step 3 - Share */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              viewport={{ once: true }}
+              className="text-center relative"
+              data-testid="step-share"
+            >
+              <div className="h-16 w-16 rounded-full bg-brand-600 text-white flex items-center justify-center mx-auto mb-6 text-2xl font-bold shadow-lg shadow-brand-500/30 relative z-10">
+                3
+              </div>
+              <div className="h-14 w-14 rounded-xl bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-4">
+                <Send className="h-7 w-7" />
+              </div>
+              <h3 className="text-xl font-bold mb-3 font-display">Share Instantly</h3>
+              <p className="text-muted-foreground">Click stop and your guide is ready. Share a link, export to PDF, or embed in your docs. No editing required.</p>
+            </motion.div>
           </div>
         </div>
       </section>

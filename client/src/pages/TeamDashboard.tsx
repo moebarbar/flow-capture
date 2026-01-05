@@ -6,6 +6,9 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sidebar, useSidebarState } from "@/components/Sidebar";
+import { NotificationBell } from "@/components/NotificationBell";
+import { cn } from "@/lib/utils";
 import { 
   Users, FileText, CheckCircle, Clock, AlertCircle, 
   Activity, TrendingUp, ClipboardList
@@ -40,6 +43,7 @@ interface TeamDashboardStats {
 export default function TeamDashboard() {
   const params = useParams();
   const workspaceId = parseInt(params.workspaceId || "0");
+  const { isCollapsed } = useSidebarState();
 
   const { data: stats, isLoading } = useQuery<TeamDashboardStats>({
     queryKey: ['/api/workspaces', workspaceId, 'team-dashboard'],
@@ -56,14 +60,6 @@ export default function TeamDashboard() {
     enabled: workspaceId > 0,
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
   const completionRate = stats && stats.totalGuides > 0 
     ? Math.round((stats.publishedGuides / stats.totalGuides) * 100) 
     : 0;
@@ -73,13 +69,25 @@ export default function TeamDashboard() {
     : 0;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Team Dashboard</h1>
-          <p className="text-muted-foreground">Track team progress and collaboration</p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-background flex">
+      <Sidebar />
+      <main className={cn(
+        "flex-1 p-8 overflow-y-auto transition-all duration-200",
+        isCollapsed ? "ml-16" : "ml-64"
+      )}>
+        {isLoading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </div>
+        ) : (
+          <div className="max-w-6xl mx-auto space-y-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold" data-testid="text-dashboard-title">Team Dashboard</h1>
+                <p className="text-muted-foreground">Track team progress and collaboration</p>
+              </div>
+              <NotificationBell />
+            </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -344,6 +352,9 @@ export default function TeamDashboard() {
           </Card>
         </TabsContent>
       </Tabs>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

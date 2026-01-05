@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, memo, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Bell, Check, CheckCheck, MessageSquare, ClipboardList, FileCheck, UserPlus } from "lucide-react";
+import { Bell, CheckCheck, MessageSquare, ClipboardList, FileCheck, UserPlus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -29,13 +28,81 @@ interface Notification {
   createdAt: string;
 }
 
-export function NotificationBell() {
+const NotificationIcon = memo(function NotificationIcon({ type }: { type: string }) {
+  switch (type) {
+    case 'comment_added':
+    case 'comment_reply':
+    case 'comment_mention':
+      return <MessageSquare className="h-4 w-4" />;
+    case 'assignment_created':
+    case 'assignment_updated':
+    case 'assignment_completed':
+      return <ClipboardList className="h-4 w-4" />;
+    case 'approval_requested':
+    case 'approval_approved':
+    case 'approval_rejected':
+    case 'approval_revision':
+      return <FileCheck className="h-4 w-4" />;
+    case 'workspace_invitation':
+      return <UserPlus className="h-4 w-4" />;
+    default:
+      return <Bell className="h-4 w-4" />;
+  }
+});
+
+const NotificationItem = memo(function NotificationItem({ 
+  notification, 
+  onClick 
+}: { 
+  notification: Notification; 
+  onClick: (notification: Notification) => void;
+}) {
+  const formattedTime = useMemo(
+    () => formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true }),
+    [notification.createdAt]
+  );
+
+  const handleClick = useCallback(() => {
+    onClick(notification);
+  }, [onClick, notification]);
+
+  return (
+    <div
+      className={`p-3 cursor-pointer hover-elevate ${!notification.isRead ? 'bg-muted/50' : ''}`}
+      onClick={handleClick}
+      data-testid={`notification-${notification.id}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`rounded-full p-2 ${!notification.isRead ? 'bg-primary/10 text-primary' : 'bg-muted'}`}>
+          <NotificationIcon type={notification.type} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-sm truncate">{notification.title}</p>
+            {!notification.isRead && (
+              <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground truncate">
+            {notification.message}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {formattedTime}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export const NotificationBell = memo(function NotificationBell() {
   const [open, setOpen] = useState(false);
 
   const { data, isError } = useQuery<{ data: Notification[]; unreadCount: number }>({
     queryKey: ['/api/notifications'],
     refetchInterval: 30000,
     retry: 1,
+    staleTime: 10000,
   });
 
   const markReadMutation = useMutation({
@@ -56,7 +123,7 @@ export function NotificationBell() {
       }
       return { previousData };
     },
-    onError: (err, notificationId, context) => {
+    onError: (_err, _notificationId, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(['/api/notifications'], context.previousData);
       }
@@ -82,7 +149,7 @@ export function NotificationBell() {
       }
       return { previousData };
     },
-    onError: (err, variables, context) => {
+    onError: (_err, _variables, context) => {
       if (context?.previousData) {
         queryClient.setQueryData(['/api/notifications'], context.previousData);
       }
@@ -91,6 +158,16 @@ export function NotificationBell() {
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
     },
   });
+
+  const handleNotificationClick = useCallback((notification: Notification) => {
+    if (!notification.isRead) {
+      markReadMutation.mutate(notification.id);
+    }
+  }, [markReadMutation]);
+
+  const handleMarkAllRead = useCallback(() => {
+    markAllReadMutation.mutate();
+  }, [markAllReadMutation]);
 
   if (isError) {
     return (
@@ -102,34 +179,6 @@ export function NotificationBell() {
 
   const unreadCount = data?.unreadCount || 0;
   const notifications = data?.data || [];
-
-  const handleNotificationClick = (notification: Notification) => {
-    if (!notification.isRead) {
-      markReadMutation.mutate(notification.id);
-    }
-  };
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'comment_added':
-      case 'comment_reply':
-      case 'comment_mention':
-        return <MessageSquare className="h-4 w-4" />;
-      case 'assignment_created':
-      case 'assignment_updated':
-      case 'assignment_completed':
-        return <ClipboardList className="h-4 w-4" />;
-      case 'approval_requested':
-      case 'approval_approved':
-      case 'approval_rejected':
-      case 'approval_revision':
-        return <FileCheck className="h-4 w-4" />;
-      case 'workspace_invitation':
-        return <UserPlus className="h-4 w-4" />;
-      default:
-        return <Bell className="h-4 w-4" />;
-    }
-  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -158,7 +207,7 @@ export function NotificationBell() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => markAllReadMutation.mutate()}
+              onClick={handleMarkAllRead}
               disabled={markAllReadMutation.isPending}
               data-testid="button-mark-all-read"
             >
@@ -171,32 +220,11 @@ export function NotificationBell() {
           {notifications.length > 0 ? (
             <div className="divide-y">
               {notifications.map((notification) => (
-                <div
+                <NotificationItem
                   key={notification.id}
-                  className={`p-3 cursor-pointer hover-elevate ${!notification.isRead ? 'bg-muted/50' : ''}`}
-                  onClick={() => handleNotificationClick(notification)}
-                  data-testid={`notification-${notification.id}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`rounded-full p-2 ${!notification.isRead ? 'bg-primary/10 text-primary' : 'bg-muted'}`}>
-                      {getNotificationIcon(notification.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm truncate">{notification.title}</p>
-                        {!notification.isRead && (
-                          <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {notification.message}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                  notification={notification}
+                  onClick={handleNotificationClick}
+                />
               ))}
             </div>
           ) : (
@@ -209,4 +237,4 @@ export function NotificationBell() {
       </PopoverContent>
     </Popover>
   );
-}
+});

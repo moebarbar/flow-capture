@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, memo, useMemo, ChangeEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert";
 import { 
   Send, Check, X, Edit, Clock, CheckCircle, 
-  XCircle, AlertCircle 
+  XCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -57,7 +57,65 @@ interface ApprovalWorkflowPanelProps {
   currentStatus: string;
 }
 
-export function ApprovalWorkflowPanel({ 
+const getStatusConfig = (status: string) => {
+  switch (status) {
+    case 'approved':
+      return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50', label: 'Approved' };
+    case 'rejected':
+      return { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', label: 'Rejected' };
+    case 'revision_requested':
+      return { icon: Edit, color: 'text-amber-500', bg: 'bg-amber-50', label: 'Revision Requested' };
+    default:
+      return { icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50', label: 'Pending' };
+  }
+};
+
+const ApprovalHistoryItem = memo(function ApprovalHistoryItem({ 
+  approval,
+  onReview 
+}: { 
+  approval: GuideApproval;
+  onReview: (approval: GuideApproval) => void;
+}) {
+  const config = useMemo(() => getStatusConfig(approval.status), [approval.status]);
+  const formattedDate = useMemo(
+    () => format(new Date(approval.createdAt), "MMM d, yyyy"),
+    [approval.createdAt]
+  );
+  const StatusIcon = config.icon;
+
+  const handleReview = useCallback(() => onReview(approval), [onReview, approval]);
+
+  return (
+    <div 
+      className={`p-3 rounded-md border ${config.bg}`}
+      data-testid={`approval-history-${approval.id}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <StatusIcon className={`h-4 w-4 ${config.color}`} />
+          <span className="text-sm font-medium">{config.label}</span>
+        </div>
+        <span className="text-xs text-muted-foreground">{formattedDate}</span>
+      </div>
+      {approval.requestNotes && (
+        <p className="text-xs text-muted-foreground mt-1">Request: {approval.requestNotes}</p>
+      )}
+      {approval.reviewNotes && (
+        <p className="text-xs text-muted-foreground mt-1">Review: {approval.reviewNotes}</p>
+      )}
+      {approval.status === 'pending' && (
+        <div className="flex gap-2 mt-2">
+          <Button size="sm" onClick={handleReview} data-testid={`button-review-${approval.id}`}>
+            Review
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+export const ApprovalWorkflowPanel = memo(function ApprovalWorkflowPanel({ 
   guideId, 
   workspaceId, 
   guideTitle,
@@ -73,11 +131,13 @@ export function ApprovalWorkflowPanel({
   const { data: approvalsData } = useQuery<{ data: GuideApproval[] }>({
     queryKey: ['/api/workspaces', workspaceId, 'approvals'],
     enabled: workspaceId > 0,
+    staleTime: 30000,
   });
 
   const { data: membersData } = useQuery<{ members: WorkspaceMember[] }>({
     queryKey: ['/api/workspaces', workspaceId, 'team-dashboard'],
     enabled: workspaceId > 0,
+    staleTime: 60000,
   });
 
   const requestApprovalMutation = useMutation({
@@ -108,58 +168,77 @@ export function ApprovalWorkflowPanel({
     },
   });
 
-  const resetRequestForm = () => {
+  const resetRequestForm = useCallback(() => {
     setSelectedReviewer("");
     setRequestNotes("");
-  };
+  }, []);
 
-  const resetReviewForm = () => {
+  const resetReviewForm = useCallback(() => {
     setReviewNotes("");
     setSelectedApproval(null);
-  };
+  }, []);
 
-  const handleRequestApproval = () => {
+  const handleRequestApproval = useCallback(() => {
     requestApprovalMutation.mutate({
       reviewerId: selectedReviewer || undefined,
       requestNotes: requestNotes || undefined,
     });
-  };
+  }, [selectedReviewer, requestNotes, requestApprovalMutation]);
 
-  const handleReview = (status: 'approved' | 'rejected' | 'revision_requested') => {
+  const handleReview = useCallback((status: 'approved' | 'rejected' | 'revision_requested') => {
     if (!selectedApproval) return;
     reviewApprovalMutation.mutate({
       id: selectedApproval.id,
       status,
       reviewNotes: reviewNotes || undefined,
     });
-  };
+  }, [selectedApproval, reviewNotes, reviewApprovalMutation]);
 
-  const guideApprovals = approvalsData?.data?.filter(a => a.guideId === guideId) || [];
-  const pendingApproval = guideApprovals.find(a => a.status === 'pending');
-  const members = membersData?.members || [];
-  const adminsAndOwners = members.filter(m => ['owner', 'admin'].includes(m.role));
+  const handleOpenReview = useCallback((approval: GuideApproval) => {
+    setSelectedApproval(approval);
+    setIsReviewDialogOpen(true);
+  }, []);
 
-  const getMemberName = (userId: string) => {
+  const handleRequestNotesChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => setRequestNotes(e.target.value),
+    []
+  );
+
+  const handleReviewNotesChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => setReviewNotes(e.target.value),
+    []
+  );
+
+  const guideApprovals = useMemo(
+    () => approvalsData?.data?.filter(a => a.guideId === guideId) || [],
+    [approvalsData?.data, guideId]
+  );
+
+  const pendingApproval = useMemo(
+    () => guideApprovals.find(a => a.status === 'pending'),
+    [guideApprovals]
+  );
+
+  const members = useMemo(() => membersData?.members || [], [membersData?.members]);
+  
+  const adminsAndOwners = useMemo(
+    () => members.filter(m => ['owner', 'admin'].includes(m.role)),
+    [members]
+  );
+
+  const getMemberName = useCallback((userId: string) => {
     const member = members.find(m => m.userId === userId);
     if (!member) return 'Unknown';
     if (member.user.firstName && member.user.lastName) {
       return `${member.user.firstName} ${member.user.lastName}`;
     }
     return member.user.email;
-  };
+  }, [members]);
 
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50', label: 'Approved' };
-      case 'rejected':
-        return { icon: XCircle, color: 'text-red-500', bg: 'bg-red-50', label: 'Rejected' };
-      case 'revision_requested':
-        return { icon: Edit, color: 'text-amber-500', bg: 'bg-amber-50', label: 'Revision Requested' };
-      default:
-        return { icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50', label: 'Pending' };
-    }
-  };
+  const reviewerName = useMemo(() => {
+    if (!pendingApproval?.reviewerId) return null;
+    return getMemberName(pendingApproval.reviewerId);
+  }, [pendingApproval?.reviewerId, getMemberName]);
 
   return (
     <div className="space-y-4">
@@ -172,9 +251,7 @@ export function ApprovalWorkflowPanel({
           <Clock className="h-4 w-4" />
           <AlertDescription>
             This guide is pending approval.
-            {pendingApproval.reviewerId && (
-              <span> Assigned to: {getMemberName(pendingApproval.reviewerId)}</span>
-            )}
+            {reviewerName && <span> Assigned to: {reviewerName}</span>}
           </AlertDescription>
         </Alert>
       ) : currentStatus === 'draft' ? (
@@ -204,9 +281,7 @@ export function ApprovalWorkflowPanel({
                       <SelectItem key={member.userId} value={member.userId}>
                         <div className="flex items-center gap-2">
                           <span>{getMemberName(member.userId)}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {member.role}
-                          </Badge>
+                          <Badge variant="outline" className="text-xs">{member.role}</Badge>
                         </div>
                       </SelectItem>
                     ))}
@@ -219,7 +294,7 @@ export function ApprovalWorkflowPanel({
                 <Textarea
                   placeholder="Add any context or notes for the reviewer..."
                   value={requestNotes}
-                  onChange={(e) => setRequestNotes(e.target.value)}
+                  onChange={handleRequestNotesChange}
                   className="resize-none"
                   data-testid="input-request-notes"
                 />
@@ -246,51 +321,13 @@ export function ApprovalWorkflowPanel({
       {guideApprovals.length > 0 && (
         <div className="space-y-2">
           <span className="text-xs font-medium text-muted-foreground">Approval History</span>
-          {guideApprovals.map((approval) => {
-            const config = getStatusConfig(approval.status);
-            const StatusIcon = config.icon;
-            return (
-              <div 
-                key={approval.id} 
-                className={`p-3 rounded-md border ${config.bg}`}
-                data-testid={`approval-history-${approval.id}`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <StatusIcon className={`h-4 w-4 ${config.color}`} />
-                    <span className="text-sm font-medium">{config.label}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {format(new Date(approval.createdAt), "MMM d, yyyy")}
-                  </span>
-                </div>
-                {approval.requestNotes && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Request: {approval.requestNotes}
-                  </p>
-                )}
-                {approval.reviewNotes && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Review: {approval.reviewNotes}
-                  </p>
-                )}
-                {approval.status === 'pending' && (
-                  <div className="flex gap-2 mt-2">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setSelectedApproval(approval);
-                        setIsReviewDialogOpen(true);
-                      }}
-                      data-testid={`button-review-${approval.id}`}
-                    >
-                      Review
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {guideApprovals.map((approval) => (
+            <ApprovalHistoryItem 
+              key={approval.id} 
+              approval={approval} 
+              onReview={handleOpenReview}
+            />
+          ))}
         </div>
       )}
 
@@ -308,7 +345,7 @@ export function ApprovalWorkflowPanel({
               <Textarea
                 placeholder="Add feedback or notes..."
                 value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
+                onChange={handleReviewNotesChange}
                 className="resize-none"
                 data-testid="input-review-notes"
               />
@@ -346,4 +383,4 @@ export function ApprovalWorkflowPanel({
       </Dialog>
     </div>
   );
-}
+});

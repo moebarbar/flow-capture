@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, memo, useMemo, ChangeEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +58,100 @@ interface StepAssignmentPanelProps {
   workspaceId: number;
 }
 
-export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssignmentPanelProps) {
+const StatusIcon = memo(function StatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case 'completed':
+      return <Check className="h-3 w-3 text-green-500" />;
+    case 'in_progress':
+      return <Clock className="h-3 w-3 text-blue-500" />;
+    case 'overdue':
+      return <AlertCircle className="h-3 w-3 text-red-500" />;
+    default:
+      return <Clock className="h-3 w-3 text-amber-500" />;
+  }
+});
+
+const AssignmentItem = memo(function AssignmentItem({ 
+  assignment,
+  memberName,
+  onComplete,
+  onDelete,
+  isUpdating,
+  isDeleting
+}: { 
+  assignment: StepAssignment;
+  memberName: string;
+  onComplete: () => void;
+  onDelete: () => void;
+  isUpdating: boolean;
+  isDeleting: boolean;
+}) {
+  const formattedDue = useMemo(() => {
+    if (!assignment.dueDate) return null;
+    return format(new Date(assignment.dueDate), "MMM d");
+  }, [assignment.dueDate]);
+
+  const initials = useMemo(
+    () => assignment.assigneeId.substring(0, 2).toUpperCase(),
+    [assignment.assigneeId]
+  );
+
+  return (
+    <div 
+      className="flex items-center justify-between gap-2 p-2 rounded-md border"
+      data-testid={`assignment-${assignment.id}`}
+    >
+      <div className="flex items-center gap-2">
+        <Avatar className="h-6 w-6">
+          <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+        </Avatar>
+        <div>
+          <p className="text-sm font-medium">{memberName}</p>
+          {formattedDue && (
+            <p className="text-xs text-muted-foreground">Due {formattedDue}</p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-1">
+        <Badge 
+          variant={assignment.status === 'completed' ? 'default' : 'outline'}
+          className="text-xs"
+        >
+          <StatusIcon status={assignment.status} />
+          <span className="ml-1">{assignment.status}</span>
+        </Badge>
+        {assignment.status !== 'completed' && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={onComplete}
+            disabled={isUpdating}
+            data-testid={`button-complete-${assignment.id}`}
+          >
+            <Check className="h-3 w-3" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-destructive"
+          onClick={onDelete}
+          disabled={isDeleting}
+          data-testid={`button-delete-${assignment.id}`}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+});
+
+export const StepAssignmentPanel = memo(function StepAssignmentPanel({ 
+  stepId, 
+  guideId, 
+  workspaceId 
+}: StepAssignmentPanelProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string>("");
   const [dueDate, setDueDate] = useState<Date | undefined>();
@@ -67,11 +160,13 @@ export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssign
   const { data: assignmentsData } = useQuery<{ data: StepAssignment[] }>({
     queryKey: ['/api/guides', guideId, 'assignments'],
     enabled: guideId > 0,
+    staleTime: 30000,
   });
 
   const { data: membersData } = useQuery<{ members: WorkspaceMember[] }>({
     queryKey: ['/api/workspaces', workspaceId, 'team-dashboard'],
     enabled: workspaceId > 0,
+    staleTime: 60000,
   });
 
   const createAssignmentMutation = useMutation({
@@ -111,45 +206,46 @@ export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssign
     },
   });
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setSelectedUser("");
     setDueDate(undefined);
     setNotes("");
-  };
+  }, []);
 
-  const handleCreateAssignment = () => {
+  const handleCreateAssignment = useCallback(() => {
     if (!selectedUser) return;
     createAssignmentMutation.mutate({
       assigneeId: selectedUser,
       dueDate: dueDate?.toISOString(),
       notes: notes || undefined,
     });
-  };
+  }, [selectedUser, dueDate, notes, createAssignmentMutation]);
 
-  const stepAssignments = assignmentsData?.data?.filter(a => a.stepId === stepId) || [];
-  const members = membersData?.members || [];
+  const handleNotesChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value),
+    []
+  );
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <Check className="h-3 w-3 text-green-500" />;
-      case 'in_progress':
-        return <Clock className="h-3 w-3 text-blue-500" />;
-      case 'overdue':
-        return <AlertCircle className="h-3 w-3 text-red-500" />;
-      default:
-        return <Clock className="h-3 w-3 text-amber-500" />;
-    }
-  };
+  const stepAssignments = useMemo(
+    () => assignmentsData?.data?.filter(a => a.stepId === stepId) || [],
+    [assignmentsData?.data, stepId]
+  );
 
-  const getMemberName = (userId: string) => {
+  const members = useMemo(() => membersData?.members || [], [membersData?.members]);
+
+  const getMemberName = useCallback((userId: string) => {
     const member = members.find(m => m.userId === userId);
     if (!member) return 'Unknown';
     if (member.user.firstName && member.user.lastName) {
       return `${member.user.firstName} ${member.user.lastName}`;
     }
     return member.user.email;
-  };
+  }, [members]);
+
+  const formattedDueDate = useMemo(
+    () => dueDate ? format(dueDate, "PPP") : "Pick a date",
+    [dueDate]
+  );
 
   return (
     <div className="space-y-3">
@@ -178,9 +274,7 @@ export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssign
                       <SelectItem key={member.userId} value={member.userId}>
                         <div className="flex items-center gap-2">
                           <span>{getMemberName(member.userId)}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {member.role}
-                          </Badge>
+                          <Badge variant="outline" className="text-xs">{member.role}</Badge>
                         </div>
                       </SelectItem>
                     ))}
@@ -198,7 +292,7 @@ export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssign
                       data-testid="button-select-date"
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dueDate ? format(dueDate, "PPP") : "Pick a date"}
+                      {formattedDueDate}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -217,7 +311,7 @@ export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssign
                 <Textarea
                   placeholder="Add any instructions or context..."
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
+                  onChange={handleNotesChange}
                   className="resize-none"
                   data-testid="input-assignment-notes"
                 />
@@ -239,56 +333,15 @@ export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssign
       {stepAssignments.length > 0 ? (
         <div className="space-y-2">
           {stepAssignments.map((assignment) => (
-            <div 
-              key={assignment.id} 
-              className="flex items-center justify-between gap-2 p-2 rounded-md border"
-              data-testid={`assignment-${assignment.id}`}
-            >
-              <div className="flex items-center gap-2">
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-xs">
-                    {assignment.assigneeId.substring(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm font-medium">{getMemberName(assignment.assigneeId)}</p>
-                  {assignment.dueDate && (
-                    <p className="text-xs text-muted-foreground">
-                      Due {format(new Date(assignment.dueDate), "MMM d")}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <Badge 
-                  variant={assignment.status === 'completed' ? 'default' : 'outline'}
-                  className="text-xs"
-                >
-                  {getStatusIcon(assignment.status)}
-                  <span className="ml-1">{assignment.status}</span>
-                </Badge>
-                {assignment.status !== 'completed' && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => updateAssignmentMutation.mutate({ id: assignment.id, status: 'completed' })}
-                    data-testid={`button-complete-${assignment.id}`}
-                  >
-                    <Check className="h-3 w-3" />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-destructive"
-                  onClick={() => deleteAssignmentMutation.mutate(assignment.id)}
-                  data-testid={`button-delete-${assignment.id}`}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
+            <AssignmentItem
+              key={assignment.id}
+              assignment={assignment}
+              memberName={getMemberName(assignment.assigneeId)}
+              onComplete={() => updateAssignmentMutation.mutate({ id: assignment.id, status: 'completed' })}
+              onDelete={() => deleteAssignmentMutation.mutate(assignment.id)}
+              isUpdating={updateAssignmentMutation.isPending}
+              isDeleting={deleteAssignmentMutation.isPending}
+            />
           ))}
         </div>
       ) : (
@@ -298,4 +351,4 @@ export function StepAssignmentPanel({ stepId, guideId, workspaceId }: StepAssign
       )}
     </div>
   );
-}
+});

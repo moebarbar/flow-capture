@@ -282,15 +282,17 @@ export default function GuideEditor() {
     toast({ title: "Downloading HTML document..." });
   };
 
-  const handleDownloadPdf = () => {
-    // Open a printable version that user can print to PDF
-    const printWindow = window.open(`/api/guides/${guideId}/export/html`, '_blank');
-    if (printWindow) {
-      printWindow.onload = () => {
-        setTimeout(() => printWindow.print(), 500);
-      };
+  const handleDownloadPdf = async () => {
+    if (!guide || !steps) return;
+    toast({ title: "Generating PDF..." });
+    try {
+      const { exportGuideToPdf } = await import("@/lib/pdfExport");
+      await exportGuideToPdf(guide, steps);
+      toast({ title: "PDF downloaded successfully" });
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast({ title: "Failed to generate PDF", variant: "destructive" });
     }
-    toast({ title: "Opening print dialog for PDF..." });
   };
 
   const handleCopyEmbedCode = () => {

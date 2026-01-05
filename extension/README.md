@@ -124,7 +124,7 @@ extension/
 │   ├── content.css       # Content script styles
 │   └── config.js         # Configuration constants
 ├── scripts/
-│   └── build.js          # Build script for Chrome Web Store
+│   └── build.cjs         # Build script for Chrome Web Store
 ├── dist/                  # Build output (gitignored)
 │   └── flowcapture-extension.zip
 └── icons/

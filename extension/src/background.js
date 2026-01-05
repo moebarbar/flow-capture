@@ -81,9 +81,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.type === 'ELEMENT_CAPTURE_CANCELLED') {
     sendResponse({ success: true });
+  } else if (message.type === 'CAPTURE_PAGE_SCREENSHOT') {
+    // Capture screenshot for Screenshot Studio
+    capturePageScreenshot(sender.tab)
+      .then(screenshot => sendResponse({ screenshot }))
+      .catch(err => sendResponse({ error: err.message }));
+    return true;
   }
   return true;
 });
+
+async function capturePageScreenshot(tab) {
+  try {
+    const screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
+    return screenshot;
+  } catch (e) {
+    console.error('Failed to capture screenshot:', e);
+    throw e;
+  }
+}
 
 async function startElementCaptureOnActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

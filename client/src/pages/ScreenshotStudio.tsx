@@ -2,13 +2,16 @@ import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, Image as ImageIcon, Sparkles } from "lucide-react";
+import { Upload, Image as ImageIcon, Sparkles, Chrome, Camera } from "lucide-react";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
 import { motion, AnimatePresence } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ScreenshotStudio() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isWaitingForCapture, setIsWaitingForCapture] = useState(false);
+  const { toast } = useToast();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -52,6 +55,35 @@ export default function ScreenshotStudio() {
     return () => document.removeEventListener("paste", handlePaste);
   }, [handlePaste]);
 
+  // Listen for screenshots from Chrome extension
+  useEffect(() => {
+    const handleExtensionMessage = (event: MessageEvent) => {
+      if (event.data?.type === "FLOWCAPTURE_SCREENSHOT_CAPTURED" && event.data?.screenshot) {
+        setImageUrl(event.data.screenshot);
+        setIsWaitingForCapture(false);
+        toast({ title: "Screenshot captured from extension" });
+      }
+    };
+
+    window.addEventListener("message", handleExtensionMessage);
+    return () => window.removeEventListener("message", handleExtensionMessage);
+  }, [toast]);
+
+  const handleCaptureViaExtension = () => {
+    // Send message to extension popup or content script
+    window.postMessage({ type: "FLOWCAPTURE_REQUEST_SCREENSHOT" }, "*");
+    setIsWaitingForCapture(true);
+    toast({ 
+      title: "Ready to capture",
+      description: "Click the FlowCapture extension icon or use Ctrl+Shift+S to capture a screenshot" 
+    });
+    
+    // Auto-timeout after 30 seconds
+    setTimeout(() => {
+      setIsWaitingForCapture(false);
+    }, 30000);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container max-w-6xl mx-auto p-6">
@@ -85,7 +117,7 @@ export default function ScreenshotStudio() {
                   isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50"
                 }`}
               >
-                <CardContent className="flex flex-col items-center justify-center py-20">
+                <CardContent className="flex flex-col items-center justify-center py-16">
                   <input {...getInputProps()} data-testid="input-file" />
                   <div className={`p-4 rounded-full mb-4 transition-colors ${
                     isDragging ? "bg-primary/20" : "bg-muted"
@@ -97,16 +129,38 @@ export default function ScreenshotStudio() {
                     )}
                   </div>
                   <h2 className="text-xl font-medium mb-2">
-                    {isDragging ? "Drop your screenshot" : "Upload a screenshot"}
+                    {isDragging ? "Drop your screenshot" : "Add a screenshot"}
                   </h2>
                   <p className="text-muted-foreground text-center max-w-md mb-6">
-                    Drag and drop your screenshot here, paste from clipboard, or click to browse
+                    Capture directly from your browser, drag and drop, paste from clipboard, or upload
                   </p>
-                  <Button onClick={open} size="lg" data-testid="button-browse">
-                    <Upload className="w-4 h-4 mr-2" />
-                    Browse Files
-                  </Button>
-                  <p className="text-sm text-muted-foreground mt-4">
+                  
+                  <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                    <Button 
+                      onClick={handleCaptureViaExtension} 
+                      size="lg" 
+                      disabled={isWaitingForCapture}
+                      data-testid="button-capture-extension"
+                    >
+                      {isWaitingForCapture ? (
+                        <>
+                          <Camera className="w-4 h-4 mr-2 animate-pulse" />
+                          Waiting for capture...
+                        </>
+                      ) : (
+                        <>
+                          <Chrome className="w-4 h-4 mr-2" />
+                          Capture via Extension
+                        </>
+                      )}
+                    </Button>
+                    <Button onClick={open} size="lg" variant="outline" data-testid="button-browse">
+                      <Upload className="w-4 h-4 mr-2" />
+                      Browse Files
+                    </Button>
+                  </div>
+                  
+                  <p className="text-sm text-muted-foreground">
                     Supports PNG, JPG, WebP, GIF
                   </p>
                 </CardContent>

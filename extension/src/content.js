@@ -26,6 +26,26 @@ if (window.__flowcaptureInitialized) {
     }
   }
 
+  // Listen for messages from the web page (for Screenshot Studio integration)
+  window.addEventListener('message', async (event) => {
+    if (event.data?.type === 'FLOWCAPTURE_REQUEST_SCREENSHOT') {
+      console.log('FlowCapture: Received screenshot request from page');
+      try {
+        // Request screenshot from background script
+        const response = await chrome.runtime.sendMessage({ type: 'CAPTURE_PAGE_SCREENSHOT' });
+        if (response?.screenshot) {
+          // Send screenshot back to the page
+          window.postMessage({ 
+            type: 'FLOWCAPTURE_SCREENSHOT_CAPTURED', 
+            screenshot: response.screenshot 
+          }, '*');
+        }
+      } catch (e) {
+        console.error('FlowCapture: Failed to capture screenshot:', e);
+      }
+    }
+  });
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Content script received message:', message.type);
     

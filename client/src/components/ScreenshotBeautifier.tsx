@@ -65,9 +65,9 @@ export function ScreenshotBeautifier({ imageUrl, onSave, onAIAnalysis, className
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedBackground, setSelectedBackground] = useState<BackgroundTemplate>(backgroundTemplates[0]);
   const [deviceMockup, setDeviceMockup] = useState<DeviceMockup>("browser");
-  const [padding, setPadding] = useState(60);
-  const [borderRadius, setBorderRadius] = useState(12);
-  const [shadowIntensity, setShadowIntensity] = useState(30);
+  const [padding, setPadding] = useState(80);
+  const [borderRadius, setBorderRadius] = useState(24);
+  const [shadowIntensity, setShadowIntensity] = useState(50);
   const [scale, setScale] = useState(85);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
@@ -346,9 +346,9 @@ export function ScreenshotBeautifier({ imageUrl, onSave, onAIAnalysis, className
   const handleReset = () => {
     setSelectedBackground(backgroundTemplates[0]);
     setDeviceMockup("browser");
-    setPadding(60);
-    setBorderRadius(12);
-    setShadowIntensity(30);
+    setPadding(80);
+    setBorderRadius(24);
+    setShadowIntensity(50);
     setScale(85);
   };
 
@@ -477,7 +477,7 @@ export function ScreenshotBeautifier({ imageUrl, onSave, onAIAnalysis, className
                   value={[borderRadius]}
                   onValueChange={([v]) => setBorderRadius(v)}
                   min={0}
-                  max={32}
+                  max={48}
                   step={2}
                   data-testid="slider-radius"
                 />
@@ -492,7 +492,7 @@ export function ScreenshotBeautifier({ imageUrl, onSave, onAIAnalysis, className
                   value={[shadowIntensity]}
                   onValueChange={([v]) => setShadowIntensity(v)}
                   min={0}
-                  max={60}
+                  max={80}
                   step={5}
                   data-testid="slider-shadow"
                 />

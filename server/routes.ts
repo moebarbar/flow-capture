@@ -16,6 +16,8 @@ import crypto from "crypto";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { emailService } from "./services/emailService";
+import { billingService } from "./services/billingService";
+import { invitationService } from "./services/invitationService";
 import { db } from "./db"; 
 
 export async function registerRoutes(
@@ -889,6 +891,80 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     }
   });
 
+  app.get('/api/billing/plan', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const planInfo = await billingService.getUserPlan(userId);
+      res.json(planInfo);
+    } catch (error: any) {
+      console.error('Get plan error:', error);
+      res.status(500).json({ message: error.message || 'Failed to get plan info' });
+    }
+  });
+
+  app.post('/api/billing/checkout/pro', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const dbUser = await storage.getUser(userId);
+      if (!dbUser) return res.status(404).json({ message: 'User not found' });
+
+      const additionalSeats = parseInt(req.body.additionalSeats) || 0;
+      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      
+      const session = await billingService.createProCheckoutSession(
+        userId,
+        dbUser.email || user.claims.email || `${userId}@example.com`,
+        `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        `${baseUrl}/pricing`,
+        additionalSeats
+      );
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error('Pro checkout error:', error);
+      res.status(500).json({ message: error.message || 'Checkout failed' });
+    }
+  });
+
+  app.post('/api/billing/seats', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const { newSeatCount } = req.body;
+      if (typeof newSeatCount !== 'number' || newSeatCount < 1) {
+        return res.status(400).json({ message: 'Invalid seat count' });
+      }
+
+      const result = await billingService.updateSeatQuantity(userId, newSeatCount);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Seat update error:', error);
+      res.status(500).json({ message: error.message || 'Failed to update seats' });
+    }
+  });
+
+  app.get('/api/billing/can-add-member', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const result = await billingService.canAddMember(userId);
+      res.json(result);
+    } catch (error: any) {
+      console.error('Can add member error:', error);
+      res.status(500).json({ message: error.message || 'Failed to check member limits' });
+    }
+  });
+
   // === ADMIN ENDPOINTS ===
   const requireAdmin = async (req: any, res: any, next: any) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
@@ -1620,6 +1696,120 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     } catch (err) {
       console.error("Update workspace settings error:", err);
       res.status(500).json({ message: "Failed to update settings" });
+    }
+  });
+
+  app.post('/api/workspaces/:id/invitations', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const workspaceId = Number(req.params.id);
+
+    try {
+      const { email, role } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: 'Email is required' });
+      }
+
+      const invitation = await invitationService.createInvitation(
+        workspaceId,
+        email,
+        userId,
+        role || 'editor'
+      );
+
+      res.status(201).json({ success: true, invitation });
+    } catch (err: any) {
+      console.error("Create invitation error:", err);
+      if (err.message.startsWith('UPGRADE_REQUIRED:') || err.message.startsWith('SEAT_LIMIT:')) {
+        return res.status(402).json({ message: err.message });
+      }
+      res.status(400).json({ message: err.message || 'Failed to create invitation' });
+    }
+  });
+
+  app.get('/api/workspaces/:id/invitations', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const workspaceId = Number(req.params.id);
+
+    try {
+      const invitations = await invitationService.getWorkspaceInvitations(workspaceId);
+      res.json(invitations);
+    } catch (err) {
+      console.error("Get invitations error:", err);
+      res.status(500).json({ message: 'Failed to get invitations' });
+    }
+  });
+
+  app.delete('/api/invitations/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const invitationId = Number(req.params.id);
+
+    try {
+      await invitationService.cancelInvitation(invitationId, userId);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Cancel invitation error:", err);
+      res.status(400).json({ message: err.message || 'Failed to cancel invitation' });
+    }
+  });
+
+  app.get('/api/invitations/:id', async (req, res) => {
+    const invitationId = Number(req.params.id);
+    const token = req.query.token as string;
+
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+
+    try {
+      const invitation = await invitationService.getInvitationByToken(invitationId, token);
+      if (!invitation) {
+        return res.status(404).json({ message: 'Invitation not found or invalid' });
+      }
+      res.json(invitation);
+    } catch (err) {
+      console.error("Get invitation error:", err);
+      res.status(500).json({ message: 'Failed to get invitation' });
+    }
+  });
+
+  app.post('/api/invitations/:id/accept', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const invitationId = Number(req.params.id);
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+
+    try {
+      const result = await invitationService.acceptInvitation(invitationId, token, userId);
+      res.json(result);
+    } catch (err: any) {
+      console.error("Accept invitation error:", err);
+      res.status(400).json({ message: err.message || 'Failed to accept invitation' });
+    }
+  });
+
+  app.post('/api/invitations/:id/decline', async (req, res) => {
+    const invitationId = Number(req.params.id);
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+
+    try {
+      await invitationService.declineInvitation(invitationId, token);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Decline invitation error:", err);
+      res.status(400).json({ message: err.message || 'Failed to decline invitation' });
     }
   });
 

@@ -936,6 +936,137 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8 bg-muted/30 border-y border-border">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            className="text-center mb-16"
+            {...fadeInUp}
+          >
+            <Badge variant="secondary" className="rounded-full px-4 py-1.5 mb-6 bg-brand-100 text-brand-700 border border-brand-200 dark:bg-brand-900/30 dark:text-brand-300 dark:border-brand-800">
+              <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+              Simple Pricing
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">Choose Your Plan</h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Start free and scale as your team grows. No hidden fees, cancel anytime.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Free Plan */}
+            <motion.div {...fadeInUp}>
+              <Card className="p-8 h-full flex flex-col relative overflow-visible">
+                <div className="mb-6">
+                  <h3 className="text-2xl font-bold font-display mb-2">Free</h3>
+                  <p className="text-muted-foreground">Perfect for individuals getting started</p>
+                </div>
+                <div className="mb-6">
+                  <span className="text-5xl font-bold font-display">$0</span>
+                  <span className="text-muted-foreground ml-2">/month</span>
+                </div>
+                <ul className="space-y-4 mb-8 flex-1">
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>1 workspace</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>1 user</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Unlimited guides</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Chrome extension</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Screenshot capture</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Basic export options</span>
+                  </li>
+                </ul>
+                <Button size="lg" variant="outline" className="w-full rounded-full" asChild>
+                  <a href="/api/login" data-testid="button-pricing-free">Get Started Free</a>
+                </Button>
+              </Card>
+            </motion.div>
+
+            {/* Paid Plan */}
+            <motion.div {...fadeInUp} transition={{ delay: 0.1 }}>
+              <Card className="p-8 h-full flex flex-col relative overflow-visible border-2 border-brand-500">
+                <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white rounded-full px-4">
+                  Most Popular
+                </Badge>
+                <div className="mb-6">
+                  <h3 className="text-2xl font-bold font-display mb-2">Pro</h3>
+                  <p className="text-muted-foreground">For teams and growing organizations</p>
+                </div>
+                <div className="mb-6">
+                  <span className="text-5xl font-bold font-display">$23</span>
+                  <span className="text-muted-foreground ml-2">/month</span>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    + $7/month per additional user
+                  </div>
+                </div>
+                <ul className="space-y-4 mb-8 flex-1">
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Unlimited workspaces</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>1 user included, add more anytime</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Unlimited guides</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>AI-powered descriptions</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Screenshot beautification</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Team collaboration</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Analytics dashboard</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                    <span>Priority support</span>
+                  </li>
+                </ul>
+                <Button size="lg" className="w-full rounded-full bg-brand-600 text-white" asChild>
+                  <a href="/api/login" data-testid="button-pricing-pro">Start Pro Trial</a>
+                </Button>
+              </Card>
+            </motion.div>
+          </div>
+
+          <motion.div 
+            className="text-center mt-12"
+            {...fadeInUp}
+          >
+            <p className="text-muted-foreground">
+              Need a custom enterprise solution?{' '}
+              <a href="#enterprise" className="text-brand-600 font-medium hover:underline">Contact our sales team</a>
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Final CTA Section */}
       <section className="py-24 bg-gradient-to-br from-brand-600 to-brand-700 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMtOS45NDEgMC0xOCA4LjA1OS0xOCAxOHM4LjA1OSAxOCAxOCAxOGM5Ljk0MSAwIDE4LTguMDU5IDE4LTE4cy04LjA1OS0xOC0xOC0xOHptMCAzMmMtNy43MzIgMC0xNC02LjI2OC0xNC0xNHM2LjI2OC0xNCAxNC0xNHMxNCA2LjI2OCAxNCAxNC02LjI2OCAxNC0xNCAxNHoiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjA1Ii8+PC9nPjwvc3ZnPg==')] opacity-30" />

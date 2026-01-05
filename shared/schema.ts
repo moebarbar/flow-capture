@@ -234,7 +234,62 @@ export const workspaceSettings = pgTable("workspace_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// === SUBSCRIPTION & BILLING ===
+
+export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "inactive", "trialing", "past_due", "canceled", "unpaid"]);
+export const invitationStatusEnum = pgEnum("invitation_status", ["pending", "accepted", "declined", "expired"]);
+
+// User subscriptions - Track user plan and Stripe subscription
+export const userSubscriptions = pgTable("user_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull().unique(),
+  plan: text("plan").default("free").notNull(), // 'free' or 'pro'
+  status: subscriptionStatusEnum("status").default("active").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripeBasePriceId: text("stripe_base_price_id"), // $23/month base
+  stripeSeatPriceId: text("stripe_seat_price_id"), // $7/user add-on
+  seatQuantity: integer("seat_quantity").default(1).notNull(), // Number of seats (including owner)
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Workspace invitations - Invite users to workspaces
+export const workspaceInvitations = pgTable("workspace_invitations", {
+  id: serial("id").primaryKey(),
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  email: text("email").notNull(), // Email of invited user
+  role: workspaceRoleEnum("role").default("editor").notNull(),
+  invitedById: text("invited_by_id").references(() => users.id).notNull(),
+  tokenHash: text("token_hash").notNull(), // Hashed invitation token
+  status: invitationStatusEnum("status").default("pending").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // === RELATIONS ===
+
+export const userSubscriptionsRelations = relations(userSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [userSubscriptions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const workspaceInvitationsRelations = relations(workspaceInvitations, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [workspaceInvitations.workspaceId],
+    references: [workspaces.id],
+  }),
+  invitedBy: one(users, {
+    fields: [workspaceInvitations.invitedById],
+    references: [users.id],
+  }),
+}));
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   owner: one(users, {
@@ -372,6 +427,18 @@ export const insertEmailSettingsSchema = createInsertSchema(emailSettings).omit(
   updatedAt: true
 });
 
+export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertWorkspaceInvitationSchema = createInsertSchema(workspaceInvitations).omit({
+  id: true,
+  acceptedAt: true,
+  createdAt: true
+});
+
 // === TYPES ===
 
 export type Workspace = typeof workspaces.$inferSelect;
@@ -415,6 +482,12 @@ export type InsertAuthToken = z.infer<typeof insertAuthTokenSchema>;
 
 export type EmailSettingsType = typeof emailSettings.$inferSelect;
 export type InsertEmailSettings = z.infer<typeof insertEmailSettingsSchema>;
+
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
+export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;
+
+export type WorkspaceInvitation = typeof workspaceInvitations.$inferSelect;
+export type InsertWorkspaceInvitation = z.infer<typeof insertWorkspaceInvitationSchema>;
 
 // API Request/Response Types
 export type CreateWorkspaceRequest = InsertWorkspace;

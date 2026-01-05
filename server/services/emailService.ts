@@ -153,6 +153,16 @@ class EmailService {
       .where(eq(authTokens.id, tokenId));
   }
 
+  // Send email using SendGrid (public method for generic emails)
+  async sendGenericEmail(options: {
+    to: string;
+    subject: string;
+    html: string;
+    text?: string;
+  }): Promise<boolean> {
+    return this.sendEmail(options.to, options.subject, options.html, options.text);
+  }
+
   // Send email using SendGrid
   private async sendEmail(
     to: string,

@@ -12,6 +12,7 @@ export * from "./models/chat";
 export const workspaceRoleEnum = pgEnum("workspace_role", ["owner", "admin", "editor", "viewer"]);
 export const guideStatusEnum = pgEnum("guide_status", ["draft", "published", "archived"]);
 export const stepTypeEnum = pgEnum("step_type", ["click", "input", "navigation", "wait", "scroll", "custom"]);
+export const blogPostStatusEnum = pgEnum("blog_post_status", ["draft", "published", "archived"]);
 
 // === TABLE DEFINITIONS ===
 
@@ -68,6 +69,20 @@ export const steps = pgTable("steps", {
   url: text("url"), // Page URL where step happens
   metadata: jsonb("metadata"), // Extra data like element attributes, coordinates
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const blogPosts = pgTable("blog_posts", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").unique().notNull(),
+  content: text("content").notNull(),
+  excerpt: text("excerpt"),
+  featuredImageUrl: text("featured_image_url"),
+  status: blogPostStatusEnum("status").default("draft").notNull(),
+  authorId: text("author_id").references(() => users.id).notNull(),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // === RELATIONS ===
@@ -132,6 +147,13 @@ export const stepsRelations = relations(steps, ({ one }) => ({
   }),
 }));
 
+export const blogPostsRelations = relations(blogPosts, ({ one }) => ({
+  author: one(users, {
+    fields: [blogPosts.authorId],
+    references: [users.id],
+  }),
+}));
+
 // === ZOD SCHEMAS ===
 
 export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({ 
@@ -157,6 +179,12 @@ export const insertFolderSchema = createInsertSchema(folders).omit({
   createdAt: true
 });
 
+export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 // === TYPES ===
 
 export type Workspace = typeof workspaces.$inferSelect;
@@ -170,6 +198,9 @@ export type InsertStep = z.infer<typeof insertStepSchema>;
 
 export type Folder = typeof folders.$inferSelect;
 export type InsertFolder = z.infer<typeof insertFolderSchema>;
+
+export type BlogPost = typeof blogPosts.$inferSelect;
+export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
 
 // API Request/Response Types
 export type CreateWorkspaceRequest = InsertWorkspace;

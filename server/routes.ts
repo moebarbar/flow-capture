@@ -9,7 +9,8 @@ import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { openai } from "./replit_integrations/image/client";
 import { stripeService } from "./stripeService";
-import { getStripePublishableKey } from "./stripeClient"; 
+import { getStripePublishableKey } from "./stripeClient";
+import { insertBlogPostSchema } from "@shared/schema"; 
 
 export async function registerRoutes(
   httpServer: Server,
@@ -442,6 +443,97 @@ export async function registerRoutes(
     } catch (error) {
       console.error('Admin invoices error:', error);
       res.json({ data: [] });
+    }
+  });
+
+  // Blog Post Admin Endpoints
+  app.get('/api/admin/blog-posts', requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const posts = await storage.getAllBlogPosts(limit, offset);
+      res.json({ data: posts });
+    } catch (error) {
+      console.error('Blog posts error:', error);
+      res.status(500).json({ message: 'Failed to get blog posts' });
+    }
+  });
+
+  app.get('/api/admin/blog-posts/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const post = await storage.getBlogPost(id);
+      if (!post) return res.status(404).json({ message: 'Post not found' });
+      res.json(post);
+    } catch (error) {
+      console.error('Blog post error:', error);
+      res.status(500).json({ message: 'Failed to get blog post' });
+    }
+  });
+
+  app.post('/api/admin/blog-posts', requireAdmin, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user.claims.sub;
+
+      const data = insertBlogPostSchema.parse({
+        ...req.body,
+        authorId: userId,
+      });
+
+      const post = await storage.createBlogPost(data);
+      res.status(201).json(post);
+    } catch (error: any) {
+      console.error('Create blog post error:', error);
+      res.status(400).json({ message: error.message || 'Failed to create blog post' });
+    }
+  });
+
+  app.patch('/api/admin/blog-posts/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const post = await storage.getBlogPost(id);
+      if (!post) return res.status(404).json({ message: 'Post not found' });
+
+      const updated = await storage.updateBlogPost(id, req.body);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('Update blog post error:', error);
+      res.status(400).json({ message: error.message || 'Failed to update blog post' });
+    }
+  });
+
+  app.delete('/api/admin/blog-posts/:id', requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteBlogPost(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete blog post error:', error);
+      res.status(500).json({ message: 'Failed to delete blog post' });
+    }
+  });
+
+  // Public Blog Endpoints
+  app.get('/api/blog', async (req, res) => {
+    try {
+      const posts = await storage.getAllBlogPosts(20, 0);
+      const publishedPosts = posts.filter(p => p.status === 'published');
+      res.json({ data: publishedPosts });
+    } catch (error) {
+      res.json({ data: [] });
+    }
+  });
+
+  app.get('/api/blog/:slug', async (req, res) => {
+    try {
+      const post = await storage.getBlogPostBySlug(req.params.slug);
+      if (!post || post.status !== 'published') {
+        return res.status(404).json({ message: 'Post not found' });
+      }
+      res.json(post);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get post' });
     }
   });
 

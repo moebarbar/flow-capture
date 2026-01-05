@@ -12,10 +12,14 @@ import { eq, and, desc, asc } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
-  // Users (delegated to authStorage mostly, but maybe some extras)
+  // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUserStripeInfo(userId: string, info: { stripeCustomerId?: string; stripeSubscriptionId?: string; subscriptionStatus?: string }): Promise<User>;
+  updateUserRole(userId: string, role: string): Promise<User>;
+  getAllUsers(limit?: number, offset?: number): Promise<User[]>;
+  getAdminStats(): Promise<{ totalUsers: number; totalWorkspaces: number; totalGuides: number; activeSubscriptions: number }>;
 
   // Workspaces
   createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
@@ -59,9 +63,48 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    // This is handled by Replit Auth usually, but for seed data or manual:
     const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async updateUserStripeInfo(userId: string, info: { stripeCustomerId?: string; stripeSubscriptionId?: string; subscriptionStatus?: string }): Promise<User> {
+    const [user] = await db.update(users)
+      .set({ ...info, updatedAt: new Date() } as any)
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async updateUserRole(userId: string, role: string): Promise<User> {
+    const [user] = await db.update(users)
+      .set({ role: role as any, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  async getAllUsers(limit = 50, offset = 0): Promise<User[]> {
+    return db.select()
+      .from(users)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getAdminStats(): Promise<{ totalUsers: number; totalWorkspaces: number; totalGuides: number; activeSubscriptions: number }> {
+    const [usersCount] = await db.select({ count: db.$count(users) }).from(users);
+    const [workspacesCount] = await db.select({ count: db.$count(workspaces) }).from(workspaces);
+    const [guidesCount] = await db.select({ count: db.$count(guides) }).from(guides);
+    const activeSubsResult = await db.select()
+      .from(users)
+      .where(eq(users.subscriptionStatus, 'active'));
+
+    return {
+      totalUsers: usersCount?.count || 0,
+      totalWorkspaces: workspacesCount?.count || 0,
+      totalGuides: guidesCount?.count || 0,
+      activeSubscriptions: activeSubsResult.length,
+    };
   }
 
   // Workspace methods

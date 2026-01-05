@@ -7,7 +7,9 @@ import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
-import { openai } from "./replit_integrations/image/client"; 
+import { openai } from "./replit_integrations/image/client";
+import { stripeService } from "./stripeService";
+import { getStripePublishableKey } from "./stripeClient"; 
 
 export async function registerRoutes(
   httpServer: Server,
@@ -235,6 +237,211 @@ export async function registerRoutes(
     } catch (error) {
       console.error("AI Generation error:", error);
       res.status(500).json({ message: "Failed to generate description" });
+    }
+  });
+
+  // === STRIPE & CHECKOUT ENDPOINTS ===
+  app.get('/api/stripe/config', async (req, res) => {
+    try {
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to get Stripe config' });
+    }
+  });
+
+  app.get('/api/products', async (req, res) => {
+    try {
+      const rows = await stripeService.listProductsWithPrices();
+      const productsMap = new Map();
+      for (const row of rows as any[]) {
+        if (!productsMap.has(row.product_id)) {
+          productsMap.set(row.product_id, {
+            id: row.product_id,
+            name: row.product_name,
+            description: row.product_description,
+            active: row.product_active,
+            metadata: row.product_metadata,
+            prices: []
+          });
+        }
+        if (row.price_id) {
+          productsMap.get(row.product_id).prices.push({
+            id: row.price_id,
+            unit_amount: row.unit_amount,
+            currency: row.currency,
+            recurring: row.recurring,
+            active: row.price_active,
+            metadata: row.price_metadata,
+          });
+        }
+      }
+      res.json({ data: Array.from(productsMap.values()) });
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      res.json({ data: [] });
+    }
+  });
+
+  app.post('/api/checkout', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const { priceId } = req.body;
+      if (!priceId) return res.status(400).json({ message: 'Price ID required' });
+
+      const dbUser = await storage.getUser(userId);
+      if (!dbUser) return res.status(404).json({ message: 'User not found' });
+
+      let customerId = dbUser.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripeService.createCustomer(
+          dbUser.email || user.claims.email || `${userId}@example.com`,
+          userId,
+          `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() || undefined
+        );
+        await storage.updateUserStripeInfo(userId, { stripeCustomerId: customer.id });
+        customerId = customer.id;
+      }
+
+      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      const session = await stripeService.createCheckoutSession(
+        customerId,
+        priceId,
+        `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        `${baseUrl}/pricing`
+      );
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error('Checkout error:', error);
+      res.status(500).json({ message: error.message || 'Checkout failed' });
+    }
+  });
+
+  app.post('/api/billing/portal', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const dbUser = await storage.getUser(userId);
+      if (!dbUser?.stripeCustomerId) {
+        return res.status(400).json({ message: 'No billing account found' });
+      }
+
+      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      const session = await stripeService.createCustomerPortalSession(
+        dbUser.stripeCustomerId,
+        `${baseUrl}/settings`
+      );
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error('Portal error:', error);
+      res.status(500).json({ message: error.message || 'Failed to open billing portal' });
+    }
+  });
+
+  app.get('/api/subscription', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const dbUser = await storage.getUser(userId);
+      if (!dbUser?.stripeSubscriptionId) {
+        return res.json({ subscription: null, status: 'inactive' });
+      }
+
+      const subscription = await stripeService.getSubscription(dbUser.stripeSubscriptionId);
+      res.json({ subscription, status: dbUser.subscriptionStatus || 'inactive' });
+    } catch (error) {
+      console.error('Subscription error:', error);
+      res.json({ subscription: null, status: 'inactive' });
+    }
+  });
+
+  // === ADMIN ENDPOINTS ===
+  const requireAdmin = async (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const dbUser = await storage.getUser(userId);
+    if (dbUser?.role !== 'admin') {
+      return res.status(403).json({ message: "Forbidden: Admin access required" });
+    }
+    next();
+  };
+
+  app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getAdminStats();
+      res.json(stats);
+    } catch (error) {
+      console.error('Admin stats error:', error);
+      res.status(500).json({ message: 'Failed to get stats' });
+    }
+  });
+
+  app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const users = await storage.getAllUsers(limit, offset);
+      res.json({ data: users });
+    } catch (error) {
+      console.error('Admin users error:', error);
+      res.status(500).json({ message: 'Failed to get users' });
+    }
+  });
+
+  app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { role } = req.body;
+      
+      if (role && !['user', 'admin'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role' });
+      }
+
+      const updatedUser = await storage.updateUserRole(id, role);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Admin update user error:', error);
+      res.status(500).json({ message: 'Failed to update user' });
+    }
+  });
+
+  app.get('/api/admin/subscriptions', requireAdmin, async (req, res) => {
+    try {
+      const subscriptions = await stripeService.listSubscriptions();
+      res.json({ data: subscriptions });
+    } catch (error) {
+      console.error('Admin subscriptions error:', error);
+      res.json({ data: [] });
+    }
+  });
+
+  app.get('/api/admin/customers', requireAdmin, async (req, res) => {
+    try {
+      const customers = await stripeService.listCustomers();
+      res.json({ data: customers });
+    } catch (error) {
+      console.error('Admin customers error:', error);
+      res.json({ data: [] });
+    }
+  });
+
+  app.get('/api/admin/invoices', requireAdmin, async (req, res) => {
+    try {
+      const invoices = await stripeService.getInvoices();
+      res.json({ data: invoices });
+    } catch (error) {
+      console.error('Admin invoices error:', error);
+      res.json({ data: [] });
     }
   });
 

@@ -142,15 +142,17 @@ export default function LandingPage() {
                 Now with AI-Powered Features
               </Badge>
             </div>
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-extrabold tracking-tight mb-8 pb-4 leading-[1.15] bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
-              Stop documenting.
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-extrabold tracking-tight mb-8 pb-4 leading-[1.15]">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
+                Stop documenting.
+              </span>
               <br />
-              <span className="relative inline-block">
+              <span className="relative inline-block bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-brand-800 to-brand-600 dark:from-white dark:via-brand-200 dark:to-brand-400">
                 Start capturing.
                 <svg className="absolute -bottom-1 left-0 w-full" viewBox="0 0 300 12" fill="none">
-                  <path d="M2 10C50 4 100 2 150 6C200 10 250 8 298 4" stroke="url(#gradient)" strokeWidth="3" strokeLinecap="round"/>
+                  <path d="M2 10C50 4 100 2 150 6C200 10 250 8 298 4" stroke="url(#hero-underline-gradient)" strokeWidth="3" strokeLinecap="round"/>
                   <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <linearGradient id="hero-underline-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                       <stop offset="0%" stopColor="hsl(var(--brand-500))" />
                       <stop offset="100%" stopColor="hsl(var(--brand-700))" />
                     </linearGradient>

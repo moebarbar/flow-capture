@@ -473,6 +473,24 @@ export const redactionRegions = pgTable("redaction_regions", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// === CAPTURE SESSIONS ===
+
+export const captureStatusEnum = pgEnum("capture_status", ["active", "stopped", "expired"]);
+
+// Capture sessions - Track active recording sessions for guides
+export const captureSessions = pgTable("capture_sessions", {
+  id: serial("id").primaryKey(),
+  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  token: text("token").unique().notNull(), // Unique session token for extension auth
+  status: captureStatusEnum("status").default("active").notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  stoppedAt: timestamp("stopped_at"),
+  eventsReceived: integer("events_received").default(0).notNull(),
+  lastEventAt: timestamp("last_event_at"),
+  expiresAt: timestamp("expires_at").notNull(), // Sessions expire after inactivity
+});
+
 // === INTEGRATIONS & AUTOMATION ===
 
 export const integrationProviderEnum = pgEnum("integration_provider", [

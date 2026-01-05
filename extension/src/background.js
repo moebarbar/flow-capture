@@ -1,4 +1,6 @@
 let isRecording = false;
+let activeSessionToken = null;
+let activeGuideId = null;
 
 async function getConfiguredApiUrl() {
   try {
@@ -16,9 +18,108 @@ chrome.runtime.onInstalled.addListener(() => {
     guideId: null,
     selectedWorkspaceId: null,
     apiBaseUrl: 'https://flowcapture.replit.app',
-    borderColor: '#ef4444'
+    borderColor: '#ef4444',
+    captureSession: null
   });
 });
+
+// Restore session on startup (browser launch)
+chrome.runtime.onStartup.addListener(async () => {
+  console.log('Extension started, checking for active session');
+  await restoreSessionState();
+});
+
+// Also restore when service worker wakes up
+async function restoreSessionState() {
+  try {
+    const hasSession = await checkForWebAppSession();
+    if (hasSession) {
+      console.log('Restored capture session from storage');
+      const { isRecording: wasRecording } = await chrome.storage.local.get(['isRecording']);
+      if (wasRecording) {
+        isRecording = true;
+        // Delay to ensure tabs are ready
+        setTimeout(() => startRecordingOnAllTabs(), 1000);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to restore session:', e);
+  }
+}
+
+// Run restore on every service worker wake-up
+restoreSessionState();
+
+// Check if there's an active session from the web app
+async function checkForWebAppSession() {
+  try {
+    const { captureSession } = await chrome.storage.local.get(['captureSession']);
+    if (captureSession && captureSession.token) {
+      const now = Date.now();
+      const expiresAt = new Date(captureSession.expiresAt).getTime();
+      if (now < expiresAt) {
+        activeSessionToken = captureSession.token;
+        activeGuideId = captureSession.guideId;
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Send a captured step to the backend in real-time
+async function sendStepToBackend(stepData) {
+  if (!activeSessionToken) return null;
+  
+  try {
+    const apiUrl = await getConfiguredApiUrl();
+    const response = await fetch(`${apiUrl}/api/capture/step`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${activeSessionToken}`
+      },
+      body: JSON.stringify({
+        title: stepData.description || stepData.type,
+        description: stepData.description,
+        actionType: stepData.type,
+        selector: stepData.selector,
+        url: stepData.url || stepData.tabUrl,
+        imageData: stepData.screenshot, // Include the screenshot
+        metadata: {
+          element: stepData.element,
+          elementBounds: stepData.elementBounds,
+          borderColor: stepData.borderColor,
+          isElementCapture: stepData.isElementCapture,
+          pageTitle: stepData.pageTitle || stepData.tabTitle
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to send step to backend:', response.status);
+      // Session might be expired
+      if (response.status === 401) {
+        console.log('Session expired, stopping recording');
+        activeSessionToken = null;
+        activeGuideId = null;
+        isRecording = false;
+        await chrome.storage.local.set({ captureSession: null, isRecording: false });
+        notifyAllTabs('STOP_RECORDING');
+        // Notify all tabs about session expiry so webapp can update UI
+        notifyAllTabsSessionExpired();
+      }
+      return null;
+    }
+    
+    return response.json();
+  } catch (e) {
+    console.error('Error sending step to backend:', e);
+    return null;
+  }
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background received message:', message.type);
@@ -79,6 +180,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'SET_API_URL') {
     chrome.storage.local.set({ apiBaseUrl: message.url });
     sendResponse({ success: true });
+  } else if (message.type === 'SET_CAPTURE_SESSION') {
+    // Set capture session from web app
+    const session = message.session;
+    if (session && session.token) {
+      activeSessionToken = session.token;
+      activeGuideId = session.guideId;
+      chrome.storage.local.set({ captureSession: session });
+      // Auto-start recording when session is set
+      isRecording = true;
+      chrome.storage.local.set({ isRecording: true, steps: [] }).then(() => {
+        startRecordingOnAllTabs();
+      });
+    } else {
+      activeSessionToken = null;
+      activeGuideId = null;
+      chrome.storage.local.set({ captureSession: null });
+    }
+    sendResponse({ success: true });
+  } else if (message.type === 'CLEAR_CAPTURE_SESSION') {
+    // Clear capture session (stop recording triggered from web app)
+    activeSessionToken = null;
+    activeGuideId = null;
+    isRecording = false;
+    chrome.storage.local.set({ captureSession: null, isRecording: false });
+    notifyAllTabs('STOP_RECORDING');
+    sendResponse({ success: true });
+  } else if (message.type === 'GET_CAPTURE_SESSION') {
+    sendResponse({
+      hasSession: !!activeSessionToken,
+      guideId: activeGuideId
+    });
   } else if (message.type === 'ELEMENT_CAPTURE_CANCELLED') {
     sendResponse({ success: true });
   } else if (message.type === 'CAPTURE_PAGE_SCREENSHOT') {
@@ -163,6 +295,19 @@ async function notifyAllTabs(type) {
   }
 }
 
+// Notify webapp tabs about session expiry via postMessage relay
+async function notifyAllTabsSessionExpired() {
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    try {
+      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
+        await chrome.tabs.sendMessage(tab.id, { type: 'SESSION_EXPIRED' });
+      }
+    } catch (e) {
+    }
+  }
+}
+
 async function handleCaptureStep(step, tab) {
   console.log('Capturing step:', step.type, step.description);
   
@@ -185,11 +330,27 @@ async function handleCaptureStep(step, tab) {
     tabTitle: tab?.title
   };
 
+  // Store locally
   const { steps = [] } = await chrome.storage.local.get(['steps']);
   steps.push(stepWithScreenshot);
   await chrome.storage.local.set({ steps });
   
   console.log('Step captured. Total steps:', steps.length);
+  
+  // Ensure session is hydrated before sending
+  if (!activeSessionToken) {
+    await checkForWebAppSession();
+  }
+  
+  // Send to backend if session is active
+  if (activeSessionToken) {
+    try {
+      await sendStepToBackend(stepWithScreenshot);
+      console.log('Step sent to backend');
+    } catch (e) {
+      console.error('Failed to send step to backend:', e);
+    }
+  }
 }
 
 async function handleCaptureElement(captureData, tab) {
@@ -215,11 +376,27 @@ async function handleCaptureElement(captureData, tab) {
     isElementCapture: true
   };
 
+  // Store locally
   const { steps = [] } = await chrome.storage.local.get(['steps']);
   steps.push(stepWithScreenshot);
   await chrome.storage.local.set({ steps });
   
   console.log('Element captured. Total steps:', steps.length);
+  
+  // Ensure session is hydrated before sending
+  if (!activeSessionToken) {
+    await checkForWebAppSession();
+  }
+  
+  // Send to backend if session is active
+  if (activeSessionToken) {
+    try {
+      await sendStepToBackend(stepWithScreenshot);
+      console.log('Element sent to backend');
+    } catch (e) {
+      console.error('Failed to send element to backend:', e);
+    }
+  }
 }
 
 async function fetchUser() {

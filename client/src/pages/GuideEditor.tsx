@@ -18,7 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
-  Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2
+  Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
+  Video, Square, Loader2
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -49,8 +50,169 @@ export default function GuideEditor() {
   const [translationDialogOpen, setTranslationDialogOpen] = useState(false);
   const [voiceoverDialogOpen, setVoiceoverDialogOpen] = useState(false);
   const [redactionDialogOpen, setRedactionDialogOpen] = useState(false);
+  const [captureToken, setCaptureToken] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Capture session status
+  const { data: captureStatus, refetch: refetchCaptureStatus } = useQuery({
+    queryKey: ['/api/guides', guideId, 'capture', 'status'],
+    queryFn: async () => {
+      const res = await fetch(`/api/guides/${guideId}/capture/status`, { credentials: 'include' });
+      if (!res.ok) return { active: false };
+      return res.json();
+    },
+    enabled: guideId > 0,
+    refetchInterval: captureToken ? 5000 : false, // Poll while recording
+  });
+
+  // Function to send session to extension via postMessage
+  const sendSessionToExtension = (session: { token: string; guideId: number; expiresAt: string }) => {
+    // Use window.origin for security - only same-origin pages can receive this message
+    window.postMessage({ type: 'FLOWCAPTURE_SET_SESSION', session }, window.origin);
+  };
+
+  // Function to clear session from extension
+  const clearSessionFromExtension = () => {
+    window.postMessage({ type: 'FLOWCAPTURE_CLEAR_SESSION' }, window.origin);
+  };
+
+  const startCaptureMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/guides/${guideId}/capture/start`, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setCaptureToken(data.token);
+      refetchCaptureStatus();
+      
+      // Send session to extension via postMessage bridge
+      const session = {
+        token: data.token,
+        guideId: guideId,
+        expiresAt: data.expiresAt,
+      };
+      sendSessionToExtension(session);
+      
+      // Also store in localStorage as fallback
+      localStorage.setItem('flowcapture_session', JSON.stringify(session));
+      
+      toast({ 
+        title: "Recording Started", 
+        description: "The FlowCapture extension is now recording. Navigate to another tab and interact with the page." 
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to start capture", variant: "destructive" });
+    },
+  });
+
+  const stopCaptureMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/guides/${guideId}/capture/stop`, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setCaptureToken(null);
+      
+      // Clear session from extension
+      clearSessionFromExtension();
+      localStorage.removeItem('flowcapture_session');
+      
+      refetchCaptureStatus();
+      queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+      toast({ 
+        title: "Recording Stopped", 
+        description: `Captured ${data.stepsCreated} steps in ${Math.round(data.duration)}s` 
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to stop capture", variant: "destructive" });
+    },
+  });
+
+  const isRecording = captureStatus?.active || captureToken !== null;
+
+  // Reconcile session state when server says inactive but we have a local token
+  useEffect(() => {
+    if (captureStatus && !captureStatus.active && captureToken) {
+      // Session expired on server, clean up local state
+      setCaptureToken(null);
+      clearSessionFromExtension();
+      localStorage.removeItem('flowcapture_session');
+    }
+  }, [captureStatus, captureToken]);
+
+  // Rehydrate session from localStorage on mount and resend to extension
+  useEffect(() => {
+    const stored = localStorage.getItem('flowcapture_session');
+    if (stored) {
+      try {
+        const session = JSON.parse(stored);
+        if (session.guideId === guideId && new Date(session.expiresAt) > new Date()) {
+          setCaptureToken(session.token);
+          // Resend to extension in case it reloaded
+          sendSessionToExtension(session);
+        } else {
+          // Expired or wrong guide, clean up
+          localStorage.removeItem('flowcapture_session');
+        }
+      } catch (e) {
+        localStorage.removeItem('flowcapture_session');
+      }
+    }
+  }, [guideId]);
+
+  // When server shows active session but we don't have local token, try to resync
+  useEffect(() => {
+    if (captureStatus?.active && !captureToken && captureStatus.token) {
+      const session = {
+        token: captureStatus.token,
+        guideId: guideId,
+        expiresAt: captureStatus.expiresAt,
+      };
+      setCaptureToken(captureStatus.token);
+      sendSessionToExtension(session);
+      localStorage.setItem('flowcapture_session', JSON.stringify(session));
+    }
+  }, [captureStatus, captureToken, guideId]);
+
+  // Listen for extension messages
+  useEffect(() => {
+    const handleExtensionMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'FLOWCAPTURE_SESSION_SET') {
+        if (event.data.success) {
+          console.log('Extension accepted capture session');
+        } else {
+          console.error('Extension rejected capture session:', event.data.error);
+          toast({ 
+            title: "Extension Error", 
+            description: "Failed to start recording. Please reinstall the extension.",
+            variant: "destructive" 
+          });
+        }
+      } else if (event.data?.type === 'FLOWCAPTURE_SESSION_CLEARED') {
+        console.log('Extension cleared capture session');
+      } else if (event.data?.type === 'FLOWCAPTURE_EXTENSION_PRESENT') {
+        console.log('Extension detected, version:', event.data.version);
+      } else if (event.data?.type === 'FLOWCAPTURE_SESSION_EXPIRED') {
+        // Session expired (401 from backend)
+        console.log('Capture session expired');
+        setCaptureToken(null);
+        localStorage.removeItem('flowcapture_session');
+        refetchCaptureStatus();
+        queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+        toast({ 
+          title: "Recording Stopped", 
+          description: "The capture session expired. Your captured steps have been saved.",
+          variant: "default" 
+        });
+      }
+    };
+
+    window.addEventListener('message', handleExtensionMessage);
+    return () => window.removeEventListener('message', handleExtensionMessage);
+  }, [toast, guideId, refetchCaptureStatus]);
 
   // Share settings query
   const { data: shareSettings, refetch: refetchShare } = useQuery({
@@ -236,9 +398,55 @@ export default function GuideEditor() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <div className="text-sm text-muted-foreground mr-4">
-            {guide.status === 'draft' ? 'Unsaved changes' : 'All changes saved'}
-          </div>
+          {isRecording && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full mr-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+              <span className="text-sm text-red-600 font-medium">Recording</span>
+              {captureStatus?.eventsReceived > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  ({captureStatus.eventsReceived} steps)
+                </span>
+              )}
+            </div>
+          )}
+          
+          {isRecording ? (
+            <Button 
+              size="sm" 
+              variant="destructive"
+              onClick={() => stopCaptureMutation.mutate()}
+              disabled={stopCaptureMutation.isPending}
+              data-testid="button-stop-capture"
+            >
+              {stopCaptureMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Square className="h-4 w-4 mr-2" />
+              )}
+              Stop Recording
+            </Button>
+          ) : (
+            <Button 
+              size="sm" 
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => startCaptureMutation.mutate()}
+              disabled={startCaptureMutation.isPending}
+              data-testid="button-start-capture"
+            >
+              {startCaptureMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Video className="h-4 w-4 mr-2" />
+              )}
+              Start Capture
+            </Button>
+          )}
+          
+          <div className="h-6 w-px bg-border mx-1" />
+          
           <Button 
             variant="outline" 
             size="sm" 

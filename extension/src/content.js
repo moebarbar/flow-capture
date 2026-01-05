@@ -26,8 +26,69 @@ if (window.__flowcaptureInitialized) {
     }
   }
 
-  // Listen for messages from the web page (for Screenshot Studio integration)
+  // Allowed origins for capture session messages
+  const ALLOWED_ORIGINS = [
+    'https://flowcapture.replit.app',
+    'http://localhost:5000',
+    'https://localhost:5000'
+  ];
+
+  // Allowed origin suffixes (must be exact hostname suffix match)
+  const ALLOWED_ORIGIN_SUFFIXES = [
+    '.replit.dev',
+    '.repl.co',
+    '.replit.app'
+  ];
+
+  // Check if origin has a valid suffix (proper hostname check, not substring)
+  // This prevents attacks like "attackerreplit.dev" from matching ".replit.dev"
+  function hasAllowedSuffix(origin) {
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      return ALLOWED_ORIGIN_SUFFIXES.some(suffix => {
+        // Exact match: hostname equals the suffix without leading dot
+        if (hostname === suffix.substring(1)) return true;
+        // Subdomain match: hostname ends with suffix AND the char before suffix is a dot
+        // e.g., "foo.replit.dev" ends with ".replit.dev" - valid
+        // e.g., "fooreplit.dev" ends with "replit.dev" but NOT with ".replit.dev" - invalid
+        return hostname.endsWith(suffix);
+      });
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Check if origin is in the allowlist
+  async function isAllowedOrigin(origin) {
+    // Check exact matches first
+    if (ALLOWED_ORIGINS.includes(origin)) return true;
+    
+    // Check configured API URL
+    try {
+      const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
+      if (apiBaseUrl) {
+        const configuredOrigin = new URL(apiBaseUrl).origin;
+        if (origin === configuredOrigin) return true;
+      }
+    } catch (e) {}
+    
+    // Check allowed suffixes with proper hostname validation
+    return hasAllowedSuffix(origin);
+  }
+
+  // Listen for messages from the web page (for Screenshot Studio and Capture Session integration)
   window.addEventListener('message', async (event) => {
+    // Validate origin for security
+    const originAllowed = await isAllowedOrigin(event.origin);
+    if (!originAllowed && event.data?.type?.startsWith('FLOWCAPTURE_')) {
+      console.warn('FlowCapture: Ignoring message from untrusted origin:', event.origin);
+      return;
+    }
+
+    // Use the origin of the requesting page for secure responses
+    const responseOrigin = event.origin;
+
     if (event.data?.type === 'FLOWCAPTURE_REQUEST_SCREENSHOT') {
       console.log('FlowCapture: Received screenshot request from page');
       try {
@@ -38,10 +99,64 @@ if (window.__flowcaptureInitialized) {
           window.postMessage({ 
             type: 'FLOWCAPTURE_SCREENSHOT_CAPTURED', 
             screenshot: response.screenshot 
-          }, '*');
+          }, responseOrigin);
         }
       } catch (e) {
         console.error('FlowCapture: Failed to capture screenshot:', e);
+      }
+    } else if (event.data?.type === 'FLOWCAPTURE_SET_SESSION') {
+      // Web app wants to start a capture session
+      console.log('FlowCapture: Received capture session from page');
+      try {
+        const session = event.data.session;
+        const response = await chrome.runtime.sendMessage({ 
+          type: 'SET_CAPTURE_SESSION', 
+          session 
+        });
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_SESSION_SET', 
+          success: response?.success || false 
+        }, responseOrigin);
+      } catch (e) {
+        console.error('FlowCapture: Failed to set capture session:', e);
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_SESSION_SET', 
+          success: false,
+          error: e.message 
+        }, responseOrigin);
+      }
+    } else if (event.data?.type === 'FLOWCAPTURE_CLEAR_SESSION') {
+      // Web app wants to stop capture session
+      console.log('FlowCapture: Clearing capture session');
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'CLEAR_CAPTURE_SESSION' });
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_SESSION_CLEARED', 
+          success: response?.success || false 
+        }, responseOrigin);
+      } catch (e) {
+        console.error('FlowCapture: Failed to clear capture session:', e);
+      }
+    } else if (event.data?.type === 'FLOWCAPTURE_CHECK_EXTENSION') {
+      // Web app checking if extension is installed
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_EXTENSION_PRESENT', 
+        version: '1.0.0' 
+      }, responseOrigin);
+    } else if (event.data?.type === 'FLOWCAPTURE_GET_SESSION') {
+      // Web app checking current session status
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_SESSION' });
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_SESSION_STATUS', 
+          hasSession: response?.hasSession || false,
+          guideId: response?.guideId 
+        }, responseOrigin);
+      } catch (e) {
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_SESSION_STATUS', 
+          hasSession: false 
+        }, responseOrigin);
       }
     }
   });
@@ -79,6 +194,10 @@ if (window.__flowcaptureInitialized) {
       sendResponse({ success: true });
     } else if (message.type === 'GET_BORDER_COLOR') {
       sendResponse({ color: borderColor });
+    } else if (message.type === 'SESSION_EXPIRED') {
+      // Relay session expiry to webapp via postMessage (use window.origin for security)
+      window.postMessage({ type: 'FLOWCAPTURE_SESSION_EXPIRED' }, window.origin);
+      sendResponse({ success: true });
     }
     return true;
   });

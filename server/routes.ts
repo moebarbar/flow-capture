@@ -1234,6 +1234,160 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     }
   });
 
+  // === CAPTURE ENDPOINTS ===
+  
+  // Start a capture session for a guide
+  app.post("/api/guides/:id/capture/start", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.id);
+      const userId = req.user!.id;
+      
+      // Verify user has access to the guide
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const member = members.find(m => m.userId === userId);
+      const isOwner = workspace.ownerId === userId;
+      const canEdit = isOwner || (member && ["admin", "editor", "owner"].includes(member.role));
+      
+      if (!canEdit) {
+        return res.status(403).json({ message: "You don't have permission to capture for this guide" });
+      }
+      
+      const { captureService } = await import("./services/captureService");
+      const session = await captureService.startSession(guideId, userId);
+      
+      res.json({
+        token: session.token,
+        expiresAt: session.expiresAt,
+        guideId: session.guideId,
+      });
+    } catch (error) {
+      console.error("Start capture error:", error);
+      res.status(500).json({ message: "Failed to start capture session" });
+    }
+  });
+
+  // Stop a capture session
+  app.post("/api/guides/:id/capture/stop", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.id);
+      const userId = req.user!.id;
+      
+      const { captureService } = await import("./services/captureService");
+      const session = await captureService.stopSession(guideId, userId);
+      
+      if (!session) {
+        return res.status(404).json({ message: "No active capture session found" });
+      }
+      
+      res.json({
+        stepsCreated: session.eventsReceived,
+        duration: session.stoppedAt ? 
+          (session.stoppedAt.getTime() - session.startedAt.getTime()) / 1000 : 0,
+      });
+    } catch (error) {
+      console.error("Stop capture error:", error);
+      res.status(500).json({ message: "Failed to stop capture session" });
+    }
+  });
+
+  // Get active capture session status
+  app.get("/api/guides/:id/capture/status", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.id);
+      
+      const { captureService } = await import("./services/captureService");
+      const session = await captureService.getActiveSession(guideId);
+      
+      if (!session) {
+        return res.json({ active: false });
+      }
+      
+      res.json({
+        active: true,
+        token: session.userId === req.user!.id ? session.token : undefined,
+        eventsReceived: session.eventsReceived,
+        startedAt: session.startedAt,
+        expiresAt: session.expiresAt,
+      });
+    } catch (error) {
+      console.error("Capture status error:", error);
+      res.status(500).json({ message: "Failed to get capture status" });
+    }
+  });
+
+  // Receive captured events from extension (uses token auth)
+  app.post("/api/capture/events", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: "Missing capture session token" });
+      }
+      
+      const token = authHeader.split(' ')[1];
+      const { events } = req.body;
+      
+      if (!events || !Array.isArray(events)) {
+        return res.status(400).json({ message: "Events array is required" });
+      }
+      
+      const { captureService } = await import("./services/captureService");
+      const createdSteps = await captureService.processCapturedEvents(token, events);
+      
+      if (createdSteps.length === 0 && events.length > 0) {
+        return res.status(401).json({ message: "Invalid or expired capture session" });
+      }
+      
+      res.json({
+        stepsCreated: createdSteps.length,
+        steps: createdSteps,
+      });
+    } catch (error) {
+      console.error("Process capture events error:", error);
+      res.status(500).json({ message: "Failed to process captured events" });
+    }
+  });
+
+  // Add a single captured step (alternative to batch)
+  app.post("/api/capture/step", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: "Missing capture session token" });
+      }
+      
+      const token = authHeader.split(' ')[1];
+      const stepData = req.body;
+      
+      const { captureService } = await import("./services/captureService");
+      const step = await captureService.addCapturedStep(token, stepData);
+      
+      if (!step) {
+        return res.status(401).json({ message: "Invalid or expired capture session" });
+      }
+      
+      res.json(step);
+    } catch (error) {
+      console.error("Add captured step error:", error);
+      res.status(500).json({ message: "Failed to add captured step" });
+    }
+  });
+
   // === STRIPE & CHECKOUT ENDPOINTS ===
   app.get('/api/stripe/config', async (req, res) => {
     try {

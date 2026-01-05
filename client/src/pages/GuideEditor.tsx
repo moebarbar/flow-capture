@@ -388,8 +388,6 @@ export default function GuideEditor() {
     toast({ title: 'Thumbnail removed' });
   };
 
-  const currentThumbnail = guide?.coverImageUrl || sortedSteps[0]?.imageUrl || null;
-
   // Auto-select first step on load
   useEffect(() => {
     if (steps && steps.length > 0 && !selectedStepId) {
@@ -400,6 +398,9 @@ export default function GuideEditor() {
   // Sort steps by order
   const sortedSteps = steps ? [...steps].sort((a, b) => a.order - b.order) : [];
   const selectedStep = sortedSteps.find(s => s.id === selectedStepId);
+  
+  // Current thumbnail - use coverImageUrl or fall back to first step screenshot
+  const currentThumbnail = guide?.coverImageUrl || sortedSteps[0]?.imageUrl || null;
 
   const handleAddStep = () => {
     createStep({

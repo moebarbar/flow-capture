@@ -1,11 +1,13 @@
 import { 
-  users, workspaces, workspaceMembers, guides, steps, folders, blogPosts,
+  users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
   type User, type InsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
   type Step, type InsertStep,
   type Folder, type InsertFolder,
   type BlogPost, type InsertBlogPost,
+  type SiteSettings, type InsertSiteSettings,
+  type DiscountCode, type InsertDiscountCode,
   type WorkspaceWithMembers
 } from "@shared/schema";
 import { db } from "./db";
@@ -57,6 +59,19 @@ export interface IStorage {
   getAllBlogPosts(limit?: number, offset?: number): Promise<BlogPost[]>;
   updateBlogPost(id: number, post: Partial<InsertBlogPost>): Promise<BlogPost>;
   deleteBlogPost(id: number): Promise<void>;
+
+  // Site Settings
+  getSiteSettings(): Promise<SiteSettings | undefined>;
+  upsertSiteSettings(settings: Partial<InsertSiteSettings>): Promise<SiteSettings>;
+
+  // Discount Codes
+  createDiscountCode(code: InsertDiscountCode): Promise<DiscountCode>;
+  getDiscountCode(id: number): Promise<DiscountCode | undefined>;
+  getDiscountCodeByCode(code: string): Promise<DiscountCode | undefined>;
+  getAllDiscountCodes(): Promise<DiscountCode[]>;
+  updateDiscountCode(id: number, code: Partial<InsertDiscountCode>): Promise<DiscountCode>;
+  deleteDiscountCode(id: number): Promise<void>;
+  incrementRedemption(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -287,6 +302,69 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBlogPost(id: number): Promise<void> {
     await db.delete(blogPosts).where(eq(blogPosts.id, id));
+  }
+
+  // Site Settings methods
+  async getSiteSettings(): Promise<SiteSettings | undefined> {
+    const [settings] = await db.select().from(siteSettings).limit(1);
+    return settings;
+  }
+
+  async upsertSiteSettings(update: Partial<InsertSiteSettings>): Promise<SiteSettings> {
+    const existing = await this.getSiteSettings();
+    if (existing) {
+      const [updated] = await db.update(siteSettings)
+        .set({ ...update, updatedAt: new Date() })
+        .where(eq(siteSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(siteSettings)
+        .values({ ...update } as any)
+        .returning();
+      return created;
+    }
+  }
+
+  // Discount Code methods
+  async createDiscountCode(code: InsertDiscountCode): Promise<DiscountCode> {
+    const [newCode] = await db.insert(discountCodes).values(code).returning();
+    return newCode;
+  }
+
+  async getDiscountCode(id: number): Promise<DiscountCode | undefined> {
+    const [code] = await db.select().from(discountCodes).where(eq(discountCodes.id, id));
+    return code;
+  }
+
+  async getDiscountCodeByCode(code: string): Promise<DiscountCode | undefined> {
+    const [result] = await db.select().from(discountCodes).where(eq(discountCodes.code, code));
+    return result;
+  }
+
+  async getAllDiscountCodes(): Promise<DiscountCode[]> {
+    return db.select().from(discountCodes).orderBy(desc(discountCodes.createdAt));
+  }
+
+  async updateDiscountCode(id: number, update: Partial<InsertDiscountCode>): Promise<DiscountCode> {
+    const [updated] = await db.update(discountCodes)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(discountCodes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDiscountCode(id: number): Promise<void> {
+    await db.delete(discountCodes).where(eq(discountCodes.id, id));
+  }
+
+  async incrementRedemption(id: number): Promise<void> {
+    const code = await this.getDiscountCode(id);
+    if (code) {
+      await db.update(discountCodes)
+        .set({ redemptionCount: code.redemptionCount + 1 })
+        .where(eq(discountCodes.id, id));
+    }
   }
 }
 

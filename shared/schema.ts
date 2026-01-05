@@ -85,6 +85,42 @@ export const blogPosts = pgTable("blog_posts", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Site settings (singleton - one row for the whole site)
+export const siteSettings = pgTable("site_settings", {
+  id: serial("id").primaryKey(),
+  logoUrl: text("logo_url"),
+  faviconUrl: text("favicon_url"),
+  siteName: text("site_name").default("FlowCapture"),
+  siteDescription: text("site_description"),
+  primaryColor: text("primary_color").default("#6366f1"),
+  secondaryColor: text("secondary_color").default("#8b5cf6"),
+  accentColor: text("accent_color").default("#06b6d4"),
+  headScripts: text("head_scripts"),
+  bodyScripts: text("body_scripts"),
+  customCss: text("custom_css"),
+  socialLinks: jsonb("social_links"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const discountCodeStatusEnum = pgEnum("discount_code_status", ["active", "inactive", "expired"]);
+
+export const discountCodes = pgTable("discount_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").unique().notNull(),
+  description: text("description"),
+  discountType: text("discount_type").notNull(), // 'percent' or 'fixed'
+  discountValue: integer("discount_value").notNull(), // percentage (0-100) or cents
+  currency: text("currency").default("usd"),
+  maxRedemptions: integer("max_redemptions"),
+  redemptionCount: integer("redemption_count").default(0).notNull(),
+  expiresAt: timestamp("expires_at"),
+  status: discountCodeStatusEnum("status").default("active").notNull(),
+  stripePromotionId: text("stripe_promotion_id"),
+  stripeCouponId: text("stripe_coupon_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // === RELATIONS ===
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
@@ -185,6 +221,18 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
   updatedAt: true
 });
 
+export const insertSiteSettingsSchema = createInsertSchema(siteSettings).omit({
+  id: true,
+  updatedAt: true
+});
+
+export const insertDiscountCodeSchema = createInsertSchema(discountCodes).omit({
+  id: true,
+  redemptionCount: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 // === TYPES ===
 
 export type Workspace = typeof workspaces.$inferSelect;
@@ -201,6 +249,12 @@ export type InsertFolder = z.infer<typeof insertFolderSchema>;
 
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
+
+export type SiteSettings = typeof siteSettings.$inferSelect;
+export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;
+
+export type DiscountCode = typeof discountCodes.$inferSelect;
+export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
 
 // API Request/Response Types
 export type CreateWorkspaceRequest = InsertWorkspace;

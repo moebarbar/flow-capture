@@ -99,6 +99,11 @@ export const siteSettings = pgTable("site_settings", {
   bodyScripts: text("body_scripts"),
   customCss: text("custom_css"),
   socialLinks: jsonb("social_links"),
+  // Landing page CTA links
+  extensionLink: text("extension_link"),
+  demoLink: text("demo_link"),
+  pricingLink: text("pricing_link"),
+  docsLink: text("docs_link"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

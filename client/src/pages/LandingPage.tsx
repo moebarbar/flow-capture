@@ -20,6 +20,10 @@ interface SiteSettings {
   primaryColor?: string;
   secondaryColor?: string;
   accentColor?: string;
+  extensionLink?: string | null;
+  demoLink?: string | null;
+  pricingLink?: string | null;
+  docsLink?: string | null;
 }
 
 export default function LandingPage() {
@@ -107,13 +111,13 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Button size="lg" className="rounded-full text-lg h-14 px-8 bg-brand-600 hover:bg-brand-700 text-white shadow-xl shadow-brand-500/30 transition-all hover:-translate-y-1" asChild>
-                <a href="#install-extension" data-testid="button-hero-install-extension">
+                <a href={branding?.extensionLink || "#install-extension"} target={branding?.extensionLink?.startsWith('http') ? "_blank" : undefined} rel={branding?.extensionLink?.startsWith('http') ? "noopener noreferrer" : undefined} data-testid="button-hero-install-extension">
                   <SiGooglechrome className="mr-2 h-5 w-5" />
                   Get the Extension, it's free
                 </a>
               </Button>
               <Button size="lg" variant="outline" className="rounded-full text-lg h-14 px-8 border-2 hover:bg-muted/50" asChild>
-                <a href="#how-it-works" data-testid="link-how-it-works">See How It Works</a>
+                <a href={branding?.demoLink || "#how-it-works"} target={branding?.demoLink?.startsWith('http') ? "_blank" : undefined} rel={branding?.demoLink?.startsWith('http') ? "noopener noreferrer" : undefined} data-testid="link-how-it-works">See How It Works</a>
               </Button>
             </div>
             <p className="mt-6 text-sm text-muted-foreground">

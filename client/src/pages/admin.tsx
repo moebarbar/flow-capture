@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Users, CreditCard, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, BookOpen, Palette, Code, DollarSign, Tag, Image } from "lucide-react";
+import { Users, CreditCard, FileText, TrendingUp, Shield, Plus, Pencil, Trash2, BookOpen, Palette, Code, DollarSign, Tag, Image, ExternalLink } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -61,6 +61,10 @@ interface SiteSettings {
   headScripts: string | null;
   bodyScripts: string | null;
   customCss: string | null;
+  extensionLink: string | null;
+  demoLink: string | null;
+  pricingLink: string | null;
+  docsLink: string | null;
 }
 
 interface DiscountCode {
@@ -447,6 +451,60 @@ function BrandingTab() {
                   data-testid="input-accent-color-hex"
                 />
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ExternalLink className="h-5 w-5" />
+            Landing Page Links
+          </CardTitle>
+          <CardDescription>Configure URLs for landing page buttons and CTAs</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Get Extension Link</Label>
+              <Input
+                value={currentData.extensionLink || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, extensionLink: e.target.value }))}
+                placeholder="https://chrome.google.com/webstore/..."
+                data-testid="input-extension-link"
+              />
+              <p className="text-xs text-muted-foreground">Link for the "Get the Extension" button</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Demo / How It Works Link</Label>
+              <Input
+                value={currentData.demoLink || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, demoLink: e.target.value }))}
+                placeholder="https://youtube.com/watch?v=..."
+                data-testid="input-demo-link"
+              />
+              <p className="text-xs text-muted-foreground">Link for the "See How It Works" button</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Pricing Link</Label>
+              <Input
+                value={currentData.pricingLink || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, pricingLink: e.target.value }))}
+                placeholder="/pricing or https://..."
+                data-testid="input-pricing-link"
+              />
+              <p className="text-xs text-muted-foreground">Link for any pricing buttons</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Documentation Link</Label>
+              <Input
+                value={currentData.docsLink || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, docsLink: e.target.value }))}
+                placeholder="/docs or https://..."
+                data-testid="input-docs-link"
+              />
+              <p className="text-xs text-muted-foreground">Link for documentation or help pages</p>
             </div>
           </div>
         </CardContent>

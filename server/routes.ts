@@ -579,6 +579,10 @@ export async function registerRoutes(
         primaryColor: settings.primaryColor,
         secondaryColor: settings.secondaryColor,
         accentColor: settings.accentColor,
+        extensionLink: settings.extensionLink,
+        demoLink: settings.demoLink,
+        pricingLink: settings.pricingLink,
+        docsLink: settings.docsLink,
       });
     } catch (error) {
       res.json({ siteName: 'FlowCapture' });

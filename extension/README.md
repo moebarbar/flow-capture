@@ -39,6 +39,76 @@ The extension needs to know which FlowCapture dashboard to sync with:
 
 For local development, use your Replit development URL.
 
+---
+
+## Building for Chrome Web Store
+
+### Step 1: Run the Build Script
+
+```bash
+node extension/scripts/build.cjs
+```
+
+This creates a ZIP file at `extension/dist/flowcapture-extension.zip`.
+
+### Step 2: Prepare Store Listing Assets
+
+You'll need:
+- **Screenshots**: At least one 1280x800 or 640x400 screenshot
+- **Promotional images** (optional): 440x280 small tile, 920x680 large tile
+- **Privacy Policy URL**: A public webpage explaining data handling
+
+### Step 3: Create Developer Account
+
+1. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+2. Pay the one-time $5 developer registration fee
+3. Complete identity verification if required
+
+### Step 4: Submit Extension
+
+1. Click "New Item" in the Developer Dashboard
+2. Upload the ZIP file from `extension/dist/`
+3. Fill in store listing:
+   - **Name**: FlowCapture - Workflow Documentation
+   - **Description**: See suggested description below
+   - **Category**: Productivity
+   - **Language**: English (or your target language)
+4. Upload screenshots and promotional images
+5. Complete the Privacy Practices section
+6. Submit for review (typically 1-3 business days)
+
+### Suggested Store Description
+
+```
+FlowCapture automatically captures your browser workflows and creates beautiful step-by-step documentation.
+
+FEATURES:
+- One-click recording - Start capturing any workflow instantly
+- Automatic screenshots - Every click and action is documented
+- Smart descriptions - AI generates clear instructions for each step
+- Easy editing - Drag, drop, and refine your guides
+- Team sharing - Collaborate on documentation with your team
+
+PERFECT FOR:
+- Training new employees
+- Creating SOPs and process docs
+- Customer support tutorials
+- Software documentation
+- Personal workflow notes
+
+HOW IT WORKS:
+1. Click the extension icon and start recording
+2. Perform your workflow as usual
+3. Stop recording and your guide is ready
+4. Edit, share, or export your documentation
+
+FlowCapture connects to your FlowCapture dashboard where you can organize, edit, and share all your guides.
+
+Privacy: This extension captures screenshots only during active recording sessions. Data is sent securely to your FlowCapture account. No data is collected when recording is off.
+```
+
+---
+
 ## File Structure
 
 ```
@@ -51,7 +121,12 @@ extension/
 ├── src/
 │   ├── background.js     # Service worker (screenshot capture, API sync)
 │   ├── content.js        # Content script (event listeners, capture)
-│   └── content.css       # Content script styles
+│   ├── content.css       # Content script styles
+│   └── config.js         # Configuration constants
+├── scripts/
+│   └── build.js          # Build script for Chrome Web Store
+├── dist/                  # Build output (gitignored)
+│   └── flowcapture-extension.zip
 └── icons/
     ├── icon16.png        # Toolbar icon
     ├── icon48.png        # Extension management icon
@@ -75,6 +150,7 @@ extension/
 - Sensitive inputs (passwords, SSN, etc.) are automatically masked
 - Screenshots are captured via Chrome's built-in API
 - All API communication uses HTTPS with credentials
+- Origin validation prevents unauthorized message handling
 
 ## API Endpoints
 
@@ -83,13 +159,15 @@ The extension communicates with these backend endpoints:
 - `GET /api/extension/user` - Get current user info
 - `GET /api/extension/workspaces` - List user's workspaces
 - `POST /api/extension/sync` - Upload captured workflow
+- `POST /api/capture/step` - Real-time step capture with Bearer token auth
 
 ## Permissions
 
 - `activeTab`: Access current tab for screenshot capture
 - `storage`: Store captured steps locally
 - `tabs`: Query and message tabs
-- `<all_urls>`: Inject content script on any page
+- `scripting`: Inject content scripts dynamically
+- `<all_urls>`: Inject content script on any page (required for workflow capture)
 
 ## Troubleshooting
 
@@ -105,3 +183,7 @@ The extension communicates with these backend endpoints:
 - Ensure your FlowCapture web app is running
 - Check the Dashboard URL in Settings is correct (include https://)
 - Make sure you have at least one workspace created in the dashboard
+
+**Extension not appearing:**
+- Reload the extension from chrome://extensions
+- Check for console errors in the extension's service worker

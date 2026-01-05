@@ -165,8 +165,23 @@ export async function registerRoutes(
     const guides = await storage.getGuidesByWorkspace(workspaceId);
     const paginatedGuides = guides.slice(offset, offset + limit);
     
+    // Fetch first step's imageUrl for each guide to use as fallback thumbnail
+    const guidesWithThumbnails = await Promise.all(
+      paginatedGuides.map(async (guide) => {
+        if (guide.coverImageUrl) {
+          return guide; // Already has a cover image
+        }
+        const steps = await storage.getStepsByGuide(guide.id);
+        const firstStep = steps[0];
+        return {
+          ...guide,
+          coverImageUrl: firstStep?.imageUrl || null
+        };
+      })
+    );
+    
     res.json({ 
-      data: paginatedGuides, 
+      data: guidesWithThumbnails, 
       total: guides.length,
       page,
       limit,

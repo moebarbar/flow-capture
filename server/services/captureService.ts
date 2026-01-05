@@ -53,10 +53,11 @@ export const captureService = {
     return isObjectStorageConfigured();
   },
 
-  async startSession(guideId: number, userId: string): Promise<typeof captureSessions.$inferSelect> {
-    // Warn if object storage is not configured (screenshots won't be saved)
+  async startSession(guideId: number, userId: string): Promise<typeof captureSessions.$inferSelect | { error: string }> {
+    // Fail fast if object storage is not configured
     if (!isObjectStorageConfigured()) {
-      console.warn('Starting capture session without object storage - screenshots will not be saved');
+      console.error('Cannot start capture session - object storage not configured');
+      return { error: 'Object storage is not configured. Please set up object storage before capturing.' };
     }
 
     // End any existing active sessions for this guide

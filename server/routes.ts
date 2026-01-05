@@ -1265,12 +1265,17 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       }
       
       const { captureService } = await import("./services/captureService");
-      const session = await captureService.startSession(guideId, userId);
+      const result = await captureService.startSession(guideId, userId);
+      
+      // Check if storage is not configured
+      if ('error' in result) {
+        return res.status(503).json({ message: result.error });
+      }
       
       res.json({
-        token: session.token,
-        expiresAt: session.expiresAt,
-        guideId: session.guideId,
+        token: result.token,
+        expiresAt: result.expiresAt,
+        guideId: result.guideId,
       });
     } catch (error) {
       console.error("Start capture error:", error);

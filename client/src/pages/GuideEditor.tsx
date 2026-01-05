@@ -387,8 +387,20 @@ export default function GuideEditor() {
       {/* Top Bar */}
       <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 shrink-0 z-30">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <a href="/"><ArrowLeft className="h-5 w-5" /></a>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => {
+              // Use browser history if available, fallback to /guides
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                window.location.href = '/guides';
+              }
+            }}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="h-8 w-px bg-border" />
           <Input 

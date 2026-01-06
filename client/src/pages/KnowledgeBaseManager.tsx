@@ -67,9 +67,10 @@ export default function KnowledgeBaseManager() {
     queryKey: ['/api/kb/categories'],
   });
 
-  const { data: guides = [] } = useQuery<Guide[]>({
+  const { data: guidesResponse } = useQuery<{ guides: Guide[]; total: number; page: number; hasMore: boolean }>({
     queryKey: ['/api/guides'],
   });
+  const guides = guidesResponse?.guides || [];
 
   const filteredArticles = useMemo(() => {
     return articles.filter((article) => {

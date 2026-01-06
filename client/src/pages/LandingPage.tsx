@@ -1337,7 +1337,7 @@ export default function LandingPage() {
                 className="font-medium text-foreground hover:text-primary transition-colors"
                 data-testid="link-footer-moebarbar"
               >
-                Moebarbar
+                Moe Barbar
               </a>
             </p>
             <div className="flex items-center gap-6">

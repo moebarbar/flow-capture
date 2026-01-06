@@ -201,14 +201,6 @@ export default function KnowledgeBaseManager() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setImportGuideOpen(true)}
-                  data-testid="button-import-guide"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import
-                </Button>
-                <Button
-                  variant="outline"
                   onClick={() => setCreateCategoryOpen(true)}
                   data-testid="button-create-category"
                 >
@@ -221,6 +213,14 @@ export default function KnowledgeBaseManager() {
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   New Article
+                </Button>
+                <Button
+                  onClick={() => setImportGuideOpen(true)}
+                  className="bg-gradient-to-r from-primary to-purple-600 text-white border-0"
+                  data-testid="button-import-guide"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import from Guides
                 </Button>
               </div>
             </div>

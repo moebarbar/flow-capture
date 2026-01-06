@@ -608,6 +608,120 @@ export const analyticsEvents = pgTable("analytics_events", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// === KNOWLEDGE BASE ===
+
+export const kbArticleStatusEnum = pgEnum("kb_article_status", ["draft", "published", "archived"]);
+
+// Knowledge Base Categories
+export const kbCategories = pgTable("kb_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").unique().notNull(),
+  description: text("description"),
+  icon: text("icon").default("BookOpen"), // Lucide icon name
+  color: text("color").default("#6366f1"), // Category accent color
+  order: integer("order").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  articleCount: integer("article_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Knowledge Base Articles
+export const kbArticles = pgTable("kb_articles", {
+  id: serial("id").primaryKey(),
+  categoryId: integer("category_id").references(() => kbCategories.id),
+  title: text("title").notNull(),
+  slug: text("slug").unique().notNull(),
+  content: text("content").notNull(), // Rich text / HTML content
+  excerpt: text("excerpt"), // Short summary for cards
+  featuredImageUrl: text("featured_image_url"),
+  status: kbArticleStatusEnum("status").default("draft").notNull(),
+  authorId: text("author_id").references(() => users.id).notNull(),
+  // Source linking - can be linked to a captured guide
+  sourceGuideId: integer("source_guide_id").references(() => guides.id),
+  sourceType: text("source_type"), // 'manual' or 'guide_conversion'
+  // SEO & metadata
+  metaDescription: text("meta_description"),
+  tags: text("tags").array(), // Array of tags for filtering
+  // Stats
+  viewCount: integer("view_count").default(0).notNull(),
+  helpfulCount: integer("helpful_count").default(0).notNull(),
+  notHelpfulCount: integer("not_helpful_count").default(0).notNull(),
+  readingTimeMinutes: integer("reading_time_minutes").default(3),
+  // Publishing
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Knowledge Base Article Views - Track for analytics
+export const kbArticleViews = pgTable("kb_article_views", {
+  id: serial("id").primaryKey(),
+  articleId: integer("article_id").references(() => kbArticles.id).notNull(),
+  sessionId: text("session_id"),
+  userId: text("user_id").references(() => users.id),
+  helpful: boolean("helpful"), // null = no feedback, true/false = feedback given
+  userAgent: text("user_agent"),
+  referrer: text("referrer"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Insert schemas for KB
+export const insertKbCategorySchema = createInsertSchema(kbCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  articleCount: true,
+});
+
+export const insertKbArticleSchema = createInsertSchema(kbArticles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewCount: true,
+  helpfulCount: true,
+  notHelpfulCount: true,
+});
+
+export type InsertKbCategory = z.infer<typeof insertKbCategorySchema>;
+export type KbCategory = typeof kbCategories.$inferSelect;
+export type InsertKbArticle = z.infer<typeof insertKbArticleSchema>;
+export type KbArticle = typeof kbArticles.$inferSelect;
+export type KbArticleView = typeof kbArticleViews.$inferSelect;
+
+// KB Relations
+export const kbCategoriesRelations = relations(kbCategories, ({ many }) => ({
+  articles: many(kbArticles),
+}));
+
+export const kbArticlesRelations = relations(kbArticles, ({ one, many }) => ({
+  category: one(kbCategories, {
+    fields: [kbArticles.categoryId],
+    references: [kbCategories.id],
+  }),
+  author: one(users, {
+    fields: [kbArticles.authorId],
+    references: [users.id],
+  }),
+  sourceGuide: one(guides, {
+    fields: [kbArticles.sourceGuideId],
+    references: [guides.id],
+  }),
+  views: many(kbArticleViews),
+}));
+
+export const kbArticleViewsRelations = relations(kbArticleViews, ({ one }) => ({
+  article: one(kbArticles, {
+    fields: [kbArticleViews.articleId],
+    references: [kbArticles.id],
+  }),
+  user: one(users, {
+    fields: [kbArticleViews.userId],
+    references: [users.id],
+  }),
+}));
+
 // === RELATIONS ===
 
 export const stepAssignmentsRelations = relations(stepAssignments, ({ one }) => ({

@@ -3752,6 +3752,386 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     }
   });
 
+  // === KNOWLEDGE BASE - PUBLIC ROUTES ===
+
+  // Get all active categories (public)
+  app.get('/api/kb/categories', async (req, res) => {
+    try {
+      const categories = await storage.getActiveKbCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error('Error fetching KB categories:', error);
+      res.status(500).json({ message: 'Failed to fetch categories' });
+    }
+  });
+
+  // Get category by slug (public)
+  app.get('/api/kb/categories/:slug', async (req, res) => {
+    try {
+      const category = await storage.getKbCategoryBySlug(req.params.slug);
+      if (!category) return res.status(404).json({ message: 'Category not found' });
+      res.json(category);
+    } catch (error) {
+      console.error('Error fetching KB category:', error);
+      res.status(500).json({ message: 'Failed to fetch category' });
+    }
+  });
+
+  // Get published articles (public, optionally filtered by category)
+  app.get('/api/kb/articles', async (req, res) => {
+    try {
+      const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+      const articles = await storage.getPublishedKbArticles(categoryId);
+      res.json(articles);
+    } catch (error) {
+      console.error('Error fetching KB articles:', error);
+      res.status(500).json({ message: 'Failed to fetch articles' });
+    }
+  });
+
+  // Search articles (public)
+  app.get('/api/kb/search', async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 2) {
+        return res.json([]);
+      }
+      const articles = await storage.searchKbArticles(query);
+      res.json(articles);
+    } catch (error) {
+      console.error('Error searching KB articles:', error);
+      res.status(500).json({ message: 'Failed to search articles' });
+    }
+  });
+
+  // Get article by slug (public)
+  app.get('/api/kb/articles/:slug', async (req, res) => {
+    try {
+      const article = await storage.getKbArticleBySlug(req.params.slug);
+      if (!article) return res.status(404).json({ message: 'Article not found' });
+      if (article.status !== 'published') {
+        return res.status(404).json({ message: 'Article not found' });
+      }
+      // Increment view count
+      await storage.incrementKbArticleViewCount(article.id);
+      res.json(article);
+    } catch (error) {
+      console.error('Error fetching KB article:', error);
+      res.status(500).json({ message: 'Failed to fetch article' });
+    }
+  });
+
+  // Submit article feedback (public)
+  app.post('/api/kb/articles/:id/feedback', async (req, res) => {
+    try {
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) return res.status(400).json({ message: 'Invalid article ID' });
+      
+      const { helpful } = req.body;
+      if (typeof helpful !== 'boolean') {
+        return res.status(400).json({ message: 'Helpful field must be a boolean' });
+      }
+      
+      await storage.updateKbArticleHelpfulness(articleId, helpful);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error submitting article feedback:', error);
+      res.status(500).json({ message: 'Failed to submit feedback' });
+    }
+  });
+
+  // === KNOWLEDGE BASE - ADMIN ROUTES ===
+
+  // Get all categories (admin)
+  app.get('/api/admin/kb/categories', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const categories = await storage.getAllKbCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error('Error fetching KB categories:', error);
+      res.status(500).json({ message: 'Failed to fetch categories' });
+    }
+  });
+
+  // Create category (admin)
+  app.post('/api/admin/kb/categories', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const { name, slug, description, icon, color, order, isActive } = req.body;
+      if (!name || !slug) {
+        return res.status(400).json({ message: 'Name and slug are required' });
+      }
+      
+      const category = await storage.createKbCategory({
+        name,
+        slug,
+        description,
+        icon,
+        color,
+        order: order || 0,
+        isActive: isActive !== false
+      });
+      res.status(201).json(category);
+    } catch (error) {
+      console.error('Error creating KB category:', error);
+      res.status(500).json({ message: 'Failed to create category' });
+    }
+  });
+
+  // Update category (admin)
+  app.patch('/api/admin/kb/categories/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const categoryId = parseInt(req.params.id);
+      if (isNaN(categoryId)) return res.status(400).json({ message: 'Invalid category ID' });
+      
+      const category = await storage.updateKbCategory(categoryId, req.body);
+      res.json(category);
+    } catch (error) {
+      console.error('Error updating KB category:', error);
+      res.status(500).json({ message: 'Failed to update category' });
+    }
+  });
+
+  // Delete category (admin)
+  app.delete('/api/admin/kb/categories/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const categoryId = parseInt(req.params.id);
+      if (isNaN(categoryId)) return res.status(400).json({ message: 'Invalid category ID' });
+      
+      await storage.deleteKbCategory(categoryId);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting KB category:', error);
+      res.status(500).json({ message: 'Failed to delete category' });
+    }
+  });
+
+  // Get all articles (admin)
+  app.get('/api/admin/kb/articles', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const articles = await storage.getAllKbArticles(limit, offset);
+      res.json(articles);
+    } catch (error) {
+      console.error('Error fetching KB articles:', error);
+      res.status(500).json({ message: 'Failed to fetch articles' });
+    }
+  });
+
+  // Get article by ID (admin)
+  app.get('/api/admin/kb/articles/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) return res.status(400).json({ message: 'Invalid article ID' });
+      
+      const article = await storage.getKbArticle(articleId);
+      if (!article) return res.status(404).json({ message: 'Article not found' });
+      res.json(article);
+    } catch (error) {
+      console.error('Error fetching KB article:', error);
+      res.status(500).json({ message: 'Failed to fetch article' });
+    }
+  });
+
+  // Create article (admin)
+  app.post('/api/admin/kb/articles', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const { title, slug, content, excerpt, categoryId, featuredImageUrl, status, metaDescription, tags, sourceGuideId, sourceType, readingTimeMinutes } = req.body;
+      
+      if (!title || !slug || !content) {
+        return res.status(400).json({ message: 'Title, slug, and content are required' });
+      }
+      
+      const article = await storage.createKbArticle({
+        title,
+        slug,
+        content,
+        excerpt,
+        categoryId,
+        featuredImageUrl,
+        status: status || 'draft',
+        authorId: user.claims.sub,
+        metaDescription,
+        tags,
+        sourceGuideId,
+        sourceType,
+        readingTimeMinutes,
+        publishedAt: status === 'published' ? new Date() : null
+      });
+      res.status(201).json(article);
+    } catch (error) {
+      console.error('Error creating KB article:', error);
+      res.status(500).json({ message: 'Failed to create article' });
+    }
+  });
+
+  // Update article (admin)
+  app.patch('/api/admin/kb/articles/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) return res.status(400).json({ message: 'Invalid article ID' });
+      
+      const existingArticle = await storage.getKbArticle(articleId);
+      if (!existingArticle) return res.status(404).json({ message: 'Article not found' });
+      
+      const updates = { ...req.body };
+      
+      // Set publishedAt when publishing for the first time
+      if (updates.status === 'published' && existingArticle.status !== 'published') {
+        updates.publishedAt = new Date();
+      }
+      
+      const article = await storage.updateKbArticle(articleId, updates);
+      res.json(article);
+    } catch (error) {
+      console.error('Error updating KB article:', error);
+      res.status(500).json({ message: 'Failed to update article' });
+    }
+  });
+
+  // Delete article (admin)
+  app.delete('/api/admin/kb/articles/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) return res.status(400).json({ message: 'Invalid article ID' });
+      
+      await storage.deleteKbArticle(articleId);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting KB article:', error);
+      res.status(500).json({ message: 'Failed to delete article' });
+    }
+  });
+
+  // Convert guide to KB article (admin)
+  app.post('/api/admin/kb/articles/from-guide/:guideId', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser || dbUser.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    try {
+      const guideId = parseInt(req.params.guideId);
+      if (isNaN(guideId)) return res.status(400).json({ message: 'Invalid guide ID' });
+      
+      const guide = await storage.getGuide(guideId);
+      if (!guide) return res.status(404).json({ message: 'Guide not found' });
+      
+      const stepsData = await storage.getStepsByGuide(guideId);
+      
+      // Generate content from guide steps
+      let content = `<h1>${guide.title}</h1>\n`;
+      if (guide.description) {
+        content += `<p>${guide.description}</p>\n`;
+      }
+      content += '\n';
+      
+      stepsData.forEach((step, index) => {
+        content += `<h2>Step ${index + 1}: ${step.title || 'Untitled Step'}</h2>\n`;
+        if (step.description) {
+          content += `<p>${step.description}</p>\n`;
+        }
+        if (step.imageUrl) {
+          content += `<img src="${step.imageUrl}" alt="${step.title || 'Step image'}" />\n`;
+        }
+        content += '\n';
+      });
+      
+      // Generate slug from title
+      const baseSlug = guide.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      const slug = `${baseSlug}-${Date.now()}`;
+      
+      const { categoryId } = req.body;
+      
+      const article = await storage.createKbArticle({
+        title: guide.title,
+        slug,
+        content,
+        excerpt: guide.description?.substring(0, 200),
+        categoryId,
+        featuredImageUrl: guide.coverImageUrl,
+        status: 'draft',
+        authorId: user.claims.sub,
+        sourceGuideId: guideId,
+        sourceType: 'guide_conversion',
+        readingTimeMinutes: Math.max(1, Math.ceil(stepsData.length * 0.5))
+      });
+      
+      res.status(201).json(article);
+    } catch (error) {
+      console.error('Error converting guide to KB article:', error);
+      res.status(500).json({ message: 'Failed to convert guide to article' });
+    }
+  });
+
   return httpServer;
 }
 

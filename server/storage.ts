@@ -2,7 +2,7 @@ import {
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
   guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares, contentPages,
   stepAssignments, guideApprovals, stepComments, notifications, teamActivity,
-  guideTranslations, stepTranslations,
+  guideTranslations, stepTranslations, kbCategories, kbArticles, kbArticleViews,
   type User, type UpsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
@@ -21,10 +21,12 @@ import {
   type Notification, type InsertNotification,
   type TeamActivity, type InsertTeamActivity,
   type GuideTranslation, type InsertGuideTranslation,
-  type StepTranslation, type InsertStepTranslation
+  type StepTranslation, type InsertStepTranslation,
+  type KbCategory, type InsertKbCategory,
+  type KbArticle, type InsertKbArticle
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, sql, ilike, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage {
@@ -163,6 +165,28 @@ export interface IStorage {
   createStepTranslation(translation: InsertStepTranslation): Promise<StepTranslation>;
   updateStepTranslation(id: number, translation: Partial<InsertStepTranslation>): Promise<StepTranslation>;
   deleteStepTranslations(guideId: number, locale: string): Promise<void>;
+
+  // Knowledge Base Categories
+  createKbCategory(category: InsertKbCategory): Promise<KbCategory>;
+  getKbCategory(id: number): Promise<KbCategory | undefined>;
+  getKbCategoryBySlug(slug: string): Promise<KbCategory | undefined>;
+  getAllKbCategories(): Promise<KbCategory[]>;
+  getActiveKbCategories(): Promise<KbCategory[]>;
+  updateKbCategory(id: number, category: Partial<InsertKbCategory>): Promise<KbCategory>;
+  deleteKbCategory(id: number): Promise<void>;
+
+  // Knowledge Base Articles
+  createKbArticle(article: InsertKbArticle): Promise<KbArticle>;
+  getKbArticle(id: number): Promise<KbArticle | undefined>;
+  getKbArticleBySlug(slug: string): Promise<KbArticle | undefined>;
+  getAllKbArticles(limit?: number, offset?: number): Promise<KbArticle[]>;
+  getPublishedKbArticles(categoryId?: number): Promise<KbArticle[]>;
+  getKbArticlesByCategory(categoryId: number): Promise<KbArticle[]>;
+  searchKbArticles(query: string): Promise<KbArticle[]>;
+  updateKbArticle(id: number, article: Partial<InsertKbArticle>): Promise<KbArticle>;
+  deleteKbArticle(id: number): Promise<void>;
+  incrementKbArticleViewCount(id: number): Promise<void>;
+  updateKbArticleHelpfulness(id: number, helpful: boolean): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -994,6 +1018,141 @@ export class DatabaseStorage implements IStorage {
         eq(stepTranslations.guideId, guideId),
         eq(stepTranslations.locale, locale)
       ));
+  }
+
+  // Knowledge Base Category methods
+  async createKbCategory(category: InsertKbCategory): Promise<KbCategory> {
+    const [newCategory] = await db.insert(kbCategories).values(category).returning();
+    return newCategory;
+  }
+
+  async getKbCategory(id: number): Promise<KbCategory | undefined> {
+    const [category] = await db.select().from(kbCategories).where(eq(kbCategories.id, id));
+    return category;
+  }
+
+  async getKbCategoryBySlug(slug: string): Promise<KbCategory | undefined> {
+    const [category] = await db.select().from(kbCategories).where(eq(kbCategories.slug, slug));
+    return category;
+  }
+
+  async getAllKbCategories(): Promise<KbCategory[]> {
+    return db.select().from(kbCategories).orderBy(asc(kbCategories.order));
+  }
+
+  async getActiveKbCategories(): Promise<KbCategory[]> {
+    return db.select().from(kbCategories)
+      .where(eq(kbCategories.isActive, true))
+      .orderBy(asc(kbCategories.order));
+  }
+
+  async updateKbCategory(id: number, category: Partial<InsertKbCategory>): Promise<KbCategory> {
+    const [updated] = await db.update(kbCategories)
+      .set({ ...category, updatedAt: new Date() })
+      .where(eq(kbCategories.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteKbCategory(id: number): Promise<void> {
+    await db.delete(kbCategories).where(eq(kbCategories.id, id));
+  }
+
+  // Knowledge Base Article methods
+  async createKbArticle(article: InsertKbArticle): Promise<KbArticle> {
+    const [newArticle] = await db.insert(kbArticles).values(article).returning();
+    // Update category article count
+    if (article.categoryId) {
+      await db.update(kbCategories)
+        .set({ articleCount: sql`${kbCategories.articleCount} + 1` })
+        .where(eq(kbCategories.id, article.categoryId));
+    }
+    return newArticle;
+  }
+
+  async getKbArticle(id: number): Promise<KbArticle | undefined> {
+    const [article] = await db.select().from(kbArticles).where(eq(kbArticles.id, id));
+    return article;
+  }
+
+  async getKbArticleBySlug(slug: string): Promise<KbArticle | undefined> {
+    const [article] = await db.select().from(kbArticles).where(eq(kbArticles.slug, slug));
+    return article;
+  }
+
+  async getAllKbArticles(limit = 50, offset = 0): Promise<KbArticle[]> {
+    return db.select().from(kbArticles)
+      .orderBy(desc(kbArticles.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getPublishedKbArticles(categoryId?: number): Promise<KbArticle[]> {
+    const conditions = [eq(kbArticles.status, 'published' as const)];
+    if (categoryId) {
+      conditions.push(eq(kbArticles.categoryId, categoryId));
+    }
+    return db.select().from(kbArticles)
+      .where(and(...conditions))
+      .orderBy(desc(kbArticles.publishedAt));
+  }
+
+  async getKbArticlesByCategory(categoryId: number): Promise<KbArticle[]> {
+    return db.select().from(kbArticles)
+      .where(eq(kbArticles.categoryId, categoryId))
+      .orderBy(desc(kbArticles.createdAt));
+  }
+
+  async searchKbArticles(query: string): Promise<KbArticle[]> {
+    const searchPattern = `%${query}%`;
+    return db.select().from(kbArticles)
+      .where(and(
+        eq(kbArticles.status, 'published' as const),
+        or(
+          ilike(kbArticles.title, searchPattern),
+          ilike(kbArticles.content, searchPattern),
+          ilike(kbArticles.excerpt, searchPattern)
+        )
+      ))
+      .orderBy(desc(kbArticles.viewCount))
+      .limit(20);
+  }
+
+  async updateKbArticle(id: number, article: Partial<InsertKbArticle>): Promise<KbArticle> {
+    const [updated] = await db.update(kbArticles)
+      .set({ ...article, updatedAt: new Date() })
+      .where(eq(kbArticles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteKbArticle(id: number): Promise<void> {
+    // Get article first to update category count
+    const article = await this.getKbArticle(id);
+    if (article?.categoryId) {
+      await db.update(kbCategories)
+        .set({ articleCount: sql`GREATEST(${kbCategories.articleCount} - 1, 0)` })
+        .where(eq(kbCategories.id, article.categoryId));
+    }
+    await db.delete(kbArticles).where(eq(kbArticles.id, id));
+  }
+
+  async incrementKbArticleViewCount(id: number): Promise<void> {
+    await db.update(kbArticles)
+      .set({ viewCount: sql`${kbArticles.viewCount} + 1` })
+      .where(eq(kbArticles.id, id));
+  }
+
+  async updateKbArticleHelpfulness(id: number, helpful: boolean): Promise<void> {
+    if (helpful) {
+      await db.update(kbArticles)
+        .set({ helpfulCount: sql`${kbArticles.helpfulCount} + 1` })
+        .where(eq(kbArticles.id, id));
+    } else {
+      await db.update(kbArticles)
+        .set({ notHelpfulCount: sql`${kbArticles.notHelpfulCount} + 1` })
+        .where(eq(kbArticles.id, id));
+    }
   }
 }
 

@@ -20,6 +20,7 @@ import { emailService } from "./services/emailService";
 import { billingService } from "./services/billingService";
 import { invitationService } from "./services/invitationService";
 import { integrationsService } from "./services/integrationsService";
+import { validateIntegrationCredentials, triggerIntegrationSync, getProvider } from "./services/integrationProviders";
 import { db } from "./db";
 import sanitizeHtml from "sanitize-html"; 
 
@@ -3273,6 +3274,166 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: 'Failed to delete integration' });
+    }
+  });
+
+  // Validate integration credentials before saving
+  app.post('/api/workspaces/:workspaceId/integrations/validate', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const { provider, config } = req.body;
+      if (!provider || !config) {
+        return res.status(400).json({ message: 'Provider and config are required' });
+      }
+
+      const result = await validateIntegrationCredentials(provider, config);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to validate credentials',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Test an existing integration
+  app.post('/api/workspaces/:workspaceId/integrations/:id/test', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const integrationId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed || (access.role !== 'owner' && access.role !== 'admin')) {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+
+      const integration = await integrationsService.getIntegration(integrationId);
+      if (!integration) {
+        return res.status(404).json({ message: 'Integration not found' });
+      }
+
+      const config = integration.credentials as Record<string, string>;
+      const result = await validateIntegrationCredentials(integration.provider, config);
+      
+      // Update integration status based on test result
+      await integrationsService.updateIntegrationStatus(
+        integrationId, 
+        result.success ? 'active' : 'error',
+        result.success ? undefined : result.error
+      );
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to test integration',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Trigger integration sync for a specific guide
+  app.post('/api/workspaces/:workspaceId/integrations/:id/sync', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const integrationId = parseInt(req.params.id);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const { guideId, action } = req.body;
+      if (!guideId) {
+        return res.status(400).json({ message: 'Guide ID is required' });
+      }
+
+      const integration = await integrationsService.getIntegration(integrationId);
+      if (!integration || integration.status !== 'active') {
+        return res.status(400).json({ message: 'Integration not found or inactive' });
+      }
+
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: 'Guide not found' });
+      }
+
+      const credentials = integration.credentials as Record<string, string>;
+      const result = await triggerIntegrationSync(
+        integration.provider, 
+        guide, 
+        credentials, 
+        action || 'published'
+      );
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to sync integration',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Trigger all active integrations for a guide (called when guide is published)
+  app.post('/api/workspaces/:workspaceId/guides/:guideId/sync-integrations', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const workspaceId = parseInt(req.params.workspaceId);
+    const guideId = parseInt(req.params.guideId);
+
+    try {
+      const access = await checkWorkspaceAccess(user.claims.sub, workspaceId);
+      if (!access.allowed) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const guide = await storage.getGuide(guideId);
+      if (!guide || guide.workspaceId !== workspaceId) {
+        return res.status(404).json({ message: 'Guide not found' });
+      }
+
+      const action = req.body.action || 'published';
+      const integrations = await integrationsService.getIntegrationsByWorkspace(workspaceId);
+      const activeIntegrations = integrations.filter(i => i.status === 'active');
+
+      const results = await Promise.all(
+        activeIntegrations.map(async (integration) => {
+          const credentials = integration.credentials as Record<string, string>;
+          const result = await triggerIntegrationSync(integration.provider, guide, credentials, action);
+          return {
+            integrationId: integration.id,
+            provider: integration.provider,
+            name: integration.name,
+            ...result
+          };
+        })
+      );
+
+      res.json({ 
+        synced: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length,
+        results 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        message: 'Failed to sync integrations',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

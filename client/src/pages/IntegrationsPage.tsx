@@ -26,13 +26,14 @@ const INTEGRATION_PROVIDERS = [
   { id: "slack", name: "Slack", icon: SiSlack, description: "Send notifications to Slack channels", category: "communication" },
   { id: "microsoft_teams", name: "Microsoft Teams", icon: MessageSquare, description: "Push updates to Teams channels", category: "communication" },
   { id: "email", name: "Email (SendGrid)", icon: Mail, description: "Send email notifications", category: "communication" },
-  { id: "jira", name: "Jira", icon: SiJira, description: "Create tasks and track progress", category: "project" },
-  { id: "clickup", name: "ClickUp", icon: Calendar, description: "Sync tasks with ClickUp boards", category: "project" },
-  { id: "monday", name: "Monday.com", icon: Calendar, description: "Connect to Monday boards", category: "project" },
-  { id: "notion", name: "Notion", icon: SiNotion, description: "Push guides to Notion pages", category: "content" },
-  { id: "confluence", name: "Confluence", icon: FileText, description: "Sync to Confluence spaces", category: "content" },
-  { id: "google_analytics", name: "Google Analytics", icon: SiGoogleanalytics, description: "Track guide usage", category: "analytics" },
-  { id: "mixpanel", name: "Mixpanel", icon: BarChart3, description: "Analytics and user tracking", category: "analytics" },
+  { id: "jira", name: "Jira", icon: SiJira, description: "Create Jira issues from guides", category: "project" },
+  { id: "trello", name: "Trello", icon: Calendar, description: "Create cards in Trello boards", category: "project" },
+  { id: "asana", name: "Asana", icon: Calendar, description: "Create tasks in Asana projects", category: "project" },
+  { id: "notion", name: "Notion", icon: SiNotion, description: "Sync guides to Notion pages", category: "content" },
+  { id: "confluence", name: "Confluence", icon: FileText, description: "Publish to Confluence spaces", category: "content" },
+  { id: "google_drive", name: "Google Drive", icon: FileText, description: "Export guides to Google Drive", category: "content" },
+  { id: "hubspot", name: "HubSpot", icon: BarChart3, description: "Sync documentation to HubSpot", category: "analytics" },
+  { id: "mixpanel", name: "Mixpanel", icon: BarChart3, description: "Track guide analytics", category: "analytics" },
 ];
 
 const AUTOMATION_TRIGGERS = [
@@ -87,14 +88,51 @@ export default function IntegrationsPage() {
     queryKey: ['/api/integrations/ai-status'],
   });
 
+  // Validate credentials before saving
+  const validateCredentialsMutation = useMutation({
+    mutationFn: async (data: { provider: string; config: Record<string, string> }) => {
+      const response = await apiRequest('POST', `/api/workspaces/${workspaceId}/integrations/validate`, data);
+      return response.json();
+    },
+  });
+
+  // Create integration (validates first, then saves)
   const createIntegrationMutation = useMutation({
     mutationFn: async (data: { name: string; provider: string; config: Record<string, string> }) => {
-      return apiRequest('POST', `/api/workspaces/${workspaceId}/integrations`, data);
+      // First validate credentials
+      const validateResponse = await apiRequest('POST', `/api/workspaces/${workspaceId}/integrations/validate`, {
+        provider: data.provider,
+        config: data.config
+      });
+      const validationResult = await validateResponse.json();
+      
+      if (!validationResult.success) {
+        throw new Error(validationResult.message || 'Credential validation failed');
+      }
+      
+      // If valid, create the integration with credentials field for database
+      return apiRequest('POST', `/api/workspaces/${workspaceId}/integrations`, {
+        name: data.name,
+        provider: data.provider,
+        credentials: data.config,
+        status: 'active'
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'integrations'] });
       setConfigureProvider(null);
       setShowAddIntegration(false);
+    },
+  });
+
+  // Test an existing integration
+  const testIntegrationMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiRequest('POST', `/api/workspaces/${workspaceId}/integrations/${id}/test`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'integrations'] });
     },
   });
 
@@ -302,6 +340,25 @@ export default function IntegrationsPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
+                            {integration.status === 'error' && (
+                              <Badge variant="destructive" className="text-xs">
+                                Error
+                              </Badge>
+                            )}
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => testIntegrationMutation.mutate(integration.id)}
+                              disabled={testIntegrationMutation.isPending}
+                              data-testid={`test-integration-${integration.id}`}
+                            >
+                              {testIntegrationMutation.isPending ? (
+                                <Activity className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Play className="h-4 w-4" />
+                              )}
+                              <span className="ml-1 hidden sm:inline">Test</span>
+                            </Button>
                             <Switch
                               checked={integration.status === 'active'}
                               onCheckedChange={(checked) => 
@@ -826,7 +883,7 @@ function AutomationDialog({
 const PROVIDER_FIELDS: Record<string, { key: string; label: string; placeholder: string; type?: string }[]> = {
   slack: [
     { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://hooks.slack.com/services/...' },
-    { key: 'channel', label: 'Default Channel', placeholder: '#general' },
+    { key: 'channel', label: 'Default Channel (optional)', placeholder: '#general' },
   ],
   microsoft_teams: [
     { key: 'webhookUrl', label: 'Incoming Webhook URL', placeholder: 'https://outlook.office.com/webhook/...' },
@@ -840,18 +897,21 @@ const PROVIDER_FIELDS: Record<string, { key: string; label: string; placeholder:
     { key: 'email', label: 'Email', placeholder: 'your-email@company.com' },
     { key: 'apiToken', label: 'API Token', placeholder: 'Your Jira API token', type: 'password' },
     { key: 'projectKey', label: 'Default Project Key', placeholder: 'PROJ' },
+    { key: 'issueType', label: 'Issue Type', placeholder: 'Task' },
   ],
-  clickup: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'pk_xxxx...', type: 'password' },
-    { key: 'workspaceId', label: 'Workspace ID', placeholder: '123456' },
+  trello: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'Your Trello API key', type: 'password' },
+    { key: 'apiToken', label: 'API Token', placeholder: 'Your Trello token', type: 'password' },
+    { key: 'listId', label: 'List ID', placeholder: 'The ID of the list to add cards to' },
   ],
-  monday: [
-    { key: 'apiKey', label: 'API Key', placeholder: 'Your Monday.com API key', type: 'password' },
-    { key: 'boardId', label: 'Default Board ID', placeholder: '123456789' },
+  asana: [
+    { key: 'accessToken', label: 'Personal Access Token', placeholder: 'Your Asana access token', type: 'password' },
+    { key: 'projectId', label: 'Project ID', placeholder: 'Your Asana project ID' },
   ],
   notion: [
     { key: 'apiKey', label: 'Integration Token', placeholder: 'secret_xxxx...', type: 'password' },
-    { key: 'databaseId', label: 'Database ID', placeholder: 'abc123...' },
+    { key: 'databaseId', label: 'Database ID (optional)', placeholder: 'abc123...' },
+    { key: 'parentPageId', label: 'Parent Page ID (if no database)', placeholder: 'abc123...' },
   ],
   confluence: [
     { key: 'domain', label: 'Confluence Domain', placeholder: 'yourcompany.atlassian.net' },
@@ -859,8 +919,12 @@ const PROVIDER_FIELDS: Record<string, { key: string; label: string; placeholder:
     { key: 'apiToken', label: 'API Token', placeholder: 'Your Confluence API token', type: 'password' },
     { key: 'spaceKey', label: 'Default Space Key', placeholder: 'DOCS' },
   ],
-  google_analytics: [
-    { key: 'measurementId', label: 'Measurement ID', placeholder: 'G-XXXXXXXXXX' },
+  google_drive: [
+    { key: 'accessToken', label: 'OAuth Access Token', placeholder: 'Your Google OAuth token', type: 'password' },
+    { key: 'folderId', label: 'Folder ID (optional)', placeholder: 'Target folder ID' },
+  ],
+  hubspot: [
+    { key: 'accessToken', label: 'Private App Token', placeholder: 'Your HubSpot token', type: 'password' },
   ],
   mixpanel: [
     { key: 'projectToken', label: 'Project Token', placeholder: 'Your Mixpanel project token', type: 'password' },

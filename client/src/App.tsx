@@ -31,6 +31,9 @@ const IntegrationsPage = lazy(() => import("@/pages/IntegrationsPage"));
 const AcceptInvitation = lazy(() => import("@/pages/AcceptInvitation"));
 const InteractiveDemo = lazy(() => import("@/pages/InteractiveDemo"));
 const WebhooksSettings = lazy(() => import("@/pages/WebhooksSettings"));
+const KnowledgeBase = lazy(() => import("@/pages/KnowledgeBase"));
+const KnowledgeBaseArticle = lazy(() => import("@/pages/KnowledgeBaseArticle"));
+const KnowledgeBaseCategory = lazy(() => import("@/pages/KnowledgeBaseCategory"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -137,6 +140,27 @@ function Router() {
         {() => (
           <Suspense fallback={<PageLoader />}>
             <InteractiveDemo />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/help">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <KnowledgeBase />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/help/article/:slug">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <KnowledgeBaseArticle />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/help/category/:slug">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <KnowledgeBaseCategory />
           </Suspense>
         )}
       </Route>

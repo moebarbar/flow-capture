@@ -4066,6 +4066,114 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     }
   });
 
+  // KB Article Embed Info (public)
+  app.get('/api/kb/articles/:slug/embed', async (req, res) => {
+    try {
+      const article = await storage.getKbArticleBySlug(req.params.slug);
+      if (!article) return res.status(404).json({ message: 'Article not found' });
+      if (article.status !== 'published') {
+        return res.status(404).json({ message: 'Article not found' });
+      }
+      
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const articleUrl = `${baseUrl}/help/article/${article.slug}`;
+      const embedUrl = `${baseUrl}/help/embed/${article.slug}`;
+      
+      const embedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" style="border: 1px solid #e5e7eb; border-radius: 8px;"></iframe>`;
+      
+      res.json({
+        article: {
+          id: article.id,
+          title: article.title,
+          slug: article.slug,
+          excerpt: article.excerpt,
+        },
+        shareUrl: articleUrl,
+        embedUrl,
+        embedCode,
+      });
+    } catch (error) {
+      console.error('Error generating KB article embed:', error);
+      res.status(500).json({ message: 'Failed to generate embed code' });
+    }
+  });
+
+  // Convert user's own guide to KB article (authenticated users)
+  app.post('/api/guides/:guideId/convert-to-kb', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+
+    try {
+      const guideId = parseInt(req.params.guideId);
+      if (isNaN(guideId)) return res.status(400).json({ message: 'Invalid guide ID' });
+      
+      const guide = await storage.getGuide(guideId);
+      if (!guide) return res.status(404).json({ message: 'Guide not found' });
+      
+      // Verify user owns this guide or is in the workspace
+      if (guide.createdById !== userId) {
+        // Check workspace membership
+        const members = await storage.getWorkspaceMembers(guide.workspaceId);
+        const isMember = members.some((m: any) => m.userId === userId);
+        if (!isMember) {
+          return res.status(403).json({ message: 'Not authorized to convert this guide' });
+        }
+      }
+      
+      const stepsData = await storage.getStepsByGuide(guideId);
+      
+      // Generate professional HTML content from guide steps
+      let content = '';
+      if (guide.description) {
+        content += `<p class="lead">${guide.description}</p>\n\n`;
+      }
+      
+      stepsData.forEach((step, index) => {
+        content += `<div class="step-container">\n`;
+        content += `<h2><span class="step-number">${index + 1}</span>${step.title || 'Step ' + (index + 1)}</h2>\n`;
+        if (step.description) {
+          content += `<p>${step.description}</p>\n`;
+        }
+        if (step.imageUrl) {
+          content += `<figure class="step-image">\n`;
+          content += `<img src="${step.imageUrl}" alt="${step.title || 'Step ' + (index + 1)}" />\n`;
+          content += `</figure>\n`;
+        }
+        content += `</div>\n\n`;
+      });
+      
+      // Generate unique slug from title
+      const baseSlug = guide.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      const slug = `${baseSlug}-${Date.now()}`;
+      
+      const { categoryId, title, excerpt, tags } = req.body;
+      
+      const article = await storage.createKbArticle({
+        title: title || guide.title,
+        slug,
+        content,
+        excerpt: excerpt || guide.description?.substring(0, 200),
+        categoryId: categoryId || null,
+        featuredImageUrl: guide.coverImageUrl,
+        status: 'draft',
+        authorId: userId,
+        sourceGuideId: guideId,
+        sourceType: 'guide_conversion',
+        tags: tags || [],
+        readingTimeMinutes: Math.max(1, Math.ceil(stepsData.length * 0.5))
+      });
+      
+      res.status(201).json(article);
+    } catch (error) {
+      console.error('Error converting guide to KB article:', error);
+      res.status(500).json({ message: 'Failed to convert guide to article' });
+    }
+  });
+
   // Convert guide to KB article (admin)
   app.post('/api/admin/kb/articles/from-guide/:guideId', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

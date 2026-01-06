@@ -34,6 +34,7 @@ const WebhooksSettings = lazy(() => import("@/pages/WebhooksSettings"));
 const KnowledgeBase = lazy(() => import("@/pages/KnowledgeBase"));
 const KnowledgeBaseArticle = lazy(() => import("@/pages/KnowledgeBaseArticle"));
 const KnowledgeBaseCategory = lazy(() => import("@/pages/KnowledgeBaseCategory"));
+const KnowledgeBaseEmbed = lazy(() => import("@/pages/KnowledgeBaseEmbed"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -161,6 +162,13 @@ function Router() {
         {() => (
           <Suspense fallback={<PageLoader />}>
             <KnowledgeBaseCategory />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/help/embed/:slug">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <KnowledgeBaseEmbed />
           </Suspense>
         )}
       </Route>

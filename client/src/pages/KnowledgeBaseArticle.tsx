@@ -8,13 +8,20 @@ import {
   ThumbsDown, 
   ChevronRight,
   BookOpen,
-  Check
+  Check,
+  Share2,
+  Copy,
+  Code,
+  ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { KbArticle, KbCategory } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -231,6 +238,8 @@ export default function KnowledgeBaseArticle() {
               </Card>
             )}
 
+            <ShareEmbedCard articleSlug={article.slug} />
+
             <Card className="mt-6" data-testid="card-need-help">
               <CardHeader>
                 <CardTitle className="text-lg">Need More Help?</CardTitle>
@@ -250,5 +259,142 @@ export default function KnowledgeBaseArticle() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ShareEmbedCard({ articleSlug }: { articleSlug: string }) {
+  const { toast } = useToast();
+  const [embedDialogOpen, setEmbedDialogOpen] = useState(false);
+
+  const { data: embedInfo } = useQuery<{
+    shareUrl: string;
+    embedUrl: string;
+    embedCode: string;
+    article: { id: number; title: string; slug: string; excerpt: string | null };
+  }>({
+    queryKey: ['/api/kb/articles', articleSlug, 'embed'],
+    enabled: embedDialogOpen,
+  });
+
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    toast({ title: "Link copied to clipboard" });
+  };
+
+  const handleCopyEmbed = () => {
+    if (embedInfo?.embedCode) {
+      navigator.clipboard.writeText(embedInfo.embedCode);
+      toast({ title: "Embed code copied to clipboard" });
+    }
+  };
+
+  return (
+    <>
+      <Card className="mt-6" data-testid="card-share-embed">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Share2 className="w-4 h-4" />
+            Share This Article
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            onClick={handleCopyLink}
+            data-testid="button-copy-article-link"
+          >
+            <Copy className="w-4 h-4 mr-2" />
+            Copy Link
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            onClick={() => setEmbedDialogOpen(true)}
+            data-testid="button-get-embed-code"
+          >
+            <Code className="w-4 h-4 mr-2" />
+            Get Embed Code
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start"
+            onClick={() => window.open(shareUrl, '_blank')}
+            data-testid="button-open-new-tab"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Open in New Tab
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Dialog open={embedDialogOpen} onOpenChange={setEmbedDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Code className="w-5 h-5" />
+              Embed This Article
+            </DialogTitle>
+            <DialogDescription>
+              Add this article to any website that supports embeds or iframes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Embed Code</label>
+              <div className="relative">
+                <Textarea
+                  value={embedInfo?.embedCode || 'Loading...'}
+                  readOnly
+                  className="font-mono text-xs h-24 resize-none bg-muted"
+                  data-testid="textarea-article-embed-code"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleCopyEmbed}
+                  className="absolute right-2 top-2"
+                  disabled={!embedInfo?.embedCode}
+                  data-testid="button-copy-article-embed"
+                >
+                  <Copy className="w-3 h-3 mr-1" />
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Direct Link</label>
+              <div className="flex gap-2">
+                <Input
+                  value={embedInfo?.shareUrl || shareUrl}
+                  readOnly
+                  className="flex-1 bg-muted text-sm"
+                  data-testid="input-article-share-url"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleCopyLink}
+                  data-testid="button-copy-share-url"
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              The embedded version displays a clean, focused view of the article content.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

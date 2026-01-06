@@ -63,6 +63,7 @@ export default function IntegrationsPage() {
   const [showAddIntegration, setShowAddIntegration] = useState(false);
   const [showAddWebhook, setShowAddWebhook] = useState(false);
   const [showAddAutomation, setShowAddAutomation] = useState(false);
+  const [configureProvider, setConfigureProvider] = useState<typeof INTEGRATION_PROVIDERS[0] | null>(null);
 
   const { data: integrationsData, isLoading: integrationsLoading } = useQuery<{ data: any[] }>({
     queryKey: ['/api/workspaces', workspaceId, 'integrations'],
@@ -84,6 +85,35 @@ export default function IntegrationsPage() {
     translation: { enabled: boolean; supportedLanguages: number };
   }>({
     queryKey: ['/api/integrations/ai-status'],
+  });
+
+  const createIntegrationMutation = useMutation({
+    mutationFn: async (data: { name: string; provider: string; config: Record<string, string> }) => {
+      return apiRequest('POST', `/api/workspaces/${workspaceId}/integrations`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'integrations'] });
+      setConfigureProvider(null);
+      setShowAddIntegration(false);
+    },
+  });
+
+  const toggleIntegrationMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: 'active' | 'inactive' }) => {
+      return apiRequest('PUT', `/api/workspaces/${workspaceId}/integrations/${id}`, { status });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'integrations'] });
+    },
+  });
+
+  const deleteIntegrationMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('DELETE', `/api/workspaces/${workspaceId}/integrations/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/workspaces', workspaceId, 'integrations'] });
+    },
   });
 
   const createWebhookMutation = useMutation({
@@ -127,6 +157,10 @@ export default function IntegrationsPage() {
   const integrations = integrationsData?.data || [];
   const webhooks = webhooksData?.data || [];
   const automations = automationsData?.data || [];
+
+  const handleProviderClick = (provider: typeof INTEGRATION_PROVIDERS[0]) => {
+    setConfigureProvider(provider);
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -192,6 +226,7 @@ export default function IntegrationsPage() {
                         <Card 
                           key={provider.id} 
                           className="cursor-pointer hover-elevate"
+                          onClick={() => handleProviderClick(provider)}
                           data-testid={`integration-provider-${provider.id}`}
                         >
                           <CardContent className="p-4 flex items-start gap-3">
@@ -216,6 +251,13 @@ export default function IntegrationsPage() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+
+                <IntegrationConfigDialog
+                  provider={configureProvider}
+                  onClose={() => setConfigureProvider(null)}
+                  onSubmit={(data) => createIntegrationMutation.mutate(data)}
+                  isPending={createIntegrationMutation.isPending}
+                />
               </div>
 
               {integrationsLoading ? (
@@ -238,29 +280,51 @@ export default function IntegrationsPage() {
                 </Card>
               ) : (
                 <div className="grid gap-4">
-                  {integrations.map((integration: any) => (
-                    <Card key={integration.id} data-testid={`integration-${integration.id}`}>
-                      <CardContent className="p-4 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-muted">
-                            <Plug className="h-5 w-5" />
+                  {integrations.map((integration: any) => {
+                    const provider = INTEGRATION_PROVIDERS.find(p => p.id === integration.provider);
+                    const ProviderIcon = provider?.icon || Plug;
+                    return (
+                      <Card key={integration.id} data-testid={`integration-${integration.id}`}>
+                        <CardContent className="p-4 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              "p-2 rounded-lg",
+                              integration.status === 'active' ? "bg-green-100 dark:bg-green-900/30" : "bg-muted"
+                            )}>
+                              <ProviderIcon className={cn(
+                                "h-5 w-5",
+                                integration.status === 'active' ? "text-green-600" : "text-muted-foreground"
+                              )} />
+                            </div>
+                            <div>
+                              <h3 className="font-medium">{integration.name}</h3>
+                              <p className="text-sm text-muted-foreground">{provider?.name || integration.provider}</p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-medium">{integration.name}</h3>
-                            <p className="text-sm text-muted-foreground">{integration.provider}</p>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={integration.status === 'active'}
+                              onCheckedChange={(checked) => 
+                                toggleIntegrationMutation.mutate({ 
+                                  id: integration.id, 
+                                  status: checked ? 'active' : 'inactive' 
+                                })
+                              }
+                              data-testid={`toggle-integration-${integration.id}`}
+                            />
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => deleteIntegrationMutation.mutate(integration.id)}
+                              data-testid={`delete-integration-${integration.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={integration.status === 'active' ? 'default' : 'secondary'}>
-                            {integration.status}
-                          </Badge>
-                          <Button variant="ghost" size="icon">
-                            <Settings className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </TabsContent>
@@ -752,6 +816,140 @@ function AutomationDialog({
             data-testid="button-save-automation"
           >
             {isPending ? 'Creating...' : 'Create Automation'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const PROVIDER_FIELDS: Record<string, { key: string; label: string; placeholder: string; type?: string }[]> = {
+  slack: [
+    { key: 'webhookUrl', label: 'Webhook URL', placeholder: 'https://hooks.slack.com/services/...' },
+    { key: 'channel', label: 'Default Channel', placeholder: '#general' },
+  ],
+  microsoft_teams: [
+    { key: 'webhookUrl', label: 'Incoming Webhook URL', placeholder: 'https://outlook.office.com/webhook/...' },
+  ],
+  email: [
+    { key: 'apiKey', label: 'SendGrid API Key', placeholder: 'SG.xxxx...', type: 'password' },
+    { key: 'fromEmail', label: 'From Email', placeholder: 'noreply@yourcompany.com' },
+  ],
+  jira: [
+    { key: 'domain', label: 'Jira Domain', placeholder: 'yourcompany.atlassian.net' },
+    { key: 'email', label: 'Email', placeholder: 'your-email@company.com' },
+    { key: 'apiToken', label: 'API Token', placeholder: 'Your Jira API token', type: 'password' },
+    { key: 'projectKey', label: 'Default Project Key', placeholder: 'PROJ' },
+  ],
+  clickup: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'pk_xxxx...', type: 'password' },
+    { key: 'workspaceId', label: 'Workspace ID', placeholder: '123456' },
+  ],
+  monday: [
+    { key: 'apiKey', label: 'API Key', placeholder: 'Your Monday.com API key', type: 'password' },
+    { key: 'boardId', label: 'Default Board ID', placeholder: '123456789' },
+  ],
+  notion: [
+    { key: 'apiKey', label: 'Integration Token', placeholder: 'secret_xxxx...', type: 'password' },
+    { key: 'databaseId', label: 'Database ID', placeholder: 'abc123...' },
+  ],
+  confluence: [
+    { key: 'domain', label: 'Confluence Domain', placeholder: 'yourcompany.atlassian.net' },
+    { key: 'email', label: 'Email', placeholder: 'your-email@company.com' },
+    { key: 'apiToken', label: 'API Token', placeholder: 'Your Confluence API token', type: 'password' },
+    { key: 'spaceKey', label: 'Default Space Key', placeholder: 'DOCS' },
+  ],
+  google_analytics: [
+    { key: 'measurementId', label: 'Measurement ID', placeholder: 'G-XXXXXXXXXX' },
+  ],
+  mixpanel: [
+    { key: 'projectToken', label: 'Project Token', placeholder: 'Your Mixpanel project token', type: 'password' },
+  ],
+};
+
+function IntegrationConfigDialog({ 
+  provider, 
+  onClose, 
+  onSubmit, 
+  isPending 
+}: { 
+  provider: typeof INTEGRATION_PROVIDERS[0] | null;
+  onClose: () => void;
+  onSubmit: (data: { name: string; provider: string; config: Record<string, string> }) => void;
+  isPending: boolean;
+}) {
+  const [name, setName] = useState('');
+  const [config, setConfig] = useState<Record<string, string>>({});
+
+  const fields = provider ? PROVIDER_FIELDS[provider.id] || [] : [];
+
+  const handleSubmit = () => {
+    if (provider && name) {
+      onSubmit({ name, provider: provider.id, config });
+      setName('');
+      setConfig({});
+    }
+  };
+
+  const handleClose = () => {
+    setName('');
+    setConfig({});
+    onClose();
+  };
+
+  const isValid = name && fields.every(field => config[field.key]?.trim());
+
+  if (!provider) return null;
+
+  return (
+    <Dialog open={!!provider} onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-muted">
+              <provider.icon className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle>Configure {provider.name}</DialogTitle>
+              <DialogDescription>{provider.description}</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="integration-name">Integration Name</Label>
+            <Input 
+              id="integration-name"
+              placeholder={`My ${provider.name} Integration`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              data-testid="input-integration-name"
+            />
+          </div>
+          {fields.map((field) => (
+            <div key={field.key} className="space-y-2">
+              <Label htmlFor={`field-${field.key}`}>{field.label}</Label>
+              <Input 
+                id={`field-${field.key}`}
+                type={field.type || 'text'}
+                placeholder={field.placeholder}
+                value={config[field.key] || ''}
+                onChange={(e) => setConfig({ ...config, [field.key]: e.target.value })}
+                data-testid={`input-${field.key}`}
+              />
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            disabled={isPending || !isValid}
+            data-testid="button-save-integration"
+          >
+            {isPending ? 'Connecting...' : 'Connect Integration'}
           </Button>
         </DialogFooter>
       </DialogContent>

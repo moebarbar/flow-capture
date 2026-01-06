@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, memo, createContext, useContext } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles, Moon, Sun, Users, Menu, X, Plug } from "lucide-react";
+import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles, Moon, Sun, Users, Menu, X, Plug, FileText } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { useTheme } from "@/components/ThemeProvider";
@@ -195,6 +195,7 @@ export const Sidebar = memo(function Sidebar() {
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/guides", label: "My Guides", icon: BookOpen },
+    { href: "/knowledge-base", label: "Knowledge Base", icon: FileText },
     { href: "/studio", label: "Screenshot Studio", icon: Sparkles },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/templates", label: "Templates", icon: LayoutTemplate },

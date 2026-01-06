@@ -35,6 +35,7 @@ const KnowledgeBase = lazy(() => import("@/pages/KnowledgeBase"));
 const KnowledgeBaseArticle = lazy(() => import("@/pages/KnowledgeBaseArticle"));
 const KnowledgeBaseCategory = lazy(() => import("@/pages/KnowledgeBaseCategory"));
 const KnowledgeBaseEmbed = lazy(() => import("@/pages/KnowledgeBaseEmbed"));
+const KnowledgeBaseManager = lazy(() => import("@/pages/KnowledgeBaseManager"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -206,6 +207,9 @@ function Router() {
       </Route>
       <Route path="/webhooks">
         {() => <ProtectedRoute component={WebhooksSettings} />}
+      </Route>
+      <Route path="/knowledge-base">
+        {() => <ProtectedRoute component={KnowledgeBaseManager} />}
       </Route>
 
       <Route>

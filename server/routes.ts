@@ -3840,6 +3840,190 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     }
   });
 
+  // === KNOWLEDGE BASE - AUTHENTICATED USER ROUTES ===
+
+  // Get all articles for current user (for KB manager)
+  app.get('/api/kb/articles/manage', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) return res.status(401).json({ message: "User not found" });
+
+    try {
+      // Get all articles - if admin, return all, otherwise only user's articles
+      const allArticles = await storage.getAllKbArticles();
+      
+      if (dbUser.role === 'admin') {
+        res.json(allArticles);
+      } else {
+        // Filter to only return articles authored by this user
+        const userArticles = allArticles.filter(a => a.authorId === dbUser.id);
+        res.json(userArticles);
+      }
+    } catch (error) {
+      console.error('Error fetching KB articles:', error);
+      res.status(500).json({ message: 'Failed to fetch articles' });
+    }
+  });
+
+  // Create KB article
+  app.post('/api/kb/articles', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) return res.status(401).json({ message: "User not found" });
+
+    try {
+      const { title, excerpt, content, categoryId, status, tags } = req.body;
+      if (!title) {
+        return res.status(400).json({ message: 'Title is required' });
+      }
+
+      // Generate slug
+      const slug = title.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        + '-' + Date.now().toString(36);
+
+      const article = await storage.createKbArticle({
+        categoryId: categoryId || null,
+        title,
+        slug,
+        excerpt: excerpt || null,
+        content: content || '',
+        status: status || 'draft',
+        tags: tags || [],
+        authorId: dbUser.id,
+        readingTimeMinutes: Math.max(1, Math.ceil((content?.split(' ')?.length || 0) / 200)),
+      });
+
+      res.status(201).json(article);
+    } catch (error) {
+      console.error('Error creating KB article:', error);
+      res.status(500).json({ message: 'Failed to create article' });
+    }
+  });
+
+  // Update KB article
+  app.patch('/api/kb/articles/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) return res.status(401).json({ message: "User not found" });
+
+    try {
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) return res.status(400).json({ message: 'Invalid article ID' });
+
+      // Verify user has access to this article (must be author or admin)
+      const article = await storage.getKbArticle(articleId);
+      if (!article) return res.status(404).json({ message: 'Article not found' });
+      
+      if (article.authorId !== dbUser.id && dbUser.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      const updates: any = {};
+      if (req.body.title !== undefined) updates.title = req.body.title;
+      if (req.body.excerpt !== undefined) updates.excerpt = req.body.excerpt;
+      if (req.body.content !== undefined) {
+        updates.content = req.body.content;
+        updates.readingTimeMinutes = Math.max(1, Math.ceil((req.body.content.split(' ')?.length || 0) / 200));
+      }
+      if (req.body.categoryId !== undefined) updates.categoryId = req.body.categoryId;
+      if (req.body.status !== undefined) updates.status = req.body.status;
+      if (req.body.tags !== undefined) updates.tags = req.body.tags;
+
+      const updated = await storage.updateKbArticle(articleId, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error('Error updating KB article:', error);
+      res.status(500).json({ message: 'Failed to update article' });
+    }
+  });
+
+  // Delete KB article
+  app.delete('/api/kb/articles/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) return res.status(401).json({ message: "User not found" });
+
+    try {
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) return res.status(400).json({ message: 'Invalid article ID' });
+
+      // Verify user has access to this article (must be author or admin)
+      const article = await storage.getKbArticle(articleId);
+      if (!article) return res.status(404).json({ message: 'Article not found' });
+      
+      if (article.authorId !== dbUser.id && dbUser.role !== 'admin') {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      await storage.deleteKbArticle(articleId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting KB article:', error);
+      res.status(500).json({ message: 'Failed to delete article' });
+    }
+  });
+
+  // Create KB category (authenticated user)
+  app.post('/api/kb/categories', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) return res.status(401).json({ message: "User not found" });
+
+    try {
+      const { name, description } = req.body;
+      if (!name) {
+        return res.status(400).json({ message: 'Name is required' });
+      }
+
+      // Generate slug
+      const slug = name.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        + '-' + Date.now().toString(36);
+
+      const category = await storage.createKbCategory({
+        name,
+        slug,
+        description: description || null,
+        icon: null,
+        color: null,
+        order: 0,
+        isActive: true,
+      });
+
+      res.status(201).json(category);
+    } catch (error) {
+      console.error('Error creating KB category:', error);
+      res.status(500).json({ message: 'Failed to create category' });
+    }
+  });
+
+  // Delete KB category
+  app.delete('/api/kb/categories/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) return res.status(401).json({ message: "User not found" });
+
+    try {
+      const categoryId = parseInt(req.params.id);
+      if (isNaN(categoryId)) return res.status(400).json({ message: 'Invalid category ID' });
+
+      await storage.deleteKbCategory(categoryId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting KB category:', error);
+      res.status(500).json({ message: 'Failed to delete category' });
+    }
+  });
+
   // === KNOWLEDGE BASE - ADMIN ROUTES ===
 
   // Get all categories (admin)

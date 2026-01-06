@@ -2,7 +2,7 @@ import {
   users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
   guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares, contentPages,
   stepAssignments, guideApprovals, stepComments, notifications, teamActivity,
-  guideTranslations, stepTranslations, kbCategories, kbArticles, kbArticleViews,
+  guideTranslations, stepTranslations, kbCategories, kbArticles, kbArticleViews, kbBrandingSettings,
   type User, type UpsertUser,
   type Workspace, type InsertWorkspace,
   type Guide, type InsertGuide,
@@ -23,7 +23,8 @@ import {
   type GuideTranslation, type InsertGuideTranslation,
   type StepTranslation, type InsertStepTranslation,
   type KbCategory, type InsertKbCategory,
-  type KbArticle, type InsertKbArticle
+  type KbArticle, type InsertKbArticle,
+  type KbBrandingSettings
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, sql, ilike, or } from "drizzle-orm";
@@ -187,6 +188,10 @@ export interface IStorage {
   deleteKbArticle(id: number): Promise<void>;
   incrementKbArticleViewCount(id: number): Promise<void>;
   updateKbArticleHelpfulness(id: number, helpful: boolean): Promise<void>;
+
+  // Knowledge Base Branding
+  getKbBranding(): Promise<KbBrandingSettings | undefined>;
+  upsertKbBranding(settings: Partial<KbBrandingSettings>): Promise<KbBrandingSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1152,6 +1157,28 @@ export class DatabaseStorage implements IStorage {
       await db.update(kbArticles)
         .set({ notHelpfulCount: sql`${kbArticles.notHelpfulCount} + 1` })
         .where(eq(kbArticles.id, id));
+    }
+  }
+
+  // Knowledge Base Branding
+  async getKbBranding(): Promise<KbBrandingSettings | undefined> {
+    const [branding] = await db.select().from(kbBrandingSettings).limit(1);
+    return branding;
+  }
+
+  async upsertKbBranding(settings: Partial<KbBrandingSettings>): Promise<KbBrandingSettings> {
+    const existing = await this.getKbBranding();
+    if (existing) {
+      const [updated] = await db.update(kbBrandingSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(kbBrandingSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(kbBrandingSettings)
+        .values({ ...settings, updatedAt: new Date() })
+        .returning();
+      return created;
     }
   }
 }

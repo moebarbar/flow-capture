@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { 
@@ -13,7 +13,13 @@ import {
   BookOpen,
   ExternalLink,
   Upload,
-  Filter
+  Filter,
+  Settings,
+  Share2,
+  Copy,
+  Check,
+  Code,
+  Palette
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +55,26 @@ import { Sidebar, SidebarProvider } from "@/components/Sidebar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { KbArticle, KbCategory, Guide } from "@shared/schema";
 
+interface KbBrandingSettings {
+  logoUrl: string;
+  primaryColor: string;
+  accentColor: string;
+  headerTitle: string;
+  headerSubtitle: string;
+  showSearch: boolean;
+  showCategories: boolean;
+}
+
+const defaultBranding: KbBrandingSettings = {
+  logoUrl: '',
+  primaryColor: '#3b82f6',
+  accentColor: '#8b5cf6',
+  headerTitle: 'Help Center',
+  headerSubtitle: 'Find answers to your questions',
+  showSearch: true,
+  showCategories: true,
+};
+
 export default function KnowledgeBaseManager() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,6 +84,25 @@ export default function KnowledgeBaseManager() {
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [importGuideOpen, setImportGuideOpen] = useState(false);
   const [deleteArticleId, setDeleteArticleId] = useState<number | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+
+  const { data: branding = defaultBranding } = useQuery<KbBrandingSettings>({
+    queryKey: ['/api/kb/branding'],
+  });
+
+  const saveBrandingMutation = useMutation({
+    mutationFn: async (newBranding: KbBrandingSettings) => {
+      return await apiRequest('PUT', '/api/kb/branding', newBranding);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/kb/branding'] });
+      toast({ title: "Settings saved successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save settings", variant: "destructive" });
+    }
+  });
 
   const { data: articles = [], isLoading: articlesLoading } = useQuery<KbArticle[]>({
     queryKey: ['/api/kb/articles/manage'],
@@ -132,11 +177,35 @@ export default function KnowledgeBaseManager() {
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   variant="outline"
+                  onClick={() => window.open('/help', '_blank')}
+                  data-testid="button-preview-kb"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Preview
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShareOpen(true)}
+                  data-testid="button-share-kb"
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setSettingsOpen(true)}
+                  data-testid="button-kb-settings"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setImportGuideOpen(true)}
                   data-testid="button-import-guide"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Import from Guide
+                  Import
                 </Button>
                 <Button
                   variant="outline"
@@ -144,7 +213,7 @@ export default function KnowledgeBaseManager() {
                   data-testid="button-create-category"
                 >
                   <FolderPlus className="w-4 h-4 mr-2" />
-                  New Category
+                  Category
                 </Button>
                 <Button
                   onClick={() => setCreateArticleOpen(true)}
@@ -390,6 +459,21 @@ export default function KnowledgeBaseManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <KbSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        branding={branding}
+        onSave={(newBranding) => {
+          saveBrandingMutation.mutate(newBranding);
+        }}
+        isSaving={saveBrandingMutation.isPending}
+      />
+
+      <KbShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
     </SidebarProvider>
   );
 }
@@ -855,6 +939,263 @@ function ImportGuideDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function KbSettingsDialog({
+  open,
+  onOpenChange,
+  branding,
+  onSave,
+  isSaving = false,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  branding: KbBrandingSettings;
+  onSave: (branding: KbBrandingSettings) => void;
+  isSaving?: boolean;
+}) {
+  const [localBranding, setLocalBranding] = useState<KbBrandingSettings>(branding);
+
+  useEffect(() => {
+    if (open) {
+      setLocalBranding(branding);
+    }
+  }, [open, branding]);
+
+  const handleSave = () => {
+    onSave(localBranding);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Palette className="w-5 h-5" />
+            Knowledge Base Settings
+          </DialogTitle>
+          <DialogDescription>
+            Customize the appearance of your public Knowledge Base.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="kb-title">Header Title</Label>
+            <Input
+              id="kb-title"
+              value={localBranding.headerTitle}
+              onChange={(e) => setLocalBranding({ ...localBranding, headerTitle: e.target.value })}
+              placeholder="Help Center"
+              data-testid="input-kb-header-title"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="kb-subtitle">Header Subtitle</Label>
+            <Input
+              id="kb-subtitle"
+              value={localBranding.headerSubtitle}
+              onChange={(e) => setLocalBranding({ ...localBranding, headerSubtitle: e.target.value })}
+              placeholder="Find answers to your questions"
+              data-testid="input-kb-header-subtitle"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="kb-logo">Logo URL (optional)</Label>
+            <Input
+              id="kb-logo"
+              value={localBranding.logoUrl}
+              onChange={(e) => setLocalBranding({ ...localBranding, logoUrl: e.target.value })}
+              placeholder="https://example.com/logo.png"
+              data-testid="input-kb-logo-url"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="kb-primary-color">Primary Color</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="kb-primary-color"
+                  type="color"
+                  value={localBranding.primaryColor}
+                  onChange={(e) => setLocalBranding({ ...localBranding, primaryColor: e.target.value })}
+                  className="w-12 h-9 p-1"
+                  data-testid="input-kb-primary-color"
+                />
+                <Input
+                  value={localBranding.primaryColor}
+                  onChange={(e) => setLocalBranding({ ...localBranding, primaryColor: e.target.value })}
+                  className="flex-1"
+                  data-testid="input-kb-primary-color-text"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="kb-accent-color">Accent Color</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="kb-accent-color"
+                  type="color"
+                  value={localBranding.accentColor}
+                  onChange={(e) => setLocalBranding({ ...localBranding, accentColor: e.target.value })}
+                  className="w-12 h-9 p-1"
+                  data-testid="input-kb-accent-color"
+                />
+                <Input
+                  value={localBranding.accentColor}
+                  onChange={(e) => setLocalBranding({ ...localBranding, accentColor: e.target.value })}
+                  className="flex-1"
+                  data-testid="input-kb-accent-color-text"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="kb-show-search">Show Search Bar</Label>
+            <input
+              id="kb-show-search"
+              type="checkbox"
+              checked={localBranding.showSearch}
+              onChange={(e) => setLocalBranding({ ...localBranding, showSearch: e.target.checked })}
+              className="w-4 h-4"
+              data-testid="checkbox-kb-show-search"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="kb-show-categories">Show Categories</Label>
+            <input
+              id="kb-show-categories"
+              type="checkbox"
+              checked={localBranding.showCategories}
+              onChange={(e) => setLocalBranding({ ...localBranding, showCategories: e.target.checked })}
+              className="w-4 h-4"
+              data-testid="checkbox-kb-show-categories"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-kb-settings">
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving} data-testid="button-save-kb-settings">
+            Save Settings
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function KbShareDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
+
+  const kbUrl = `${window.location.origin}/help`;
+  const embedCode = `<iframe src="${kbUrl}" width="100%" height="600" style="border: 1px solid #e5e7eb; border-radius: 8px;" title="Knowledge Base"></iframe>`;
+
+  const copyToClipboard = async (text: string, type: 'link' | 'embed') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (type === 'link') {
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2000);
+      } else {
+        setCopiedEmbed(true);
+        setTimeout(() => setCopiedEmbed(false), 2000);
+      }
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Share2 className="w-5 h-5" />
+            Share Knowledge Base
+          </DialogTitle>
+          <DialogDescription>
+            Share your Knowledge Base with a direct link or embed it on your website.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-6 py-4">
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2">
+              <ExternalLink className="w-4 h-4" />
+              Direct Link
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                value={kbUrl}
+                readOnly
+                className="flex-1"
+                data-testid="input-kb-share-link"
+              />
+              <Button
+                variant="outline"
+                onClick={() => copyToClipboard(kbUrl, 'link')}
+                data-testid="button-copy-kb-link"
+              >
+                {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => window.open(kbUrl, '_blank')}
+                data-testid="button-open-kb-link"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2">
+              <Code className="w-4 h-4" />
+              Embed Code
+            </Label>
+            <Textarea
+              value={embedCode}
+              readOnly
+              rows={4}
+              className="font-mono text-sm"
+              data-testid="textarea-kb-embed-code"
+            />
+            <Button
+              variant="outline"
+              onClick={() => copyToClipboard(embedCode, 'embed')}
+              className="w-full"
+              data-testid="button-copy-kb-embed"
+            >
+              {copiedEmbed ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copy Embed Code
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-close-share-dialog">
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

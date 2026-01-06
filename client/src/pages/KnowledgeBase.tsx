@@ -129,10 +129,34 @@ function SearchResults({ query }: { query: string }) {
   );
 }
 
+interface KbBrandingSettings {
+  logoUrl: string;
+  primaryColor: string;
+  accentColor: string;
+  headerTitle: string;
+  headerSubtitle: string;
+  showSearch: boolean;
+  showCategories: boolean;
+}
+
+const defaultBranding: KbBrandingSettings = {
+  logoUrl: '',
+  primaryColor: '#3b82f6',
+  accentColor: '#8b5cf6',
+  headerTitle: 'Help Center',
+  headerSubtitle: 'Find answers to your questions',
+  showSearch: true,
+  showCategories: true,
+};
+
 export default function KnowledgeBase() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data: branding = defaultBranding } = useQuery<KbBrandingSettings>({
+    queryKey: ['/api/kb/branding'],
+  });
 
   useEffect(() => {
     if (timeoutRef.current) {
@@ -161,7 +185,12 @@ export default function KnowledgeBase() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="bg-gradient-to-b from-primary/5 to-background border-b">
+      <div 
+        className="border-b"
+        style={{ 
+          background: `linear-gradient(to bottom, ${branding.primaryColor}10, transparent)` 
+        }}
+      >
         <div className="container mx-auto px-4 py-12">
           <Link href="/">
             <Button variant="ghost" size="sm" className="mb-6" data-testid="button-back-home">
@@ -171,22 +200,35 @@ export default function KnowledgeBase() {
           </Link>
           
           <div className="max-w-2xl mx-auto text-center">
-            <h1 className="text-4xl font-bold mb-4" data-testid="text-page-title">Help Center</h1>
+            {branding.logoUrl && (
+              <img 
+                src={branding.logoUrl} 
+                alt="Logo" 
+                className="h-12 mx-auto mb-4 object-contain"
+                data-testid="img-kb-logo"
+              />
+            )}
+            <h1 className="text-4xl font-bold mb-4" data-testid="text-page-title">{branding.headerTitle}</h1>
             <p className="text-muted-foreground mb-8">
-              Find answers, tutorials, and guides to help you get the most out of FlowCapture
+              {branding.headerSubtitle}
             </p>
             
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search for articles..."
-                className="pl-12 h-12 text-lg"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                data-testid="input-search-kb"
-              />
-            </div>
+            {branding.showSearch && (
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search for articles..."
+                  className="pl-12 h-12 text-lg"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  data-testid="input-search-kb"
+                  style={{ 
+                    borderColor: `${branding.primaryColor}40`,
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -196,27 +238,29 @@ export default function KnowledgeBase() {
           <SearchResults query={debouncedQuery} />
         ) : (
           <>
-            <section className="mb-12">
-              <h2 className="text-2xl font-semibold mb-6" data-testid="text-categories-heading">Browse by Category</h2>
-              {categoriesLoading ? (
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} className="h-48" />
-                  ))}
-                </div>
-              ) : categories && categories.length > 0 ? (
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {categories.map((category) => (
-                    <CategoryCard key={category.id} category={category} />
-                  ))}
-                </div>
-              ) : (
-                <Card className="p-8 text-center text-muted-foreground" data-testid="text-no-categories">
-                  <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>No categories available yet</p>
-                </Card>
-              )}
-            </section>
+            {branding.showCategories && (
+              <section className="mb-12">
+                <h2 className="text-2xl font-semibold mb-6" data-testid="text-categories-heading">Browse by Category</h2>
+                {categoriesLoading ? (
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {[1, 2, 3, 4].map((i) => (
+                      <Skeleton key={i} className="h-48" />
+                    ))}
+                  </div>
+                ) : categories && categories.length > 0 ? (
+                  <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {categories.map((category) => (
+                      <CategoryCard key={category.id} category={category} />
+                    ))}
+                  </div>
+                ) : (
+                  <Card className="p-8 text-center text-muted-foreground" data-testid="text-no-categories">
+                    <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No categories available yet</p>
+                  </Card>
+                )}
+              </section>
+            )}
 
             <section>
               <h2 className="text-2xl font-semibold mb-6" data-testid="text-articles-heading">Recent Articles</h2>

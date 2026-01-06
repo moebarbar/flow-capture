@@ -667,6 +667,21 @@ export const kbArticleViews = pgTable("kb_article_views", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Knowledge Base Branding Settings
+export const kbBrandingSettings = pgTable("kb_branding_settings", {
+  id: serial("id").primaryKey(),
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color").default("#3b82f6"),
+  accentColor: text("accent_color").default("#8b5cf6"),
+  headerTitle: text("header_title").default("Help Center"),
+  headerSubtitle: text("header_subtitle").default("Find answers to your questions"),
+  showSearch: boolean("show_search").default(true),
+  showCategories: boolean("show_categories").default(true),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type KbBrandingSettings = typeof kbBrandingSettings.$inferSelect;
+
 // Insert schemas for KB
 export const insertKbCategorySchema = createInsertSchema(kbCategories).omit({
   id: true,

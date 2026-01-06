@@ -3754,6 +3754,70 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
   // === KNOWLEDGE BASE - PUBLIC ROUTES ===
 
+  // Default KB branding settings
+  const defaultKbBranding = {
+    logoUrl: '',
+    primaryColor: '#3b82f6',
+    accentColor: '#8b5cf6',
+    headerTitle: 'Help Center',
+    headerSubtitle: 'Find answers to your questions',
+    showSearch: true,
+    showCategories: true,
+  };
+
+  // Get KB branding settings (public)
+  app.get('/api/kb/branding', async (req, res) => {
+    try {
+      const branding = await storage.getKbBranding();
+      // Merge with defaults to ensure all fields are present (handle null values)
+      const mergedBranding = branding ? {
+        logoUrl: branding.logoUrl ?? defaultKbBranding.logoUrl,
+        primaryColor: branding.primaryColor ?? defaultKbBranding.primaryColor,
+        accentColor: branding.accentColor ?? defaultKbBranding.accentColor,
+        headerTitle: branding.headerTitle ?? defaultKbBranding.headerTitle,
+        headerSubtitle: branding.headerSubtitle ?? defaultKbBranding.headerSubtitle,
+        showSearch: branding.showSearch ?? defaultKbBranding.showSearch,
+        showCategories: branding.showCategories ?? defaultKbBranding.showCategories,
+      } : defaultKbBranding;
+      res.json(mergedBranding);
+    } catch (error) {
+      console.error('Error fetching KB branding:', error);
+      res.json(defaultKbBranding);
+    }
+  });
+
+  // Update KB branding settings (authenticated admin only)
+  app.put('/api/kb/branding', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const dbUser = await storage.getUser(user.claims.sub);
+    if (!dbUser) return res.status(401).json({ message: "User not found" });
+    if (dbUser.role !== 'admin') return res.status(403).json({ message: "Admin access required" });
+
+    try {
+      const { logoUrl, primaryColor, accentColor, headerTitle, headerSubtitle, showSearch, showCategories } = req.body;
+      
+      // Get existing branding to merge with, defaulting to defaults if none exists
+      const existing = await storage.getKbBranding() ?? defaultKbBranding;
+      
+      // Only update fields that are explicitly provided (not undefined)
+      const updated = await storage.upsertKbBranding({
+        logoUrl: logoUrl !== undefined ? logoUrl : existing.logoUrl,
+        primaryColor: primaryColor !== undefined ? primaryColor : existing.primaryColor,
+        accentColor: accentColor !== undefined ? accentColor : existing.accentColor,
+        headerTitle: headerTitle !== undefined ? headerTitle : existing.headerTitle,
+        headerSubtitle: headerSubtitle !== undefined ? headerSubtitle : existing.headerSubtitle,
+        showSearch: showSearch !== undefined ? showSearch : existing.showSearch,
+        showCategories: showCategories !== undefined ? showCategories : existing.showCategories,
+      });
+
+      res.json(updated);
+    } catch (error) {
+      console.error('Error updating KB branding:', error);
+      res.status(500).json({ message: 'Failed to update branding settings' });
+    }
+  });
+
   // Get all active categories (public)
   app.get('/api/kb/categories', async (req, res) => {
     try {

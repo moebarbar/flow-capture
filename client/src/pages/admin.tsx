@@ -1789,6 +1789,641 @@ function PagesTab() {
   );
 }
 
+interface KbCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  displayOrder: number;
+  articleCount: number;
+  createdAt: string;
+}
+
+interface KbArticle {
+  id: number;
+  title: string;
+  slug: string;
+  content: string;
+  excerpt: string | null;
+  categoryId: number;
+  status: string;
+  tags: string[] | null;
+  readingTimeMinutes: number | null;
+  featuredImageUrl: string | null;
+  viewCount: number;
+  helpfulCount: number;
+  notHelpfulCount: number;
+  publishedAt: string | null;
+  createdAt: string;
+}
+
+function KnowledgeBaseTab() {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<'articles' | 'categories'>('articles');
+  const [editingArticle, setEditingArticle] = useState<KbArticle | undefined>();
+  const [editingCategory, setEditingCategory] = useState<KbCategory | undefined>();
+  const [isArticleEditorOpen, setIsArticleEditorOpen] = useState(false);
+  const [isCategoryEditorOpen, setIsCategoryEditorOpen] = useState(false);
+
+  const { data: categoriesData, isLoading: categoriesLoading } = useQuery<KbCategory[]>({
+    queryKey: ['/api/admin/kb/categories'],
+  });
+
+  const { data: articlesData, isLoading: articlesLoading } = useQuery<KbArticle[]>({
+    queryKey: ['/api/admin/kb/articles'],
+  });
+
+  const deleteArticleMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('DELETE', `/api/admin/kb/articles/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/kb/articles'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/kb/categories'] });
+      toast({ title: "Article deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete article", variant: "destructive" });
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest('DELETE', `/api/admin/kb/categories/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/kb/categories'] });
+      toast({ title: "Category deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete category", variant: "destructive" });
+    },
+  });
+
+  const saveArticleMutation = useMutation({
+    mutationFn: async (data: Partial<KbArticle>) => {
+      if (editingArticle) {
+        return apiRequest('PATCH', `/api/admin/kb/articles/${editingArticle.id}`, data);
+      } else {
+        return apiRequest('POST', '/api/admin/kb/articles', data);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/kb/articles'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/kb/categories'] });
+      toast({ title: editingArticle ? "Article updated" : "Article created" });
+      closeArticleEditor();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "Failed to save article", variant: "destructive" });
+    },
+  });
+
+  const saveCategoryMutation = useMutation({
+    mutationFn: async (data: Partial<KbCategory>) => {
+      if (editingCategory) {
+        return apiRequest('PATCH', `/api/admin/kb/categories/${editingCategory.id}`, data);
+      } else {
+        return apiRequest('POST', '/api/admin/kb/categories', data);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/kb/categories'] });
+      toast({ title: editingCategory ? "Category updated" : "Category created" });
+      closeCategoryEditor();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message || "Failed to save category", variant: "destructive" });
+    },
+  });
+
+  const openArticleEditor = (article?: KbArticle) => {
+    setEditingArticle(article);
+    setIsArticleEditorOpen(true);
+  };
+
+  const closeArticleEditor = () => {
+    setEditingArticle(undefined);
+    setIsArticleEditorOpen(false);
+  };
+
+  const openCategoryEditor = (category?: KbCategory) => {
+    setEditingCategory(category);
+    setIsCategoryEditorOpen(true);
+  };
+
+  const closeCategoryEditor = () => {
+    setEditingCategory(undefined);
+    setIsCategoryEditorOpen(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'articles' | 'categories')}>
+        <TabsList>
+          <TabsTrigger value="articles" data-testid="kb-tab-articles">Articles</TabsTrigger>
+          <TabsTrigger value="categories" data-testid="kb-tab-categories">Categories</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="articles" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Knowledge Base Articles
+                </CardTitle>
+                <CardDescription>Create and manage help articles for your knowledge base</CardDescription>
+              </div>
+              <Dialog open={isArticleEditorOpen} onOpenChange={(open) => !open && closeArticleEditor()}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => openArticleEditor()} data-testid="button-new-kb-article">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Article
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>{editingArticle ? 'Edit Article' : 'Create New Article'}</DialogTitle>
+                    <DialogDescription>
+                      {editingArticle ? 'Update your knowledge base article' : 'Create a new help article'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <KbArticleEditor 
+                    article={editingArticle} 
+                    categories={categoriesData || []}
+                    onSave={(data) => saveArticleMutation.mutate(data)}
+                    isPending={saveArticleMutation.isPending}
+                    onClose={closeArticleEditor} 
+                  />
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              {articlesLoading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Views</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {articlesData?.length ? (
+                      articlesData.map((article) => (
+                        <TableRow key={article.id} data-testid={`row-kb-article-${article.id}`}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{article.title}</div>
+                              <div className="text-sm text-muted-foreground">/help/article/{article.slug}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {categoriesData?.find(c => c.id === article.categoryId)?.name || 'Uncategorized'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={article.status === 'published' ? 'default' : article.status === 'draft' ? 'secondary' : 'outline'}>
+                              {article.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{article.viewCount || 0}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => window.open(`/help/article/${article.slug}`, '_blank')}
+                                disabled={article.status !== 'published'}
+                                data-testid={`button-view-kb-article-${article.id}`}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => openArticleEditor(article)}
+                                data-testid={`button-edit-kb-article-${article.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to delete this article?')) {
+                                    deleteArticleMutation.mutate(article.id);
+                                  }
+                                }}
+                                data-testid={`button-delete-kb-article-${article.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          No articles yet. Create your first article to get started.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="categories" className="mt-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
+                  Knowledge Base Categories
+                </CardTitle>
+                <CardDescription>Organize articles into categories</CardDescription>
+              </div>
+              <Dialog open={isCategoryEditorOpen} onOpenChange={(open) => !open && closeCategoryEditor()}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => openCategoryEditor()} data-testid="button-new-kb-category">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Category
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>{editingCategory ? 'Edit Category' : 'Create New Category'}</DialogTitle>
+                    <DialogDescription>
+                      {editingCategory ? 'Update category details' : 'Create a new category for articles'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <KbCategoryEditor 
+                    category={editingCategory} 
+                    onSave={(data) => saveCategoryMutation.mutate(data)}
+                    isPending={saveCategoryMutation.isPending}
+                    onClose={closeCategoryEditor} 
+                  />
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              {categoriesLoading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Slug</TableHead>
+                      <TableHead>Articles</TableHead>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categoriesData?.length ? (
+                      categoriesData.map((category) => (
+                        <TableRow key={category.id} data-testid={`row-kb-category-${category.id}`}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-6 h-6 rounded flex items-center justify-center text-xs"
+                                style={{ backgroundColor: `${category.color || '#6366f1'}20`, color: category.color || '#6366f1' }}
+                              >
+                                <BookOpen className="w-3 h-3" />
+                              </div>
+                              <span className="font-medium">{category.name}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">/help/category/{category.slug}</TableCell>
+                          <TableCell>{category.articleCount}</TableCell>
+                          <TableCell>{category.displayOrder}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => window.open(`/help/category/${category.slug}`, '_blank')}
+                                data-testid={`button-view-kb-category-${category.id}`}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => openCategoryEditor(category)}
+                                data-testid={`button-edit-kb-category-${category.id}`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to delete this category?')) {
+                                    deleteCategoryMutation.mutate(category.id);
+                                  }
+                                }}
+                                disabled={category.articleCount > 0}
+                                data-testid={`button-delete-kb-category-${category.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          No categories yet. Create your first category to get started.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function KbArticleEditor({ 
+  article, 
+  categories, 
+  onSave, 
+  isPending, 
+  onClose 
+}: { 
+  article?: KbArticle; 
+  categories: KbCategory[];
+  onSave: (data: Partial<KbArticle>) => void;
+  isPending: boolean;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(article?.title || '');
+  const [content, setContent] = useState(article?.content || '');
+  const [excerpt, setExcerpt] = useState(article?.excerpt || '');
+  const [slug, setSlug] = useState(article?.slug || '');
+  const [categoryId, setCategoryId] = useState(article?.categoryId?.toString() || '');
+  const [status, setStatus] = useState(article?.status || 'draft');
+  const [tags, setTags] = useState(article?.tags?.join(', ') || '');
+  const [featuredImageUrl, setFeaturedImageUrl] = useState(article?.featuredImageUrl || '');
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    if (!categoryId) return;
+    
+    const finalSlug = slug || generateSlug(title);
+    const tagArray = tags.split(',').map(t => t.trim()).filter(Boolean);
+    const wordCount = content.split(/\s+/).filter(Boolean).length;
+    const readingTimeMinutes = Math.max(1, Math.ceil(wordCount / 200));
+    
+    onSave({
+      title,
+      slug: finalSlug,
+      content,
+      excerpt: excerpt || null,
+      categoryId: parseInt(categoryId),
+      status,
+      tags: tagArray.length > 0 ? tagArray : null,
+      featuredImageUrl: featuredImageUrl || null,
+      readingTimeMinutes,
+      publishedAt: status === 'published' && !article?.publishedAt ? new Date().toISOString() : article?.publishedAt,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="kb-title">Title</Label>
+        <Input
+          id="kb-title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Article title"
+          data-testid="input-kb-title"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="kb-slug">Slug</Label>
+        <Input
+          id="kb-slug"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="article-slug (auto-generated if empty)"
+          data-testid="input-kb-slug"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="kb-category">Category</Label>
+          <Select value={categoryId} onValueChange={setCategoryId}>
+            <SelectTrigger id="kb-category" data-testid="select-kb-category">
+              <SelectValue placeholder="Select category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id.toString()}>
+                  {cat.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="kb-status">Status</Label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger id="kb-status" data-testid="select-kb-status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="published">Published</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="kb-excerpt">Excerpt</Label>
+        <Input
+          id="kb-excerpt"
+          value={excerpt}
+          onChange={(e) => setExcerpt(e.target.value)}
+          placeholder="Brief description of the article"
+          data-testid="input-kb-excerpt"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="kb-content">Content (HTML)</Label>
+        <Textarea
+          id="kb-content"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Article content (supports HTML)"
+          rows={10}
+          data-testid="input-kb-content"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="kb-tags">Tags (comma-separated)</Label>
+        <Input
+          id="kb-tags"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="getting-started, basics, tutorial"
+          data-testid="input-kb-tags"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="kb-image">Featured Image URL</Label>
+        <Input
+          id="kb-image"
+          value={featuredImageUrl}
+          onChange={(e) => setFeaturedImageUrl(e.target.value)}
+          placeholder="https://..."
+          data-testid="input-kb-image"
+        />
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} data-testid="button-cancel-kb-article">
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={isPending || !title || !categoryId} data-testid="button-save-kb-article">
+          {isPending ? 'Saving...' : (article ? 'Update' : 'Create')}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
+function KbCategoryEditor({ 
+  category, 
+  onSave, 
+  isPending, 
+  onClose 
+}: { 
+  category?: KbCategory;
+  onSave: (data: Partial<KbCategory>) => void;
+  isPending: boolean;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(category?.name || '');
+  const [slug, setSlug] = useState(category?.slug || '');
+  const [description, setDescription] = useState(category?.description || '');
+  const [color, setColor] = useState(category?.color || '#6366f1');
+  const [displayOrder, setDisplayOrder] = useState(category?.displayOrder?.toString() || '0');
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    
+    const finalSlug = slug || generateSlug(name);
+    
+    onSave({
+      name,
+      slug: finalSlug,
+      description: description || null,
+      color,
+      displayOrder: parseInt(displayOrder) || 0,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label htmlFor="kb-cat-name">Name</Label>
+        <Input
+          id="kb-cat-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Category name"
+          data-testid="input-kb-cat-name"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="kb-cat-slug">Slug</Label>
+        <Input
+          id="kb-cat-slug"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="category-slug (auto-generated if empty)"
+          data-testid="input-kb-cat-slug"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="kb-cat-description">Description</Label>
+        <Textarea
+          id="kb-cat-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Category description"
+          rows={3}
+          data-testid="input-kb-cat-description"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="kb-cat-color">Color</Label>
+          <Input
+            id="kb-cat-color"
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            data-testid="input-kb-cat-color"
+          />
+        </div>
+        <div>
+          <Label htmlFor="kb-cat-order">Display Order</Label>
+          <Input
+            id="kb-cat-order"
+            type="number"
+            value={displayOrder}
+            onChange={(e) => setDisplayOrder(e.target.value)}
+            data-testid="input-kb-cat-order"
+          />
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose} data-testid="button-cancel-kb-category">
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={isPending || !name} data-testid="button-save-kb-category">
+          {isPending ? 'Saving...' : (category ? 'Update' : 'Create')}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -1931,6 +2566,7 @@ export default function AdminPage() {
             <TabsTrigger value="promotions" data-testid="tab-promotions">Promotions</TabsTrigger>
             <TabsTrigger value="blog" data-testid="tab-blog">Blog</TabsTrigger>
             <TabsTrigger value="pages" data-testid="tab-pages">Pages</TabsTrigger>
+            <TabsTrigger value="kb" data-testid="tab-kb">Knowledge Base</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users">
@@ -2142,6 +2778,10 @@ export default function AdminPage() {
 
           <TabsContent value="pages">
             <PagesTab />
+          </TabsContent>
+
+          <TabsContent value="kb">
+            <KnowledgeBaseTab />
           </TabsContent>
         </Tabs>
       </div>

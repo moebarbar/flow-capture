@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { 
@@ -30,7 +30,7 @@ function CategoryCard({ category }: { category: KbCategory }) {
   const Icon = getCategoryIcon(category.icon);
   
   return (
-    <Link href={`/help/category/${category.slug}`}>
+    <Link href={`/help/category/${category.slug}`} data-testid={`card-category-${category.id}`}>
       <Card className="hover-elevate cursor-pointer h-full transition-all">
         <CardHeader className="pb-3">
           <div 
@@ -39,14 +39,14 @@ function CategoryCard({ category }: { category: KbCategory }) {
           >
             <Icon className="w-6 h-6" style={{ color: category.color || '#6366f1' }} />
           </div>
-          <CardTitle className="text-lg">{category.name}</CardTitle>
+          <CardTitle className="text-lg" data-testid={`text-category-name-${category.id}`}>{category.name}</CardTitle>
           {category.description && (
             <CardDescription className="line-clamp-2">{category.description}</CardDescription>
           )}
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>{category.articleCount} article{category.articleCount !== 1 ? 's' : ''}</span>
+          <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+            <span data-testid={`text-article-count-${category.id}`}>{category.articleCount} article{category.articleCount !== 1 ? 's' : ''}</span>
             <ChevronRight className="w-4 h-4" />
           </div>
         </CardContent>
@@ -57,16 +57,16 @@ function CategoryCard({ category }: { category: KbCategory }) {
 
 function ArticleCard({ article }: { article: KbArticle }) {
   return (
-    <Link href={`/help/article/${article.slug}`}>
-      <Card className="hover-elevate cursor-pointer transition-all">
+    <Link href={`/help/article/${article.slug}`} data-testid={`card-article-${article.id}`}>
+      <Card className="hover-elevate cursor-pointer transition-all h-full">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base line-clamp-2">{article.title}</CardTitle>
+          <CardTitle className="text-base line-clamp-2" data-testid={`text-article-title-${article.id}`}>{article.title}</CardTitle>
           {article.excerpt && (
             <CardDescription className="line-clamp-2">{article.excerpt}</CardDescription>
           )}
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground">
             {article.readingTimeMinutes && (
               <div className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
@@ -74,7 +74,7 @@ function ArticleCard({ article }: { article: KbArticle }) {
               </div>
             )}
             {article.tags && article.tags.length > 0 && (
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 {article.tags.slice(0, 2).map((tag) => (
                   <Badge key={tag} variant="secondary" className="text-xs">
                     {tag}
@@ -91,12 +91,7 @@ function ArticleCard({ article }: { article: KbArticle }) {
 
 function SearchResults({ query }: { query: string }) {
   const { data: articles, isLoading } = useQuery<KbArticle[]>({
-    queryKey: ['/api/kb/search', query],
-    queryFn: async () => {
-      const res = await fetch(`/api/kb/search?q=${encodeURIComponent(query)}`);
-      if (!res.ok) throw new Error('Search failed');
-      return res.json();
-    },
+    queryKey: ['/api/kb/search', { q: query }],
     enabled: query.length >= 2,
   });
 
@@ -112,7 +107,7 @@ function SearchResults({ query }: { query: string }) {
 
   if (!articles || articles.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
+      <div className="text-center py-12 text-muted-foreground" data-testid="text-no-results">
         <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
         <p>No articles found for "{query}"</p>
         <p className="text-sm mt-2">Try a different search term</p>
@@ -122,7 +117,7 @@ function SearchResults({ query }: { query: string }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-muted-foreground" data-testid="text-search-results-count">
         Found {articles.length} article{articles.length !== 1 ? 's' : ''} for "{query}"
       </p>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -137,6 +132,22 @@ function SearchResults({ query }: { query: string }) {
 export default function KnowledgeBase() {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
 
   const { data: categories, isLoading: categoriesLoading } = useQuery<KbCategory[]>({
     queryKey: ['/api/kb/categories'],
@@ -145,14 +156,6 @@ export default function KnowledgeBase() {
   const { data: articles, isLoading: articlesLoading } = useQuery<KbArticle[]>({
     queryKey: ['/api/kb/articles'],
   });
-
-  const handleSearch = (value: string) => {
-    setSearchQuery(value);
-    const timeoutId = setTimeout(() => {
-      setDebouncedQuery(value);
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  };
 
   const isSearching = debouncedQuery.length >= 2;
 
@@ -168,7 +171,7 @@ export default function KnowledgeBase() {
           </Link>
           
           <div className="max-w-2xl mx-auto text-center">
-            <h1 className="text-4xl font-bold mb-4">Help Center</h1>
+            <h1 className="text-4xl font-bold mb-4" data-testid="text-page-title">Help Center</h1>
             <p className="text-muted-foreground mb-8">
               Find answers, tutorials, and guides to help you get the most out of FlowCapture
             </p>
@@ -180,7 +183,7 @@ export default function KnowledgeBase() {
                 placeholder="Search for articles..."
                 className="pl-12 h-12 text-lg"
                 value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 data-testid="input-search-kb"
               />
             </div>
@@ -194,7 +197,7 @@ export default function KnowledgeBase() {
         ) : (
           <>
             <section className="mb-12">
-              <h2 className="text-2xl font-semibold mb-6">Browse by Category</h2>
+              <h2 className="text-2xl font-semibold mb-6" data-testid="text-categories-heading">Browse by Category</h2>
               {categoriesLoading ? (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {[1, 2, 3, 4].map((i) => (
@@ -208,7 +211,7 @@ export default function KnowledgeBase() {
                   ))}
                 </div>
               ) : (
-                <Card className="p-8 text-center text-muted-foreground">
+                <Card className="p-8 text-center text-muted-foreground" data-testid="text-no-categories">
                   <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>No categories available yet</p>
                 </Card>
@@ -216,7 +219,7 @@ export default function KnowledgeBase() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-6">Recent Articles</h2>
+              <h2 className="text-2xl font-semibold mb-6" data-testid="text-articles-heading">Recent Articles</h2>
               {articlesLoading ? (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -230,7 +233,7 @@ export default function KnowledgeBase() {
                   ))}
                 </div>
               ) : (
-                <Card className="p-8 text-center text-muted-foreground">
+                <Card className="p-8 text-center text-muted-foreground" data-testid="text-no-articles">
                   <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>No articles available yet</p>
                 </Card>

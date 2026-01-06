@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useRoute } from "wouter";
 import { 
@@ -27,38 +27,27 @@ export default function KnowledgeBaseArticle() {
 
   const { data: article, isLoading: articleLoading } = useQuery<KbArticle>({
     queryKey: ['/api/kb/articles', slug],
-    queryFn: async () => {
-      const res = await fetch(`/api/kb/articles/${slug}`);
-      if (!res.ok) {
-        if (res.status === 404) throw new Error('Article not found');
-        throw new Error('Failed to fetch article');
-      }
-      return res.json();
-    },
     enabled: !!slug,
   });
 
-  const { data: category } = useQuery<KbCategory>({
-    queryKey: ['/api/kb/categories', article?.categoryId],
-    queryFn: async () => {
-      const res = await fetch(`/api/kb/categories`);
-      if (!res.ok) throw new Error('Failed to fetch categories');
-      const categories = await res.json();
-      return categories.find((c: KbCategory) => c.id === article?.categoryId);
-    },
+  const { data: categories } = useQuery<KbCategory[]>({
+    queryKey: ['/api/kb/categories'],
+  });
+
+  const category = useMemo(() => {
+    if (!article?.categoryId || !categories) return null;
+    return categories.find((c) => c.id === article.categoryId);
+  }, [article?.categoryId, categories]);
+
+  const { data: categoryArticles } = useQuery<KbArticle[]>({
+    queryKey: ['/api/kb/articles', { categoryId: article?.categoryId }],
     enabled: !!article?.categoryId,
   });
 
-  const { data: relatedArticles } = useQuery<KbArticle[]>({
-    queryKey: ['/api/kb/articles', 'related', article?.categoryId],
-    queryFn: async () => {
-      const res = await fetch(`/api/kb/articles?categoryId=${article?.categoryId}`);
-      if (!res.ok) throw new Error('Failed to fetch related articles');
-      const articles = await res.json();
-      return articles.filter((a: KbArticle) => a.id !== article?.id).slice(0, 3);
-    },
-    enabled: !!article?.categoryId,
-  });
+  const relatedArticles = useMemo(() => {
+    if (!categoryArticles || !article) return [];
+    return categoryArticles.filter((a) => a.id !== article.id).slice(0, 3);
+  }, [categoryArticles, article]);
 
   const feedbackMutation = useMutation({
     mutationFn: async (helpful: boolean) => {
@@ -100,7 +89,7 @@ export default function KnowledgeBaseArticle() {
   if (!article) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center" data-testid="text-article-not-found">
           <BookOpen className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
           <h1 className="text-2xl font-bold mb-2">Article Not Found</h1>
           <p className="text-muted-foreground mb-4">The article you're looking for doesn't exist.</p>
@@ -116,7 +105,7 @@ export default function KnowledgeBaseArticle() {
     <div className="min-h-screen bg-background">
       <div className="border-b">
         <div className="container mx-auto px-4 py-4">
-          <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="nav-breadcrumb">
             <Link href="/help" className="hover:underline" data-testid="link-help-center">
               Help Center
             </Link>
@@ -129,7 +118,7 @@ export default function KnowledgeBaseArticle() {
                 <ChevronRight className="w-4 h-4" />
               </>
             )}
-            <span className="text-foreground truncate">{article.title}</span>
+            <span className="text-foreground truncate" data-testid="text-current-article">{article.title}</span>
           </nav>
         </div>
       </div>
@@ -144,19 +133,19 @@ export default function KnowledgeBaseArticle() {
               </Button>
             </Link>
 
-            <h1 className="text-3xl font-bold mb-4">{article.title}</h1>
+            <h1 className="text-3xl font-bold mb-4" data-testid="text-article-title">{article.title}</h1>
             
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
+            <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground mb-6">
               {article.readingTimeMinutes && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" data-testid="text-reading-time">
                   <Clock className="w-4 h-4" />
                   <span>{article.readingTimeMinutes} min read</span>
                 </div>
               )}
               {article.tags && article.tags.length > 0 && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {article.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary">
+                    <Badge key={tag} variant="secondary" data-testid={`badge-tag-${tag}`}>
                       {tag}
                     </Badge>
                   ))}
@@ -169,20 +158,22 @@ export default function KnowledgeBaseArticle() {
                 src={article.featuredImageUrl} 
                 alt={article.title}
                 className="w-full rounded-lg mb-8 max-h-80 object-cover"
+                data-testid="img-featured"
               />
             )}
 
             <div 
               className="prose prose-neutral dark:prose-invert max-w-none"
               dangerouslySetInnerHTML={{ __html: article.content }}
+              data-testid="text-article-content"
             />
 
             <Separator className="my-8" />
 
-            <div className="bg-muted/50 rounded-lg p-6 text-center">
+            <div className="bg-muted/50 rounded-lg p-6 text-center" data-testid="section-feedback">
               <h3 className="font-semibold mb-2">Was this article helpful?</h3>
               {feedbackGiven !== null ? (
-                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground" data-testid="text-feedback-thanks">
                   <Check className="w-5 h-5 text-green-500" />
                   <span>Thanks for your feedback!</span>
                 </div>
@@ -212,8 +203,8 @@ export default function KnowledgeBaseArticle() {
           </article>
 
           <aside className="lg:col-span-1">
-            {relatedArticles && relatedArticles.length > 0 && (
-              <Card>
+            {relatedArticles.length > 0 && (
+              <Card data-testid="card-related-articles">
                 <CardHeader>
                   <CardTitle className="text-lg">Related Articles</CardTitle>
                 </CardHeader>
@@ -222,6 +213,7 @@ export default function KnowledgeBaseArticle() {
                     <Link 
                       key={relArticle.id} 
                       href={`/help/article/${relArticle.slug}`}
+                      data-testid={`link-related-article-${relArticle.id}`}
                     >
                       <div className="group cursor-pointer">
                         <h4 className="font-medium text-sm group-hover:text-primary transition-colors line-clamp-2">
@@ -239,7 +231,7 @@ export default function KnowledgeBaseArticle() {
               </Card>
             )}
 
-            <Card className="mt-6">
+            <Card className="mt-6" data-testid="card-need-help">
               <CardHeader>
                 <CardTitle className="text-lg">Need More Help?</CardTitle>
               </CardHeader>

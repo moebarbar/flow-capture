@@ -877,22 +877,22 @@ export default function LandingPage() {
       </section>
 
       {/* Enterprise Section */}
-      <section id="enterprise" className="py-24 bg-gradient-to-br from-gray-900 to-gray-800 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMtOS45NDEgMC0xOCA4LjA1OS0xOCAxOHM4LjA1OSAxOCAxOCAxOGM5Ljk0MSAwIDE4LTguMDU5IDE4LTE4cy04LjA1OS0xOC0xOC0xOHptMCAzMmMtNy43MzIgMC0xNC02LjI2OC0xNC0xNHM2LjI2OC0xNCAxNC0xNHMxNCA2LjI2OCAxNCAxNC02LjI2OCAxNC0xNCAxNHoiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjAzIi8+PC9nPjwvc3ZnPg==')] opacity-50" />
+      <section id="enterprise" className="py-24 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMtOS45NDEgMC0xOCA4LjA1OS0xOCAxOHM4LjA1OSAxOCAxOCAxOGM5Ljk0MSAwIDE4LTguMDU5IDE4LTE4cy04LjA1OS0xOC0xOC0xOHptMCAzMmMtNy43MzIgMC0xNC02LjI2OC0xNC0xNHM2LjI2OC0xNCAxNC0xNHMxNCA2LjI2OCAxNCAxNC02LjI2OCAxNC0xNCAxNHoiIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iLjAzIi8+PC9nPjwvc3ZnPg==')] dark:bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMtOS45NDEgMC0xOCA4LjA1OS0xOCAxOHM4LjA1OSAxOCAxOCAxOGM5Ljk0MSAwIDE4LTguMDU5IDE4LTE4cy04LjA1OS0xOC0xOC0xOHptMCAzMmMtNy43MzIgMC0xNC02LjI2OC0xNC0xNHM2LjI2OC0xNCAxNC0xNHMxNCA2LjI2OCAxNCAxNC02LjI2OCAxNC0xNCAxNHoiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjAzIi8+PC9nPjwvc3ZnPg==')] opacity-50" />
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <motion.div 
             className="text-center mb-16"
             {...fadeInUp}
           >
-            <Badge className="mb-4 rounded-full px-4 py-1.5 bg-white/10 text-white border-white/20" data-testid="badge-enterprise-section">
+            <Badge className="mb-4 rounded-full px-4 py-1.5 bg-gray-900/10 dark:bg-white/10 text-gray-900 dark:text-white border-gray-900/20 dark:border-white/20" data-testid="badge-enterprise-section">
               <Building2 className="h-3.5 w-3.5 mr-1.5" />
               Enterprise Ready
             </Badge>
-            <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">
+            <h2 className="text-4xl md:text-5xl font-display font-bold mb-6 text-gray-900 dark:text-white">
               Built for Security-Conscious Teams
             </h2>
-            <p className="text-xl text-white/70 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-600 dark:text-white/70 max-w-3xl mx-auto">
               Enterprise-grade security, compliance, and control. 
               Deploy with confidence for your entire organization.
             </p>
@@ -912,12 +912,12 @@ export default function LandingPage() {
                 transition={{ delay: i * 0.1 }}
                 data-testid={`card-enterprise-${feature.id}`}
               >
-                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 h-full">
-                  <div className="h-12 w-12 rounded-xl bg-white/10 flex items-center justify-center mb-4">
-                    <feature.icon className="h-6 w-6" />
+                <div className="bg-white/70 dark:bg-white/5 backdrop-blur-sm border border-gray-200 dark:border-white/10 rounded-xl p-6 h-full">
+                  <div className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-white/10 flex items-center justify-center mb-4">
+                    <feature.icon className="h-6 w-6 text-gray-700 dark:text-white" />
                   </div>
-                  <h4 className="text-lg font-bold mb-2 font-display">{feature.title}</h4>
-                  <p className="text-white/60 text-sm">{feature.desc}</p>
+                  <h4 className="text-lg font-bold mb-2 font-display text-gray-900 dark:text-white">{feature.title}</h4>
+                  <p className="text-gray-600 dark:text-white/60 text-sm">{feature.desc}</p>
                 </div>
               </motion.div>
             ))}
@@ -928,7 +928,7 @@ export default function LandingPage() {
             className="text-center"
             {...fadeInUp}
           >
-            <p className="text-sm text-white/50 mb-6">Trusted by security-conscious organizations</p>
+            <p className="text-sm text-gray-500 dark:text-white/50 mb-6">Trusted by security-conscious organizations</p>
             <div className="flex flex-wrap items-center justify-center gap-8" data-testid="enterprise-trust-badges">
               {[
                 { label: 'SOC 2', sublabel: 'Type II' },
@@ -937,10 +937,10 @@ export default function LandingPage() {
                 { label: '99.9%', sublabel: 'Uptime SLA' },
               ].map((badge) => (
                 <div key={badge.label} className="flex flex-col items-center">
-                  <div className="h-16 w-16 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-2">
-                    <span className="font-bold text-sm">{badge.label}</span>
+                  <div className="h-16 w-16 rounded-full bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 flex items-center justify-center mb-2">
+                    <span className="font-bold text-sm text-gray-900 dark:text-white">{badge.label}</span>
                   </div>
-                  <span className="text-xs text-white/50">{badge.sublabel}</span>
+                  <span className="text-xs text-gray-500 dark:text-white/50">{badge.sublabel}</span>
                 </div>
               ))}
             </div>

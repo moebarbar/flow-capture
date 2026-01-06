@@ -1328,6 +1328,18 @@ export default function LandingPage() {
           </div>
           <div className="border-t border-border pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
             <p>© {new Date().getFullYear()} {siteName}. All rights reserved.</p>
+            <p className="flex items-center gap-1">
+              Developed with <span className="text-red-500">❤️</span> by{" "}
+              <a 
+                href="https://www.instagram.com/immoebarbar" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="font-medium text-foreground hover:text-primary transition-colors"
+                data-testid="link-footer-moebarbar"
+              >
+                Moebarbar
+              </a>
+            </p>
             <div className="flex items-center gap-6">
               <a href="#" className="hover:text-foreground transition-colors">Status</a>
               <a href="#" className="hover:text-foreground transition-colors">Security</a>

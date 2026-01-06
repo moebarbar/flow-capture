@@ -191,7 +191,15 @@ export interface IStorage {
 
   // Knowledge Base Branding
   getKbBranding(): Promise<KbBrandingSettings | undefined>;
-  upsertKbBranding(settings: Partial<KbBrandingSettings>): Promise<KbBrandingSettings>;
+  upsertKbBranding(settings: {
+    logoUrl: string;
+    primaryColor: string;
+    accentColor: string;
+    headerTitle: string;
+    headerSubtitle: string;
+    showSearch: boolean;
+    showCategories: boolean;
+  }): Promise<KbBrandingSettings>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1166,17 +1174,32 @@ export class DatabaseStorage implements IStorage {
     return branding;
   }
 
-  async upsertKbBranding(settings: Partial<KbBrandingSettings>): Promise<KbBrandingSettings> {
+  async upsertKbBranding(settings: {
+    logoUrl: string;
+    primaryColor: string;
+    accentColor: string;
+    headerTitle: string;
+    headerSubtitle: string;
+    showSearch: boolean;
+    showCategories: boolean;
+  }): Promise<KbBrandingSettings> {
+    // This method expects fully populated settings - route handles merging
     const existing = await this.getKbBranding();
+    
+    const values = {
+      ...settings,
+      updatedAt: new Date(),
+    };
+    
     if (existing) {
       const [updated] = await db.update(kbBrandingSettings)
-        .set({ ...settings, updatedAt: new Date() })
+        .set(values)
         .where(eq(kbBrandingSettings.id, existing.id))
         .returning();
       return updated;
     } else {
       const [created] = await db.insert(kbBrandingSettings)
-        .values({ ...settings, updatedAt: new Date() })
+        .values(values)
         .returning();
       return created;
     }

@@ -3,55 +3,49 @@ if (window.__flowcaptureInitialized) {
 } else {
   window.__flowcaptureInitialized = true;
 
-  let isRecording = false;
+  let isCapturing = false;
+  let isPaused = false;
   let isElementCaptureMode = false;
   let highlightOverlay = null;
   let hoverHighlight = null;
   let lastClickTime = 0;
-  let borderColor = '#ef4444';
+  let borderColor = '#7C3AED';
   const CLICK_DEBOUNCE_MS = 300;
 
   async function init() {
     try {
-      const { isRecording: recording, borderColor: savedColor } = await chrome.storage.local.get(['isRecording', 'borderColor']);
-      isRecording = recording || false;
-      borderColor = savedColor || '#ef4444';
+      const { isCapturing: capturing, borderColor: savedColor, isPaused: paused } = await chrome.storage.local.get(['isCapturing', 'borderColor', 'isPaused']);
+      isCapturing = capturing || false;
+      isPaused = paused || false;
+      borderColor = savedColor || '#7C3AED';
       
-      if (isRecording) {
+      if (isCapturing && !isPaused) {
         setupEventListeners();
-        showRecordingIndicator();
+        showCapturingIndicator();
       }
     } catch (e) {
       console.error('FlowCapture init error:', e);
     }
   }
 
-  // Allowed origins for capture session messages
   const ALLOWED_ORIGINS = [
     'https://flowcapture.replit.app',
     'http://localhost:5000',
     'https://localhost:5000'
   ];
 
-  // Allowed origin suffixes (must be exact hostname suffix match)
   const ALLOWED_ORIGIN_SUFFIXES = [
     '.replit.dev',
     '.repl.co',
     '.replit.app'
   ];
 
-  // Check if origin has a valid suffix (proper hostname check, not substring)
-  // This prevents attacks like "attackerreplit.dev" from matching ".replit.dev"
   function hasAllowedSuffix(origin) {
     try {
       const url = new URL(origin);
       const hostname = url.hostname;
       return ALLOWED_ORIGIN_SUFFIXES.some(suffix => {
-        // Exact match: hostname equals the suffix without leading dot
         if (hostname === suffix.substring(1)) return true;
-        // Subdomain match: hostname ends with suffix AND the char before suffix is a dot
-        // e.g., "foo.replit.dev" ends with ".replit.dev" - valid
-        // e.g., "fooreplit.dev" ends with "replit.dev" but NOT with ".replit.dev" - invalid
         return hostname.endsWith(suffix);
       });
     } catch (e) {
@@ -59,12 +53,9 @@ if (window.__flowcaptureInitialized) {
     }
   }
 
-  // Check if origin is in the allowlist
   async function isAllowedOrigin(origin) {
-    // Check exact matches first
     if (ALLOWED_ORIGINS.includes(origin)) return true;
     
-    // Check configured API URL
     try {
       const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
       if (apiBaseUrl) {
@@ -73,29 +64,23 @@ if (window.__flowcaptureInitialized) {
       }
     } catch (e) {}
     
-    // Check allowed suffixes with proper hostname validation
     return hasAllowedSuffix(origin);
   }
 
-  // Listen for messages from the web page (for Screenshot Studio and Capture Session integration)
   window.addEventListener('message', async (event) => {
-    // Validate origin for security
     const originAllowed = await isAllowedOrigin(event.origin);
     if (!originAllowed && event.data?.type?.startsWith('FLOWCAPTURE_')) {
       console.warn('FlowCapture: Ignoring message from untrusted origin:', event.origin);
       return;
     }
 
-    // Use the origin of the requesting page for secure responses
     const responseOrigin = event.origin;
 
     if (event.data?.type === 'FLOWCAPTURE_REQUEST_SCREENSHOT') {
       console.log('FlowCapture: Received screenshot request from page');
       try {
-        // Request screenshot from background script
         const response = await chrome.runtime.sendMessage({ type: 'CAPTURE_PAGE_SCREENSHOT' });
         if (response?.screenshot) {
-          // Send screenshot back to the page
           window.postMessage({ 
             type: 'FLOWCAPTURE_SCREENSHOT_CAPTURED', 
             screenshot: response.screenshot 
@@ -105,7 +90,6 @@ if (window.__flowcaptureInitialized) {
         console.error('FlowCapture: Failed to capture screenshot:', e);
       }
     } else if (event.data?.type === 'FLOWCAPTURE_SET_SESSION') {
-      // Web app wants to start a capture session
       console.log('FlowCapture: Received capture session from page');
       try {
         const session = event.data.session;
@@ -126,7 +110,6 @@ if (window.__flowcaptureInitialized) {
         }, responseOrigin);
       }
     } else if (event.data?.type === 'FLOWCAPTURE_CLEAR_SESSION') {
-      // Web app wants to stop capture session
       console.log('FlowCapture: Clearing capture session');
       try {
         const response = await chrome.runtime.sendMessage({ type: 'CLEAR_CAPTURE_SESSION' });
@@ -138,20 +121,18 @@ if (window.__flowcaptureInitialized) {
         console.error('FlowCapture: Failed to clear capture session:', e);
       }
     } else if (event.data?.type === 'FLOWCAPTURE_CHECK_EXTENSION') {
-      // Web app checking if extension is installed
       const manifest = chrome.runtime.getManifest();
       window.postMessage({ 
         type: 'FLOWCAPTURE_EXTENSION_PRESENT', 
         version: manifest.version 
       }, responseOrigin);
     } else if (event.data?.type === 'FLOWCAPTURE_GET_SESSION') {
-      // Web app checking current session status
       try {
         const response = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_SESSION' });
         window.postMessage({ 
           type: 'FLOWCAPTURE_SESSION_STATUS', 
           hasSession: response?.hasSession || false,
-          guideId: response?.guideId 
+          flowId: response?.flowId 
         }, responseOrigin);
       } catch (e) {
         window.postMessage({ 
@@ -163,24 +144,34 @@ if (window.__flowcaptureInitialized) {
   });
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('Content script received message:', message.type);
+    console.log('Content script received message:', message.action || message.type);
     
-    if (message.type === 'START_RECORDING') {
-      if (!isRecording) {
-        isRecording = true;
+    if (message.action === 'startCapture' || message.type === 'START_CAPTURE') {
+      if (!isCapturing) {
+        isCapturing = true;
+        isPaused = false;
         setupEventListeners();
-        showRecordingIndicator();
+        showCapturingIndicator();
       }
       sendResponse({ success: true });
-    } else if (message.type === 'STOP_RECORDING') {
-      if (isRecording) {
-        isRecording = false;
+    } else if (message.action === 'stopCapture' || message.type === 'STOP_CAPTURE') {
+      if (isCapturing) {
+        isCapturing = false;
+        isPaused = false;
         isElementCaptureMode = false;
         removeEventListeners();
-        hideRecordingIndicator();
+        hideCapturingIndicator();
         removeHoverHighlight();
         removeElementCaptureUI();
       }
+      sendResponse({ success: true });
+    } else if (message.action === 'pauseCapture' || message.type === 'PAUSE_CAPTURE') {
+      isPaused = true;
+      updateCapturingIndicator();
+      sendResponse({ success: true });
+    } else if (message.action === 'resumeCapture' || message.type === 'RESUME_CAPTURE') {
+      isPaused = false;
+      updateCapturingIndicator();
       sendResponse({ success: true });
     } else if (message.type === 'START_ELEMENT_CAPTURE') {
       startElementCaptureMode();
@@ -196,7 +187,6 @@ if (window.__flowcaptureInitialized) {
     } else if (message.type === 'GET_BORDER_COLOR') {
       sendResponse({ color: borderColor });
     } else if (message.type === 'SESSION_EXPIRED') {
-      // Relay session expiry to webapp via postMessage (use window.origin for security)
       window.postMessage({ type: 'FLOWCAPTURE_SESSION_EXPIRED' }, window.origin);
       sendResponse({ success: true });
     }
@@ -257,7 +247,7 @@ if (window.__flowcaptureInitialized) {
     if (!isElementCaptureMode) return;
     
     const target = event.target;
-    if (isRecordingUI(target)) return;
+    if (isCaptureUI(target)) return;
 
     const rect = target.getBoundingClientRect();
     
@@ -305,7 +295,7 @@ if (window.__flowcaptureInitialized) {
     event.stopPropagation();
     
     const target = event.target;
-    if (isRecordingUI(target)) return;
+    if (isCaptureUI(target)) return;
 
     const rect = target.getBoundingClientRect();
     const elementInfo = getElementInfo(target);
@@ -464,21 +454,21 @@ if (window.__flowcaptureInitialized) {
   }
 
   function handleClick(event) {
-    if (!isRecording || isElementCaptureMode) return;
+    if (!isCapturing || isElementCaptureMode || isPaused) return;
     
     const now = Date.now();
     if (now - lastClickTime < CLICK_DEBOUNCE_MS) return;
     lastClickTime = now;
 
     const target = event.target;
-    if (isRecordingUI(target)) return;
+    if (isCaptureUI(target)) return;
 
     const step = {
       type: 'click',
       element: getElementInfo(target),
       selector: generateSelector(target),
       description: generateClickDescription(target),
-      url: window.location.href,
+      pageUrl: window.location.href,
       pageTitle: document.title
     };
 
@@ -487,10 +477,10 @@ if (window.__flowcaptureInitialized) {
   }
 
   function handleInput(event) {
-    if (!isRecording || isElementCaptureMode) return;
+    if (!isCapturing || isElementCaptureMode || isPaused) return;
     
     const target = event.target;
-    if (isRecordingUI(target)) return;
+    if (isCaptureUI(target)) return;
     if (!isTextInput(target)) return;
 
     if (target._inputTimeout) {
@@ -504,7 +494,7 @@ if (window.__flowcaptureInitialized) {
         selector: generateSelector(target),
         value: maskSensitiveInput(target),
         description: generateInputDescription(target),
-        url: window.location.href,
+        pageUrl: window.location.href,
         pageTitle: document.title
       };
 
@@ -513,10 +503,10 @@ if (window.__flowcaptureInitialized) {
   }
 
   function handleChange(event) {
-    if (!isRecording || isElementCaptureMode) return;
+    if (!isCapturing || isElementCaptureMode || isPaused) return;
     
     const target = event.target;
-    if (isRecordingUI(target)) return;
+    if (isCaptureUI(target)) return;
     
     if (target.tagName === 'SELECT' || target.type === 'checkbox' || target.type === 'radio') {
       const step = {
@@ -525,7 +515,7 @@ if (window.__flowcaptureInitialized) {
         selector: generateSelector(target),
         value: getSelectValue(target),
         description: generateChangeDescription(target),
-        url: window.location.href,
+        pageUrl: window.location.href,
         pageTitle: document.title
       };
 
@@ -534,7 +524,7 @@ if (window.__flowcaptureInitialized) {
   }
 
   function handleSubmit(event) {
-    if (!isRecording || isElementCaptureMode) return;
+    if (!isCapturing || isElementCaptureMode || isPaused) return;
     
     const target = event.target;
     
@@ -543,7 +533,7 @@ if (window.__flowcaptureInitialized) {
       element: getElementInfo(target),
       selector: generateSelector(target),
       description: `Submit form${target.name ? ` "${target.name}"` : ''}`,
-      url: window.location.href,
+      pageUrl: window.location.href,
       pageTitle: document.title
     };
 
@@ -563,6 +553,7 @@ if (window.__flowcaptureInitialized) {
       ariaLabel: element.getAttribute('aria-label') || null,
       role: element.getAttribute('role') || null,
       href: element.href || null,
+      xpath: getXPath(element),
       rect: {
         top: rect.top,
         left: rect.left,
@@ -570,6 +561,33 @@ if (window.__flowcaptureInitialized) {
         height: rect.height
       }
     };
+  }
+
+  function getXPath(element) {
+    if (element.id) {
+      return `//*[@id="${element.id}"]`;
+    }
+    
+    const parts = [];
+    let current = element;
+    
+    while (current && current.nodeType === Node.ELEMENT_NODE) {
+      let index = 1;
+      let sibling = current.previousSibling;
+      
+      while (sibling) {
+        if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === current.tagName) {
+          index++;
+        }
+        sibling = sibling.previousSibling;
+      }
+      
+      const tagName = current.tagName.toLowerCase();
+      parts.unshift(`${tagName}[${index}]`);
+      current = current.parentNode;
+    }
+    
+    return '/' + parts.join('/');
   }
 
   function getElementText(element) {
@@ -711,11 +729,11 @@ if (window.__flowcaptureInitialized) {
     const name = element.name?.toLowerCase() || '';
     
     if (type === 'password' || name.includes('password') || name.includes('secret') || name.includes('token')) {
-      return '[HIDDEN]';
+      return '[REDACTED]';
     }
     
     if (name.includes('ssn') || name.includes('social') || name.includes('credit')) {
-      return '[HIDDEN]';
+      return '[REDACTED]';
     }
 
     return element.value?.substring(0, 50) || '';
@@ -734,7 +752,7 @@ if (window.__flowcaptureInitialized) {
     return element.value;
   }
 
-  function isRecordingUI(element) {
+  function isCaptureUI(element) {
     return element.closest('.flowcapture-overlay') !== null;
   }
 
@@ -753,9 +771,9 @@ if (window.__flowcaptureInitialized) {
       top: ${rect.top - 4}px;
       width: ${rect.width + 8}px;
       height: ${rect.height + 8}px;
-      border: 3px solid #8b5cf6;
+      border: 3px solid #7C3AED;
       border-radius: 6px;
-      background: rgba(139, 92, 246, 0.1);
+      background: rgba(124, 58, 237, 0.1);
       pointer-events: none;
       z-index: 2147483646;
       animation: flowcapture-pulse 0.3s ease-out;
@@ -771,15 +789,17 @@ if (window.__flowcaptureInitialized) {
     }, 500);
   }
 
-  function showRecordingIndicator() {
-    let indicator = document.querySelector('.flowcapture-recording-indicator');
-    if (indicator) return;
+  function showCapturingIndicator() {
+    let indicator = document.querySelector('.flowcapture-capturing-indicator');
+    if (indicator) {
+      indicator.remove();
+    }
 
     indicator = document.createElement('div');
-    indicator.className = 'flowcapture-overlay flowcapture-recording-indicator';
+    indicator.className = 'flowcapture-overlay flowcapture-capturing-indicator';
     indicator.innerHTML = `
       <span class="flowcapture-pulse"></span>
-      <span>Recording</span>
+      <span>Capturing</span>
     `;
     indicator.style.cssText = `
       position: fixed;
@@ -789,13 +809,13 @@ if (window.__flowcaptureInitialized) {
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      background: linear-gradient(135deg, #7C3AED, #8b5cf6);
       color: white;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 13px;
       font-weight: 600;
       border-radius: 20px;
-      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
       z-index: 2147483647;
       pointer-events: none;
     `;
@@ -808,7 +828,7 @@ if (window.__flowcaptureInitialized) {
         .flowcapture-pulse {
           width: 8px;
           height: 8px;
-          background: #ef4444;
+          background: #22c55e;
           border-radius: 50%;
           animation: flowcapture-blink 1s ease-in-out infinite;
         }
@@ -827,15 +847,36 @@ if (window.__flowcaptureInitialized) {
     document.body.appendChild(indicator);
   }
 
-  function hideRecordingIndicator() {
-    const indicator = document.querySelector('.flowcapture-recording-indicator');
+  function updateCapturingIndicator() {
+    const indicator = document.querySelector('.flowcapture-capturing-indicator');
+    if (!indicator) return;
+    
+    if (isPaused) {
+      indicator.innerHTML = `
+        <span class="flowcapture-pulse" style="background: #f59e0b;"></span>
+        <span>Paused</span>
+      `;
+      indicator.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+      indicator.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.4)';
+    } else {
+      indicator.innerHTML = `
+        <span class="flowcapture-pulse"></span>
+        <span>Capturing</span>
+      `;
+      indicator.style.background = 'linear-gradient(135deg, #7C3AED, #8b5cf6)';
+      indicator.style.boxShadow = '0 4px 12px rgba(124, 58, 237, 0.4)';
+    }
+  }
+
+  function hideCapturingIndicator() {
+    const indicator = document.querySelector('.flowcapture-capturing-indicator');
     if (indicator) {
       indicator.remove();
     }
   }
 
   function captureStep(step) {
-    console.log('FlowCapture: Sending step to background:', step.type);
+    console.log('FlowCapture: Capturing step:', step.type);
     
     chrome.runtime.sendMessage({
       type: 'CAPTURE_STEP',
@@ -844,8 +885,13 @@ if (window.__flowcaptureInitialized) {
       if (chrome.runtime.lastError) {
         console.error('FlowCapture: Error sending step:', chrome.runtime.lastError);
       } else {
-        console.log('FlowCapture: Step sent successfully');
+        console.log('FlowCapture: Step captured successfully');
       }
+    });
+
+    chrome.runtime.sendMessage({
+      action: 'newStep',
+      step
     });
   }
 

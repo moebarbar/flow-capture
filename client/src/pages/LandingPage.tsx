@@ -93,7 +93,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden selection:bg-brand-200 selection:text-brand-900">
       {/* Navbar */}
-      <nav className="fixed w-full z-50 glass border-b border-white/10">
+      <nav className="fixed top-0 left-0 right-0 w-full z-50 glass border-b border-white/10 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             {branding?.logoUrl ? (
@@ -120,7 +120,7 @@ export default function LandingPage() {
             <Button asChild size="sm" className="rounded-full px-3 sm:px-6 bg-brand-600 text-white shadow-lg shadow-brand-500/25">
               <a href="/api/login" data-testid="link-nav-get-started">
                 <span className="hidden sm:inline">Get Started</span>
-                <span className="sm:hidden">Capture</span>
+                <span className="sm:hidden">Start Capturing</span>
                 <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
               </a>
             </Button>

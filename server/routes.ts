@@ -89,6 +89,92 @@ export async function registerRoutes(
   registerChatRoutes(app);
   registerImageRoutes(app);
 
+  // === EXTENSION API ENDPOINTS ===
+  
+  // Upload screenshot from extension (multipart form data)
+  app.post('/api/upload/screenshot', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const { ObjectStorageService } = await import("./replit_integrations/object_storage/objectStorage");
+      const objectStorage = new ObjectStorageService();
+      
+      // Get presigned URL for upload
+      const uploadURL = await objectStorage.getObjectEntityUploadURL();
+      const objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
+      
+      // Return the upload URL and path for client to use
+      res.json({
+        uploadURL,
+        url: objectPath,
+        objectPath
+      });
+    } catch (error) {
+      console.error("Screenshot upload error:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Create flow with steps from extension
+  app.post('/api/flows', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    
+    try {
+      const { title, steps: flowSteps, workspaceId } = req.body;
+      
+      // Get or create default workspace if not provided
+      let targetWorkspaceId = workspaceId;
+      if (!targetWorkspaceId) {
+        const workspaces = await storage.getWorkspacesForUser(userId);
+        if (workspaces.length > 0) {
+          targetWorkspaceId = workspaces[0].id;
+        } else {
+          // Create default workspace
+          const firstName = user.claims.first_name || "My";
+          const slug = `personal-${userId.slice(0, 8)}-${Date.now()}`;
+          const newWorkspace = await storage.createWorkspace({
+            name: `${firstName}'s Workspace`,
+            slug,
+            ownerId: userId,
+          });
+          targetWorkspaceId = newWorkspace.id;
+        }
+      }
+      
+      // Create the flow/guide
+      const guide = await storage.createGuide({
+        title: title || 'Untitled Flow',
+        workspaceId: targetWorkspaceId,
+        createdById: userId,
+        status: 'draft'
+      });
+      
+      // Create steps if provided
+      if (flowSteps && Array.isArray(flowSteps)) {
+        for (const stepData of flowSteps) {
+          await storage.createStep({
+            flowId: guide.id,
+            order: stepData.order || 0,
+            title: stepData.description || `Step ${stepData.order}`,
+            description: stepData.description,
+            imageUrl: stepData.imageUrl,
+            actionType: stepData.type || 'click',
+            selector: stepData.selector,
+            url: stepData.url,
+            metadata: stepData.metadata
+          });
+        }
+      }
+      
+      res.status(201).json({ id: guide.id, ...guide });
+    } catch (error) {
+      console.error("Create flow error:", error);
+      res.status(500).json({ message: "Failed to create flow" });
+    }
+  });
+
   // === WORKSPACES ===
   app.get(api.workspaces.list.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

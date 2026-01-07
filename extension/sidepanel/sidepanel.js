@@ -249,20 +249,33 @@ async function handleComplete() {
         
         if (step.screenshotData && step.screenshotData.startsWith('data:')) {
           try {
+            // Convert base64 to blob
             const response = await fetch(step.screenshotData);
             const blob = await response.blob();
-            const formData = new FormData();
-            formData.append('file', blob, `step-${step.order}.png`);
             
-            const uploadResponse = await fetch(`${API_URL}/upload/screenshot`, {
+            // Get presigned upload URL from backend
+            const urlResponse = await fetch(`${API_URL}/upload/screenshot`, {
               method: 'POST',
-              headers: apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {},
-              body: formData
+              headers: {
+                'Content-Type': 'application/json',
+                ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {})
+              },
+              credentials: 'include'
             });
             
-            if (uploadResponse.ok) {
-              const { url } = await uploadResponse.json();
-              return { ...step, imageUrl: url, screenshotData: undefined };
+            if (urlResponse.ok) {
+              const { uploadURL, url } = await urlResponse.json();
+              
+              // Upload directly to presigned URL
+              const uploadResult = await fetch(uploadURL, {
+                method: 'PUT',
+                body: blob,
+                headers: { 'Content-Type': 'image/png' }
+              });
+              
+              if (uploadResult.ok) {
+                return { ...step, imageUrl: url, screenshotData: undefined };
+              }
             }
           } catch (err) {
             console.error('Screenshot upload failed:', err);
@@ -280,6 +293,7 @@ async function handleComplete() {
         'Content-Type': 'application/json',
         ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {})
       },
+      credentials: 'include',
       body: JSON.stringify({
         ...flowData,
         steps: uploadedSteps

@@ -1,0 +1,595 @@
+SIMPLIFIED RESPONSIVE SIZE FIXING PROMPT - NO DESIGN CHANGES
+═══════════════════════════════════════════════════════════════════════════════
+
+Fix only the SIZES of elements to work on all devices. Do NOT change fonts, images, colors, or designs. Only adjust widths, heights, padding, margins, and spacing.
+
+STEP 1: FIX CONTAINER WIDTHS
+═══════════════════════════════════════════════════════════════════════════════
+
+Make sure nothing is wider than the screen:
+```css
+/* Prevent horizontal scroll */
+body, html {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+* {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Make containers responsive */
+.container, .wrapper, .content {
+  width: 100%;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+@media (min-width: 768px) {
+  .container, .wrapper, .content {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+```
+
+STEP 2: FIX BUTTON SIZES FOR MOBILE
+═══════════════════════════════════════════════════════════════════════════════
+
+Make buttons bigger and easier to tap:
+```css
+/* All buttons minimum tappable size */
+button, .button, .btn, a.button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 12px 20px;
+}
+
+@media (max-width: 640px) {
+  /* Buttons full width on mobile if in flex container */
+  .button-group button,
+  .button-group .button,
+  .button-container button,
+  .button-container .button {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+}
+
+/* Icon-only buttons */
+.icon-button, button.icon-only {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+}
+```
+
+STEP 3: FIX IMAGE SIZES
+═══════════════════════════════════════════════════════════════════════════════
+
+Make images fit their containers:
+```css
+/* All images responsive */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Card images */
+.card img, .flow-card img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+@media (max-width: 640px) {
+  .card img, .flow-card img {
+    height: 160px;
+  }
+}
+
+/* Screenshots in editor */
+.screenshot, .step-screenshot {
+  width: 100%;
+  max-width: 800px;
+  height: auto;
+}
+```
+
+STEP 4: FIX GRID LAYOUTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Make grids stack on mobile:
+```css
+/* Any grid layout */
+.grid, [class*="grid"] {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr; /* 1 column on mobile */
+}
+
+@media (min-width: 640px) {
+  .grid, [class*="grid"] {
+    grid-template-columns: repeat(2, 1fr); /* 2 columns on tablet */
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid, [class*="grid"] {
+    grid-template-columns: repeat(3, 1fr); /* 3 columns on desktop */
+  }
+}
+
+/* 4-column grids */
+.grid-4, .stats-grid {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .grid-4, .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-4, .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+```
+
+STEP 5: FIX FLEX LAYOUTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Make flex containers wrap on mobile:
+```css
+/* Flex containers should wrap */
+.flex, [class*="flex"], .d-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+/* Flex items should shrink on mobile */
+.flex > *, [class*="flex"] > * {
+  flex: 1 1 auto;
+  min-width: 0; /* Prevent overflow */
+}
+
+@media (max-width: 640px) {
+  /* Stack flex items on mobile if more than 2 */
+  .flex > *:nth-child(n+3),
+  [class*="flex"] > *:nth-child(n+3) {
+    flex: 1 1 100%;
+  }
+}
+```
+
+STEP 6: FIX SIDEBAR SIZE
+═══════════════════════════════════════════════════════════════════════════════
+
+Make sidebar hide on mobile:
+```css
+/* Sidebar */
+.sidebar, [class*="sidebar"], aside {
+  width: 240px;
+}
+
+@media (max-width: 1024px) {
+  .sidebar, [class*="sidebar"], aside {
+    position: fixed;
+    left: -240px; /* Hide off screen */
+    top: 0;
+    height: 100vh;
+    z-index: 100;
+    transition: left 0.3s ease;
+  }
+  
+  .sidebar.open, [class*="sidebar"].open, aside.open {
+    left: 0; /* Show when open */
+  }
+  
+  /* Add overlay when sidebar open */
+  .sidebar.open::before,
+  [class*="sidebar"].open::before,
+  aside.open::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 240px;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+```
+
+STEP 7: FIX PADDING AND MARGINS
+═══════════════════════════════════════════════════════════════════════════════
+
+Reduce padding/margins on mobile:
+```css
+/* Large padding on desktop, smaller on mobile */
+.section, section, .page-section {
+  padding: 40px 16px;
+}
+
+@media (min-width: 768px) {
+  .section, section, .page-section {
+    padding: 60px 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .section, section, .page-section {
+    padding: 80px 40px;
+  }
+}
+
+/* Card padding */
+.card, [class*="card"] {
+  padding: 16px;
+}
+
+@media (min-width: 768px) {
+  .card, [class*="card"] {
+    padding: 24px;
+  }
+}
+
+/* Modal padding */
+.modal-content, .dialog-content {
+  padding: 20px;
+  margin: 16px;
+  max-height: calc(100vh - 32px);
+}
+
+@media (min-width: 768px) {
+  .modal-content, .dialog-content {
+    padding: 32px;
+    margin: auto;
+  }
+}
+```
+
+STEP 8: FIX TEXT CONTAINER WIDTHS
+═══════════════════════════════════════════════════════════════════════════════
+
+Prevent text from overflowing:
+```css
+/* Text containers */
+p, h1, h2, h3, h4, h5, h6, span, div {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Titles and headings */
+h1, h2, h3, .title, .heading {
+  max-width: 100%;
+}
+
+/* Long text or URLs */
+.text-content, .description, .url {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+```
+
+STEP 9: FIX MODAL AND POPUP SIZES
+═══════════════════════════════════════════════════════════════════════════════
+
+Make modals fit mobile screens:
+```css
+/* Modal/Dialog */
+.modal, .dialog, [role="dialog"] {
+  width: 100%;
+  max-width: 500px;
+  margin: 16px;
+}
+
+@media (max-width: 640px) {
+  .modal, .dialog, [role="dialog"] {
+    width: calc(100% - 32px);
+    margin: 16px;
+    max-height: calc(100vh - 32px);
+  }
+}
+
+/* Modal content */
+.modal-body, .dialog-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .modal-body, .dialog-body {
+    max-height: calc(100vh - 200px);
+  }
+}
+```
+
+STEP 10: FIX TOP BAR / NAVBAR SIZE
+═══════════════════════════════════════════════════════════════════════════════
+
+Make navbar responsive:
+```css
+/* Top bar / Navbar */
+.navbar, .top-bar, header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .navbar, .top-bar, header {
+    flex-wrap: wrap;
+  }
+  
+  /* Search bar full width on mobile */
+  .navbar .search, .top-bar .search {
+    width: 100%;
+    order: 3;
+  }
+}
+
+/* Navbar buttons on mobile */
+.navbar button, .top-bar button {
+  padding: 8px 12px;
+}
+
+@media (max-width: 640px) {
+  .navbar button, .top-bar button {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+}
+```
+
+STEP 11: FIX FORM SIZES
+═══════════════════════════════════════════════════════════════════════════════
+
+Make forms fit mobile:
+```css
+/* Form containers */
+form, .form {
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Form inputs */
+input, textarea, select {
+  width: 100%;
+  padding: 12px 16px;
+  min-height: 44px;
+}
+
+/* Form rows */
+.form-row, .input-group {
+  display: flex;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .form-row, .input-group {
+    flex-direction: column;
+  }
+}
+
+/* Submit buttons */
+.form button[type="submit"],
+.form .submit-button {
+  width: 100%;
+  margin-top: 16px;
+}
+
+@media (min-width: 640px) {
+  .form button[type="submit"],
+  .form .submit-button {
+    width: auto;
+    min-width: 200px;
+  }
+}
+```
+
+STEP 12: FIX TABLE SIZES
+═══════════════════════════════════════════════════════════════════════════════
+
+Make tables scroll on mobile:
+```css
+/* Table wrapper */
+.table-container, .table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  min-width: 600px; /* Minimum width before scrolling */
+}
+
+@media (max-width: 640px) {
+  table {
+    font-size: 14px;
+  }
+  
+  table th, table td {
+    padding: 8px;
+  }
+}
+```
+
+STEP 13: FIX EDITOR PANEL SIZES
+═══════════════════════════════════════════════════════════════════════════════
+
+Make editor panels responsive:
+```css
+/* Editor layout */
+.editor-layout, .editor-container {
+  display: flex;
+  height: 100vh;
+}
+
+@media (max-width: 768px) {
+  .editor-layout, .editor-container {
+    flex-direction: column;
+  }
+}
+
+/* Left panel */
+.editor-left, .editor-sidebar {
+  width: 280px;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .editor-left, .editor-sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 200px;
+  }
+}
+
+/* Center panel */
+.editor-center, .editor-main {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .editor-center, .editor-main {
+    padding: 16px;
+  }
+}
+
+/* Right panel (if exists) */
+.editor-right, .properties-panel {
+  width: 300px;
+}
+
+@media (max-width: 1024px) {
+  .editor-right, .properties-panel {
+    display: none; /* Hide on tablet/mobile */
+  }
+}
+```
+
+STEP 14: FIX SPACING BETWEEN ELEMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Reduce spacing on mobile:
+```css
+/* Gap between elements */
+.gap-16, [class*="gap"] {
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .gap-16, [class*="gap"] {
+    gap: 12px;
+  }
+}
+
+/* Margin bottom */
+.mb-32, .margin-bottom {
+  margin-bottom: 32px;
+}
+
+@media (max-width: 640px) {
+  .mb-32, .margin-bottom {
+    margin-bottom: 20px;
+  }
+}
+
+/* Margin top */
+.mt-32, .margin-top {
+  margin-top: 32px;
+}
+
+@media (max-width: 640px) {
+  .mt-32, .margin-top {
+    margin-top: 20px;
+  }
+}
+```
+
+STEP 15: ADD ONE GLOBAL FIX AT TOP OF CSS FILE
+═══════════════════════════════════════════════════════════════════════════════
+
+Add this at the very top of your main CSS file:
+```css
+/* MOBILE SIZE FIXES - ADD AT TOP OF CSS FILE */
+
+/* Prevent anything from being wider than screen */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* All images fit their container */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* All containers fit screen */
+.container, .wrapper, section, main {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Mobile: reduce padding */
+@media (max-width: 640px) {
+  * {
+    padding-left: min(var(--padding-left, 1rem), 16px);
+    padding-right: min(var(--padding-right, 1rem), 16px);
+  }
+}
+
+/* Make touch targets bigger on mobile */
+@media (max-width: 640px) {
+  button, a, input, select, textarea {
+    min-height: 44px;
+  }
+}
+```
+
+STEP 16: TEST ON REAL PHONE
+═══════════════════════════════════════════════════════════════════════════════
+
+After applying fixes, test on your actual phone:
+
+1. Open your app on phone browser
+2. Check every page:
+   - Landing page
+   - Dashboard
+   - Flow list
+   - Flow editor
+   - Settings
+
+3. Look for:
+   ✅ No horizontal scrolling
+   ✅ All buttons easy to tap (not too small)
+   ✅ All images fit the screen
+   ✅ All text readable (not cut off)
+   ✅ Forms work properly
+   ✅ Modals fit the screen
+   ✅ Everything looks aligned
+
+4. If something still doesn't fit:
+   - Find the element in browser DevTools
+   - Check its width/height
+   - Add specific mobile fix for that element
+
+That's it! This will fix all size issues without changing any designs, fonts, colors, or images.

@@ -1,0 +1,118 @@
+UPDATE /extension/sidepanel/sidepanel.css:
+Copy this exact styling:
+.sidepanel-container {
+width: 400px;
+height: 100vh;
+background: white;
+display: flex;
+flex-direction: column;
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.header {
+padding: 20px;
+border-bottom: 1px solid #e5e7eb;
+}
+#flow-title {
+width: 100%;
+font-size: 18px;
+font-weight: 600;
+border: none;
+border-bottom: 2px solid transparent;
+padding: 8px 0;
+outline: none;
+}
+#flow-title:focus {
+border-bottom-color: #7C3AED;
+}
+.workspace-badge {
+margin-top: 8px;
+font-size: 12px;
+color: #6b7280;
+}
+.steps-list {
+flex: 1;
+overflow-y: auto;
+padding: 16px;
+}
+.step-card {
+display: flex;
+gap: 12px;
+padding: 12px;
+margin-bottom: 8px;
+border: 1px solid #e5e7eb;
+border-radius: 8px;
+cursor: pointer;
+}
+.step-card:hover {
+background: #f9fafb;
+border-color: #d1d5db;
+}
+.step-number {
+width: 28px;
+height: 28px;
+border-radius: 50%;
+background: #f3f4f6;
+display: flex;
+align-items: center;
+justify-content: center;
+font-weight: 600;
+font-size: 14px;
+flex-shrink: 0;
+}
+.step-thumbnail {
+width: 80px;
+height: 60px;
+object-fit: cover;
+border-radius: 4px;
+flex-shrink: 0;
+}
+.step-info {
+flex: 1;
+}
+.step-description {
+font-size: 14px;
+color: #1f2937;
+line-height: 1.4;
+}
+.controls-toolbar {
+display: flex;
+justify-content: space-around;
+padding: 16px;
+border-top: 1px solid #e5e7eb;
+background: white;
+}
+.controls-toolbar button {
+width: 48px;
+height: 48px;
+border: none;
+border-radius: 50%;
+cursor: pointer;
+display: flex;
+align-items: center;
+justify-content: center;
+transition: all 0.2s;
+}
+#complete-btn {
+background: #10b981;
+color: white;
+}
+#complete-btn:hover {
+background: #059669;
+transform: scale(1.05);
+}
+#pause-btn, #restart-btn, #more-btn, #delete-btn {
+background: #f3f4f6;
+color: #4b5563;
+}
+#pause-btn:hover, #restart-btn:hover, #more-btn:hover {
+background: #e5e7eb;
+transform: scale(1.05);
+}
+#delete-btn {
+color: #ef4444;
+}
+#delete-btn:hover {
+background: #fee2e2;
+transform: scale(1.05);
+}
+Match exact spacing, colors, and interactions from Tango screenshots.

@@ -10,7 +10,8 @@ export * from "./models/chat";
 
 // === ENUMS ===
 export const workspaceRoleEnum = pgEnum("workspace_role", ["owner", "admin", "editor", "viewer"]);
-export const flowStatusEnum = pgEnum("flow_status", ["draft", "published", "archived"]);
+// Using original database enum name "guide_status" to avoid migration issues
+export const flowStatusEnum = pgEnum("guide_status", ["draft", "published", "archived"]);
 export const stepTypeEnum = pgEnum("step_type", ["click", "input", "navigation", "wait", "scroll", "custom"]);
 export const blogPostStatusEnum = pgEnum("blog_post_status", ["draft", "published", "archived"]);
 export const contentPageStatusEnum = pgEnum("content_page_status", ["draft", "published"]);
@@ -58,7 +59,8 @@ export const collections = pgTable("collections", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const flows = pgTable("flows", {
+// Using original database table name "guides" to avoid destructive migrations
+export const flows = pgTable("guides", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   folderId: integer("folder_id").references(() => folders.id),
@@ -78,7 +80,8 @@ export const guides = flows;
 
 export const steps = pgTable("steps", {
   id: serial("id").primaryKey(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   order: integer("order").notNull(),
   title: text("title"),
   description: text("description"),
@@ -91,9 +94,11 @@ export const steps = pgTable("steps", {
 });
 
 // Flow sharing with password protection
-export const flowShares = pgTable("flow_shares", {
+// Using original database table name "guide_shares" to avoid destructive migrations
+export const flowShares = pgTable("guide_shares", {
   id: serial("id").primaryKey(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   shareToken: text("share_token").unique().notNull(), // Unique token for the shareable link
   passwordHash: text("password_hash"), // bcrypt hashed password (null = no password required)
   enabled: boolean("enabled").default(true).notNull(),
@@ -210,9 +215,11 @@ export const discountCodes = pgTable("discount_codes", {
 });
 
 // Flow Analytics - Track views and engagement
-export const flowAnalytics = pgTable("flow_analytics", {
+// Using original database table name "guide_analytics" to avoid destructive migrations
+export const flowAnalytics = pgTable("guide_analytics", {
   id: serial("id").primaryKey(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   viewerId: text("viewer_id"), // Can be null for anonymous views
   sessionId: text("session_id"),
   completedSteps: integer("completed_steps").default(0).notNull(),
@@ -231,7 +238,8 @@ export const templateCategoryEnum = pgEnum("template_category", [
   "onboarding", "training", "sales", "support", "hr", "it", "marketing", "custom"
 ]);
 
-export const flowTemplates = pgTable("flow_templates", {
+// Using original database table name "guide_templates" to avoid destructive migrations
+export const flowTemplates = pgTable("guide_templates", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description"),
@@ -249,9 +257,11 @@ export const flowTemplates = pgTable("flow_templates", {
 export const guideTemplates = flowTemplates;
 
 // Flow Versions - Track changes history
-export const flowVersions = pgTable("flow_versions", {
+// Using original database table name "guide_versions" to avoid destructive migrations
+export const flowVersions = pgTable("guide_versions", {
   id: serial("id").primaryKey(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   versionNumber: integer("version_number").notNull(),
   title: text("title").notNull(),
   description: text("description"),
@@ -334,7 +344,8 @@ export const notificationTypeEnum = pgEnum("notification_type", [
 export const stepAssignments = pgTable("step_assignments", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   assigneeId: text("assignee_id").references(() => users.id).notNull(),
   assignedById: text("assigned_by_id").references(() => users.id).notNull(),
@@ -347,9 +358,11 @@ export const stepAssignments = pgTable("step_assignments", {
 });
 
 // Flow Approvals - Approval workflow for flows
-export const flowApprovals = pgTable("flow_approvals", {
+// Using original database table name "guide_approvals" to avoid destructive migrations
+export const flowApprovals = pgTable("guide_approvals", {
   id: serial("id").primaryKey(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   requestedById: text("requested_by_id").references(() => users.id).notNull(),
   reviewerId: text("reviewer_id").references(() => users.id), // Assigned reviewer (manager/admin)
@@ -368,7 +381,8 @@ export const guideApprovals = flowApprovals;
 export const stepComments = pgTable("step_comments", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   authorId: text("author_id").references(() => users.id).notNull(),
   parentId: integer("parent_id"), // For threaded replies
@@ -389,7 +403,8 @@ export const notifications = pgTable("notifications", {
   title: text("title").notNull(),
   message: text("message").notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id),
-  flowId: integer("flow_id").references(() => flows.id),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id),
   stepId: integer("step_id").references(() => steps.id),
   referenceId: integer("reference_id"), // Generic reference (comment ID, assignment ID, etc.)
   actorId: text("actor_id").references(() => users.id), // Who triggered the notification
@@ -434,9 +449,11 @@ export const SUPPORTED_LANGUAGES = [
 ] as const;
 
 // Flow translations - Store translated flow title/description per locale
-export const flowTranslations = pgTable("flow_translations", {
+// Using original database table name "guide_translations" to avoid destructive migrations
+export const flowTranslations = pgTable("guide_translations", {
   id: serial("id").primaryKey(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   locale: text("locale").notNull(), // e.g., 'es', 'fr', 'de'
   title: text("title").notNull(),
   description: text("description"),
@@ -455,7 +472,8 @@ export const guideTranslations = flowTranslations;
 export const stepTranslations = pgTable("step_translations", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   locale: text("locale").notNull(), // e.g., 'es', 'fr', 'de'
   title: text("title"),
   description: text("description"),
@@ -474,7 +492,8 @@ export const voiceoverStatusEnum = pgEnum("voiceover_status", ["pending", "proce
 export const stepVoiceovers = pgTable("step_voiceovers", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   locale: text("locale").default("en").notNull(),
   voice: text("voice").default("alloy").notNull(), // OpenAI voice: alloy, echo, fable, onyx, nova, shimmer
   audioUrl: text("audio_url"), // URL to generated audio file

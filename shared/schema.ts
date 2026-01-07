@@ -512,7 +512,8 @@ export const stepVoiceovers = pgTable("step_voiceovers", {
 export const redactionRegions = pgTable("redaction_regions", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   x: integer("x").notNull(), // X position as percentage (0-100)
   y: integer("y").notNull(), // Y position as percentage (0-100)
   width: integer("width").notNull(), // Width as percentage (0-100)
@@ -532,7 +533,8 @@ export const captureStatusEnum = pgEnum("capture_status", ["active", "stopped", 
 // Capture sessions - Track active capturing sessions for flows
 export const captureSessions = pgTable("capture_sessions", {
   id: serial("id").primaryKey(),
-  flowId: integer("flow_id").references(() => flows.id).notNull(),
+  // Using original column name "guide_id" to avoid destructive migrations
+  flowId: integer("guide_id").references(() => flows.id).notNull(),
   userId: text("user_id").references(() => users.id).notNull(),
   token: text("token").unique().notNull(), // Unique session token for extension auth
   status: captureStatusEnum("status").default("active").notNull(),

@@ -20,13 +20,13 @@
     </div>
 
     <div id="not-recording" class="state-panel">
-      <p class="description">Click the button below to start capturing your workflow</p>
-      <button id="start-btn" class="btn btn-primary" data-testid="button-start-recording">
+      <p class="description">Capture your workflow with automatic screenshots and step descriptions</p>
+      <button id="start-btn" class="btn btn-primary" data-testid="button-new-flow-capture">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
           <circle cx="12" cy="12" r="4" fill="currentColor"/>
         </svg>
-        Start Recording
+        New Flow Capture
       </button>
       <div class="divider">
         <span>or</span>
@@ -38,10 +38,10 @@
           <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
           <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
         </svg>
-        Capture Element
+        Capture Single Element
       </button>
       <div class="color-picker-section">
-        <label for="border-color">Border Color</label>
+        <label for="border-color">Highlight Color</label>
         <div class="color-picker-row">
           <input type="color" id="border-color" value="#ef4444" data-testid="input-border-color">
           <div class="color-presets">
@@ -55,17 +55,17 @@
       </div>
     </div>
 
-    <div id="recording" class="state-panel hidden">
-      <div class="recording-indicator">
+    <div id="capturing" class="state-panel hidden">
+      <div class="capturing-indicator">
         <span class="pulse"></span>
-        <span>Recording...</span>
+        <span>Capturing...</span>
       </div>
       <div class="step-counter">
         <span id="step-count">0</span>
         <span class="label">steps captured</span>
       </div>
-      <div class="recording-actions">
-        <button id="capture-element-during-recording" class="btn btn-element-capture-small" data-testid="button-capture-element-during-recording">
+      <div class="capturing-actions">
+        <button id="capture-element-during-recording" class="btn btn-element-capture-small" data-testid="button-capture-element-during-capturing">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
             <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
@@ -75,41 +75,11 @@
           Capture Element
         </button>
       </div>
-      <button id="stop-btn" class="btn btn-danger" data-testid="button-stop-recording">
+      <button id="stop-btn" class="btn btn-success" data-testid="button-complete-capture">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>
+          <polyline points="20 6 9 17 4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        Stop Recording
-      </button>
-    </div>
-
-    <div id="sync-panel" class="state-panel hidden">
-      <p class="section-title">Save your workflow</p>
-      
-      <div class="form-group">
-        <label for="guide-title">Guide Title (optional)</label>
-        <input type="text" id="guide-title" placeholder="My Workflow Guide" data-testid="input-guide-title">
-      </div>
-
-      <div class="form-group">
-        <label for="workspace-select">Select Workspace</label>
-        <select id="workspace-select" data-testid="select-workspace">
-          <option value="">Loading workspaces...</option>
-        </select>
-      </div>
-
-      <div id="sync-status" class="sync-status"></div>
-
-      <button id="sync-btn" class="btn btn-primary" data-testid="button-sync">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          <path d="M21 3V9H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Sync to Dashboard
-      </button>
-
-      <button id="skip-sync-btn" class="btn btn-secondary" data-testid="button-skip-sync">
-        Skip for now
+        Complete Capture
       </button>
     </div>
 
@@ -120,20 +90,28 @@
           <path d="M8 12L11 15L16 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <p class="success-message">Workflow captured!</p>
+      <p class="success-message">Flow Captured!</p>
       <div class="step-summary">
-        <span id="final-step-count">0</span> steps recorded
+        <span id="final-step-count">0</span> steps captured
       </div>
       <div class="button-group">
-        <button id="view-btn" class="btn btn-secondary" data-testid="button-view-guide">View Guide</button>
-        <button id="new-btn" class="btn btn-primary" data-testid="button-new-recording">New Recording</button>
+        <button id="view-btn" class="btn btn-secondary" data-testid="button-view-flow">View Flow</button>
+        <button id="new-btn" class="btn btn-primary" data-testid="button-new-capture">New Capture</button>
       </div>
     </div>
 
     <div class="footer">
-      <a href="#" id="open-dashboard" data-testid="link-open-dashboard">Open Dashboard</a>
+      <a href="#" id="open-dashboard" data-testid="link-open-dashboard">My Flows</a>
       <span class="separator">|</span>
       <a href="#" id="settings-link" data-testid="link-settings">Settings</a>
+    </div>
+
+    <div id="tab-selector-modal" class="modal hidden">
+      <div class="modal-content tab-selector-content">
+        <h3>Select a tab to capture</h3>
+        <div id="tab-list" class="tab-list" data-testid="list-tabs"></div>
+        <button id="cancel-tab-select" class="btn btn-secondary" data-testid="button-cancel-tab-select">Cancel</button>
+      </div>
     </div>
 
     <div id="settings-modal" class="modal hidden">

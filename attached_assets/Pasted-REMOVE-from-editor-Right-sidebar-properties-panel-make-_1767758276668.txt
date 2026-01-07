@@ -1,0 +1,126 @@
+REMOVE from editor:
+- Right sidebar (properties panel) - make it a modal instead
+- Complex toolbars with many buttons
+- Colored backgrounds
+- Heavy borders
+- Excessive icons
+- Nested menus
+- Progress indicators (unless uploading)
+- Timestamps (unless on hover)
+- View counters in editor (save for analytics page)
+- Multiple zoom levels (just fit-to-width + fullscreen)
+
+KEEP ONLY:
+- Flow title (top, large, editable)
+- Step list (left sidebar, collapsible)
+- Step content (center, clean)
+- Minimal action buttons (on hover only)
+- Share button (top right)
+
+SIMPLIFY step cards:
+- Remove borders
+- Use white background
+- Add subtle shadow on hover
+- Large spacing between steps (40px minimum)
+- No step type badges
+- No metadata visible unless needed
+
+SIMPLIFY top bar:
+Remove:
+- Auto-save indicator (save automatically, no indicator needed)
+- Last modified time
+- Status badges
+- Multiple action buttons
+
+Keep only:
+- Back arrow (left)
+- Flow title (center-left)
+- Share button (right, purple gradient)
+- More menu (⋮) for less common actions
+
+ANNOTATION TOOLS:
+Only show when user clicks "Annotate" on a screenshot:
+- Floating toolbar with 4 tools only:
+  - Arrow
+  - Text
+  - Blur
+  - Undo
+- Color picker (simple, 5 colors max)
+- Save/Cancel buttons
+- Hide toolbar when done
+
+MODALS for complex actions:
+Instead of right sidebar, use modals for:
+- Share settings
+- Collection/folder selection
+- Export options
+- Flow settings
+
+Make editor feel spacious, uncluttered, focused on content.
+
+═══════════════════════════════════════════════════════════════════════════════
+PROMPT 14: POLISH EDITOR INTERACTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+ADD smooth interactions to editor:
+
+INLINE EDITING:
+- Click flow title to edit (no save button, auto-save on blur)
+- Click step description to edit (same behavior)
+- Show subtle border only when focused
+- ESC key to cancel edit
+- Enter key to save (for single-line inputs)
+
+STEP REORDERING:
+- Drag handle appears on hover (⋮⋮ icon)
+- Smooth drag animation
+- Drop zone indicator (light purple line)
+- Auto-save new order
+- No confirmation needed
+
+SCREENSHOT INTERACTIONS:
+- Click screenshot to view fullscreen
+- ESC to close fullscreen
+- Arrow keys to navigate between steps in fullscreen
+- Smooth transitions
+
+HOVER STATES:
+- Step cards: subtle background change (#F9FAFB)
+- Buttons: scale up slightly (transform: scale(1.05))
+- Screenshots: subtle shadow increase
+- All transitions: 200ms ease
+
+KEYBOARD SHORTCUTS:
+- ⌘/Ctrl + S: Force save (though auto-save handles it)
+- ⌘/Ctrl + K: Open share modal
+- Arrow Up/Down: Navigate between steps
+- Delete: Delete selected step (with confirmation)
+- ESC: Close any open modal
+
+LOADING STATES:
+- Skeleton loaders for images while loading
+- Subtle pulse animation
+- No blocking spinners unless uploading
+
+ERROR STATES:
+- Failed to load screenshot: Show placeholder with retry button
+- Failed to save: Show small error message, retry automatically
+- No intrusive error modals
+
+EMPTY STATES:
+- No steps: Show friendly message "Start capturing to add steps"
+- No description: Show "Add a description..." placeholder
+
+RESPONSIVE:
+- On mobile/tablet: Hide left sidebar by default
+- Show hamburger menu to access step list
+- Stack steps vertically
+- Larger touch targets for buttons
+
+ANIMATIONS:
+- Use Framer Motion for smooth page transitions
+- Stagger animation for step list (slight delay between each)
+- Smooth scroll to newly added steps
+- Fade in/out for modals
+
+Make everything feel fluid and polished like Tango.

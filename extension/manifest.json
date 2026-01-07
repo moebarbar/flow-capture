@@ -3,24 +3,29 @@
   "name": "FlowCapture - Workflow Documentation",
   "version": "1.0.0",
   "description": "Automatically capture browser interactions and create step-by-step workflow guides with screenshots. Perfect for training, onboarding, and documentation.",
-  "minimum_chrome_version": "115",
+  "minimum_chrome_version": "116",
   "permissions": [
     "activeTab",
     "storage",
     "tabs",
-    "scripting"
+    "scripting",
+    "sidePanel",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "FlowCapture - Click to start capturing",
+    "default_title": "FlowCapture - Capture a new workflow",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
   },
   "background": {
     "service_worker": "src/background.js"

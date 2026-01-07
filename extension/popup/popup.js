@@ -1,20 +1,14 @@
 document.addEventListener('DOMContentLoaded', async () => {
   const notRecordingPanel = document.getElementById('not-recording');
-  const recordingPanel = document.getElementById('recording');
+  const capturingPanel = document.getElementById('capturing');
   const finishedPanel = document.getElementById('finished');
-  const syncPanel = document.getElementById('sync-panel');
   const startBtn = document.getElementById('start-btn');
   const stopBtn = document.getElementById('stop-btn');
   const viewBtn = document.getElementById('view-btn');
   const newBtn = document.getElementById('new-btn');
-  const syncBtn = document.getElementById('sync-btn');
-  const skipSyncBtn = document.getElementById('skip-sync-btn');
   const openDashboard = document.getElementById('open-dashboard');
   const stepCount = document.getElementById('step-count');
   const finalStepCount = document.getElementById('final-step-count');
-  const workspaceSelect = document.getElementById('workspace-select');
-  const guideTitleInput = document.getElementById('guide-title');
-  const syncStatus = document.getElementById('sync-status');
   const settingsLink = document.getElementById('settings-link');
   const settingsModal = document.getElementById('settings-modal');
   const apiUrlInput = document.getElementById('api-url');
@@ -24,32 +18,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   const captureElementDuringRecording = document.getElementById('capture-element-during-recording');
   const borderColorInput = document.getElementById('border-color');
   const colorPresets = document.querySelectorAll('.color-preset');
+  const tabSelectorModal = document.getElementById('tab-selector-modal');
+  const tabList = document.getElementById('tab-list');
+  const cancelTabSelectBtn = document.getElementById('cancel-tab-select');
 
   function showPanel(panel) {
     notRecordingPanel.classList.add('hidden');
-    recordingPanel.classList.add('hidden');
+    capturingPanel.classList.add('hidden');
     finishedPanel.classList.add('hidden');
-    syncPanel.classList.add('hidden');
     panel.classList.remove('hidden');
   }
 
   async function updateState() {
-    const { isRecording, steps, guideId, borderColor } = await chrome.storage.local.get(['isRecording', 'steps', 'guideId', 'borderColor']);
+    const { isCapturing, capturedSteps, flowId, borderColor } = await chrome.storage.local.get(['isCapturing', 'capturedSteps', 'flowId', 'borderColor']);
     
     if (borderColor) {
       borderColorInput.value = borderColor;
       updateActivePreset(borderColor);
     }
     
-    if (isRecording) {
-      showPanel(recordingPanel);
-      stepCount.textContent = (steps || []).length;
-    } else if (guideId) {
+    if (isCapturing) {
+      showPanel(capturingPanel);
+      stepCount.textContent = (capturedSteps || []).length;
+    } else if (flowId) {
       showPanel(finishedPanel);
-      finalStepCount.textContent = (steps || []).length;
-    } else if (steps && steps.length > 0) {
-      await loadWorkspaces();
-      showPanel(syncPanel);
+      finalStepCount.textContent = (capturedSteps || []).length;
     } else {
       showPanel(notRecordingPanel);
     }
@@ -65,81 +58,115 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  async function loadWorkspaces() {
-    try {
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ type: 'GET_WORKSPACES' }, resolve);
-      });
-      
-      if (response.error) {
-        syncStatus.textContent = 'Please log in to sync';
-        syncStatus.classList.add('error');
+  async function showTabSelector() {
+    const tabs = await chrome.tabs.query({});
+    tabList.innerHTML = '';
+    
+    tabs.forEach(tab => {
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
         return;
       }
-
-      workspaceSelect.innerHTML = '';
-      const workspaces = response.workspaces || [];
       
-      if (workspaces.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'No workspaces found';
-        workspaceSelect.appendChild(option);
-      } else {
-        workspaces.forEach(ws => {
-          const option = document.createElement('option');
-          option.value = ws.id;
-          option.textContent = ws.name;
-          workspaceSelect.appendChild(option);
-        });
+      const tabCard = document.createElement('div');
+      tabCard.className = 'tab-card';
+      tabCard.dataset.testid = `tab-card-${tab.id}`;
+      
+      let hostname = '';
+      try {
+        hostname = new URL(tab.url).hostname;
+      } catch (e) {
+        hostname = tab.url;
       }
-    } catch (error) {
-      syncStatus.textContent = 'Failed to load workspaces';
-      syncStatus.classList.add('error');
+      
+      tabCard.innerHTML = `
+        <img src="${tab.favIconUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23999%22><rect width=%2224%22 height=%2224%22 rx=%224%22/></svg>'}" class="tab-favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23999%22><rect width=%2224%22 height=%2224%22 rx=%224%22/></svg>'">
+        <div class="tab-info">
+          <div class="tab-title">${escapeHtml(tab.title || 'Untitled')}</div>
+          <div class="tab-url">${escapeHtml(hostname)}</div>
+        </div>
+      `;
+      tabCard.onclick = () => selectTab(tab.id);
+      tabList.appendChild(tabCard);
+    });
+    
+    tabSelectorModal.classList.remove('hidden');
+  }
+
+  async function selectTab(tabId) {
+    tabSelectorModal.classList.add('hidden');
+    
+    await chrome.tabs.update(tabId, { active: true });
+    
+    await chrome.storage.local.set({
+      isCapturing: true,
+      capturedSteps: [],
+      flowId: null,
+      currentTabId: tabId
+    });
+    
+    try {
+      await chrome.sidePanel.open({ tabId: tabId });
+    } catch (e) {
+      console.log('Side panel open error:', e);
     }
+    
+    try {
+      await chrome.tabs.sendMessage(tabId, { action: 'startCapture' });
+    } catch (e) {
+      console.log('Could not send start message, injecting content script');
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        files: ['src/content.js']
+      });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await chrome.tabs.sendMessage(tabId, { action: 'startCapture' });
+    }
+    
+    chrome.runtime.sendMessage({ type: 'START_CAPTURE', tabId });
+    
+    window.close();
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   startBtn.addEventListener('click', async () => {
-    await chrome.storage.local.set({ 
-      isRecording: true, 
-      steps: [],
-      guideId: null,
-      startTime: Date.now()
-    });
-    
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' });
-    }
-    
-    chrome.runtime.sendMessage({ type: 'START_RECORDING' });
-    showPanel(recordingPanel);
-    stepCount.textContent = '0';
+    await showTabSelector();
+  });
+
+  cancelTabSelectBtn.addEventListener('click', () => {
+    tabSelectorModal.classList.add('hidden');
   });
 
   stopBtn.addEventListener('click', async () => {
-    await chrome.storage.local.set({ isRecording: false });
+    const { currentTabId } = await chrome.storage.local.get(['currentTabId']);
     
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'STOP_RECORDING' });
+    if (currentTabId) {
+      try {
+        await chrome.tabs.sendMessage(currentTabId, { action: 'stopCapture' });
+      } catch (e) {
+        console.log('Could not send stop message');
+      }
     }
     
-    chrome.runtime.sendMessage({ type: 'STOP_RECORDING' });
+    await chrome.storage.local.set({ isCapturing: false });
+    chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
     
-    await loadWorkspaces();
-    showPanel(syncPanel);
+    const { capturedSteps } = await chrome.storage.local.get(['capturedSteps']);
+    finalStepCount.textContent = (capturedSteps || []).length;
+    showPanel(finishedPanel);
   });
 
   elementCaptureBtn.addEventListener('click', async () => {
     window.close();
-    
     chrome.runtime.sendMessage({ type: 'START_ELEMENT_CAPTURE' });
   });
 
   captureElementDuringRecording.addEventListener('click', async () => {
     window.close();
-    
     chrome.runtime.sendMessage({ type: 'START_ELEMENT_CAPTURE' });
   });
 
@@ -158,70 +185,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  syncBtn.addEventListener('click', async () => {
-    const workspaceId = parseInt(workspaceSelect.value, 10);
-    const title = guideTitleInput.value.trim();
-
-    if (!workspaceId) {
-      syncStatus.textContent = 'Please select a workspace';
-      syncStatus.classList.add('error');
-      return;
-    }
-
-    syncBtn.disabled = true;
-    syncBtn.textContent = 'Syncing...';
-    syncStatus.textContent = '';
-    syncStatus.classList.remove('error');
-
-    try {
-      const response = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({
-          type: 'SYNC_TO_BACKEND',
-          workspaceId,
-          title: title || undefined
-        }, resolve);
-      });
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      const { steps } = await chrome.storage.local.get(['steps']);
-      finalStepCount.textContent = response.stepsCreated || 0;
-      showPanel(finishedPanel);
-    } catch (error) {
-      syncStatus.textContent = error.message || 'Sync failed';
-      syncStatus.classList.add('error');
-      syncBtn.disabled = false;
-      syncBtn.textContent = 'Sync to Dashboard';
-    }
-  });
-
-  skipSyncBtn.addEventListener('click', async () => {
-    const { steps } = await chrome.storage.local.get(['steps']);
-    finalStepCount.textContent = (steps || []).length;
-    showPanel(finishedPanel);
-  });
-
   viewBtn.addEventListener('click', async () => {
-    const { guideId } = await chrome.storage.local.get(['guideId']);
+    const { flowId } = await chrome.storage.local.get(['flowId']);
     const baseUrl = await getDashboardUrl();
-    if (guideId) {
-      chrome.tabs.create({ url: `${baseUrl}/guides/${guideId}` });
+    if (flowId) {
+      chrome.tabs.create({ url: `${baseUrl}/flows/${flowId}/edit` });
     } else {
-      chrome.tabs.create({ url: baseUrl });
+      chrome.tabs.create({ url: `${baseUrl}/dashboard` });
     }
   });
 
   newBtn.addEventListener('click', async () => {
-    await chrome.storage.local.set({ steps: [], guideId: null });
+    await chrome.storage.local.set({ capturedSteps: [], flowId: null, isCapturing: false });
     showPanel(notRecordingPanel);
   });
 
   openDashboard.addEventListener('click', async (e) => {
     e.preventDefault();
     const url = await getDashboardUrl();
-    chrome.tabs.create({ url });
+    chrome.tabs.create({ url: `${url}/dashboard` });
   });
 
   settingsLink.addEventListener('click', async (e) => {
@@ -249,8 +231,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   chrome.storage.onChanged.addListener((changes) => {
-    if (changes.steps) {
-      stepCount.textContent = (changes.steps.newValue || []).length;
+    if (changes.capturedSteps) {
+      stepCount.textContent = (changes.capturedSteps.newValue || []).length;
     }
   });
 

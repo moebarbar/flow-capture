@@ -1,0 +1,100 @@
+UPDATE Side Panel "Complete" button functionality:
+
+When user clicks Complete (✓) button in side panel:
+
+1. Collect all captured data:
+   - Flow title (from input)
+   - All steps with:
+     - Step number
+     - Description
+     - Screenshot (base64 data)
+     - Element info
+     - Page URL
+     - Timestamp
+
+2. Upload to backend:
+```javascript
+   const flowData = {
+     title: flowTitle,
+     workspaceId: currentWorkspace.id,
+     collectionId: selectedCollection?.id,
+     steps: capturedSteps.map(step => ({
+       stepNumber: step.number,
+       type: step.type,
+       description: step.description,
+       screenshotData: step.screenshot, // base64
+       elementSelector: step.element.selector,
+       elementXPath: step.element.xpath,
+       pageUrl: step.pageUrl
+     }))
+   };
+   
+   // Upload screenshots first
+   const uploadedSteps = await Promise.all(
+     flowData.steps.map(async (step) => {
+       const formData = new FormData();
+       const blob = await fetch(step.screenshotData).then(r => r.blob());
+       formData.append('file', blob);
+       
+       const response = await fetch(`${API_URL}/upload/screenshot`, {
+         method: 'POST',
+         headers: { 'Authorization': `Bearer ${token}` },
+         body: formData
+       });
+       
+       const { url } = await response.json();
+       return { ...step, screenshotUrl: url };
+     })
+   );
+   
+   // Create flow with uploaded screenshots
+   const createResponse = await fetch(`${API_URL}/flows`, {
+     method: 'POST',
+     headers: {
+       'Content-Type': 'application/json',
+       'Authorization': `Bearer ${token}`
+     },
+     body: JSON.stringify({
+       ...flowData,
+       steps: uploadedSteps
+     })
+   });
+   
+   const { flowId } = await createResponse.json();
+```
+
+3. Open editor in new tab:
+```javascript
+   chrome.tabs.create({
+     url: `https://yourapp.com/flows/${flowId}/edit`
+   });
+```
+
+4. Close side panel:
+```javascript
+   chrome.sidePanel.setOptions({ enabled: false });
+```
+
+5. Show success message briefly in extension
+```javascript
+   chrome.notifications.create({
+     type: 'basic',
+     iconUrl: 'icons/icon128.png',
+     title: 'Flow Captured!',
+     message: 'Opening editor...'
+   });
+```
+
+ADD loading state:
+- Show "Saving..." overlay in side panel
+- Disable all buttons during save
+- Show progress: "Uploading screenshots (3/5)..."
+- Handle errors gracefully (show error message, allow retry)
+
+BACKEND ENDPOINT:
+POST /api/flows should:
+- Accept flow data with steps
+- Create flow record
+- Create step records with screenshot URLs
+- Return flowId
+- Handle transaction (rollback if any step fails)

@@ -10,7 +10,7 @@ export * from "./models/chat";
 
 // === ENUMS ===
 export const workspaceRoleEnum = pgEnum("workspace_role", ["owner", "admin", "editor", "viewer"]);
-export const guideStatusEnum = pgEnum("guide_status", ["draft", "published", "archived"]);
+export const flowStatusEnum = pgEnum("flow_status", ["draft", "published", "archived"]);
 export const stepTypeEnum = pgEnum("step_type", ["click", "input", "navigation", "wait", "scroll", "custom"]);
 export const blogPostStatusEnum = pgEnum("blog_post_status", ["draft", "published", "archived"]);
 export const contentPageStatusEnum = pgEnum("content_page_status", ["draft", "published"]);
@@ -45,23 +45,40 @@ export const folders = pgTable("folders", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const guides = pgTable("guides", {
+// Collections for organizing flows
+export const collections = pgTable("collections", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color"), // For UI visual organization
+  icon: text("icon"),
+  parentId: integer("parent_id"), // For nested collections
+  workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const flows = pgTable("flows", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   folderId: integer("folder_id").references(() => folders.id),
-  title: text("title").notNull().default("Untitled Guide"),
+  collectionId: integer("collection_id").references(() => collections.id),
+  title: text("title").notNull().default("Untitled Flow"),
   description: text("description"),
   coverImageUrl: text("cover_image_url"),
-  status: guideStatusEnum("status").default("draft").notNull(),
+  status: flowStatusEnum("status").default("draft").notNull(),
   createdById: text("created_by_id").references(() => users.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   viewCount: integer("view_count").default(0).notNull(),
 });
 
+// Alias for backward compatibility during migration
+export const guides = flows;
+
 export const steps = pgTable("steps", {
   id: serial("id").primaryKey(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   order: integer("order").notNull(),
   title: text("title"),
   description: text("description"),
@@ -73,10 +90,10 @@ export const steps = pgTable("steps", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Guide sharing with password protection
-export const guideShares = pgTable("guide_shares", {
+// Flow sharing with password protection
+export const flowShares = pgTable("flow_shares", {
   id: serial("id").primaryKey(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   shareToken: text("share_token").unique().notNull(), // Unique token for the shareable link
   passwordHash: text("password_hash"), // bcrypt hashed password (null = no password required)
   enabled: boolean("enabled").default(true).notNull(),
@@ -85,6 +102,9 @@ export const guideShares = pgTable("guide_shares", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Alias for backward compatibility
+export const guideShares = flowShares;
 
 export const blogPosts = pgTable("blog_posts", {
   id: serial("id").primaryKey(),
@@ -189,27 +209,29 @@ export const discountCodes = pgTable("discount_codes", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Guide Analytics - Track views and engagement
-export const guideAnalytics = pgTable("guide_analytics", {
+// Flow Analytics - Track views and engagement
+export const flowAnalytics = pgTable("flow_analytics", {
   id: serial("id").primaryKey(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   viewerId: text("viewer_id"), // Can be null for anonymous views
   sessionId: text("session_id"),
   completedSteps: integer("completed_steps").default(0).notNull(),
   totalSteps: integer("total_steps").default(0).notNull(),
-  timeSpentSeconds: integer("time_spent_seconds").default(0).notNull(),
   completedAt: timestamp("completed_at"),
   referrer: text("referrer"),
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// Guide Templates - Pre-built guide templates
+// Aliases for backward compatibility
+export const guideAnalytics = flowAnalytics;
+
+// Flow Templates - Pre-built flow templates
 export const templateCategoryEnum = pgEnum("template_category", [
   "onboarding", "training", "sales", "support", "hr", "it", "marketing", "custom"
 ]);
 
-export const guideTemplates = pgTable("guide_templates", {
+export const flowTemplates = pgTable("flow_templates", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description"),
@@ -223,10 +245,13 @@ export const guideTemplates = pgTable("guide_templates", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Guide Versions - Track changes history
-export const guideVersions = pgTable("guide_versions", {
+// Alias for backward compatibility
+export const guideTemplates = flowTemplates;
+
+// Flow Versions - Track changes history
+export const flowVersions = pgTable("flow_versions", {
   id: serial("id").primaryKey(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   versionNumber: integer("version_number").notNull(),
   title: text("title").notNull(),
   description: text("description"),
@@ -235,6 +260,9 @@ export const guideVersions = pgTable("guide_versions", {
   changeNotes: text("change_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// Alias for backward compatibility
+export const guideVersions = flowVersions;
 
 // Workspace Settings - Per-workspace configuration
 export const workspaceSettings = pgTable("workspace_settings", {
@@ -299,14 +327,14 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "assignment_created", "assignment_updated", "assignment_completed",
   "approval_requested", "approval_approved", "approval_rejected", "approval_revision",
   "comment_added", "comment_reply", "comment_mention",
-  "workspace_invitation", "guide_shared"
+  "workspace_invitation", "flow_shared"
 ]);
 
 // Step Assignments - Assign specific steps to team members
 export const stepAssignments = pgTable("step_assignments", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   assigneeId: text("assignee_id").references(() => users.id).notNull(),
   assignedById: text("assigned_by_id").references(() => users.id).notNull(),
@@ -318,10 +346,10 @@ export const stepAssignments = pgTable("step_assignments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Guide Approvals - Approval workflow for guides
-export const guideApprovals = pgTable("guide_approvals", {
+// Flow Approvals - Approval workflow for flows
+export const flowApprovals = pgTable("flow_approvals", {
   id: serial("id").primaryKey(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   requestedById: text("requested_by_id").references(() => users.id).notNull(),
   reviewerId: text("reviewer_id").references(() => users.id), // Assigned reviewer (manager/admin)
@@ -333,11 +361,14 @@ export const guideApprovals = pgTable("guide_approvals", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Alias for backward compatibility
+export const guideApprovals = flowApprovals;
+
 // Step Comments - Comments and annotations on steps
 export const stepComments = pgTable("step_comments", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   authorId: text("author_id").references(() => users.id).notNull(),
   parentId: integer("parent_id"), // For threaded replies
@@ -358,7 +389,7 @@ export const notifications = pgTable("notifications", {
   title: text("title").notNull(),
   message: text("message").notNull(),
   workspaceId: integer("workspace_id").references(() => workspaces.id),
-  guideId: integer("guide_id").references(() => guides.id),
+  flowId: integer("flow_id").references(() => flows.id),
   stepId: integer("step_id").references(() => steps.id),
   referenceId: integer("reference_id"), // Generic reference (comment ID, assignment ID, etc.)
   actorId: text("actor_id").references(() => users.id), // Who triggered the notification
@@ -372,8 +403,8 @@ export const teamActivity = pgTable("team_activity", {
   id: serial("id").primaryKey(),
   workspaceId: integer("workspace_id").references(() => workspaces.id).notNull(),
   userId: text("user_id").references(() => users.id).notNull(),
-  actionType: text("action_type").notNull(), // 'guide_created', 'step_completed', 'comment_added', etc.
-  resourceType: text("resource_type").notNull(), // 'guide', 'step', 'assignment', 'approval', 'comment'
+  actionType: text("action_type").notNull(), // 'flow_created', 'step_completed', 'comment_added', etc.
+  resourceType: text("resource_type").notNull(), // 'flow', 'step', 'assignment', 'approval', 'comment'
   resourceId: integer("resource_id").notNull(),
   metadata: jsonb("metadata"), // Additional action details
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -402,10 +433,10 @@ export const SUPPORTED_LANGUAGES = [
   { code: "tr", name: "Turkish" },
 ] as const;
 
-// Guide translations - Store translated guide title/description per locale
-export const guideTranslations = pgTable("guide_translations", {
+// Flow translations - Store translated flow title/description per locale
+export const flowTranslations = pgTable("flow_translations", {
   id: serial("id").primaryKey(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   locale: text("locale").notNull(), // e.g., 'es', 'fr', 'de'
   title: text("title").notNull(),
   description: text("description"),
@@ -417,11 +448,14 @@ export const guideTranslations = pgTable("guide_translations", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Alias for backward compatibility
+export const guideTranslations = flowTranslations;
+
 // Step translations - Store translated step title/description per locale
 export const stepTranslations = pgTable("step_translations", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   locale: text("locale").notNull(), // e.g., 'es', 'fr', 'de'
   title: text("title"),
   description: text("description"),
@@ -440,11 +474,10 @@ export const voiceoverStatusEnum = pgEnum("voiceover_status", ["pending", "proce
 export const stepVoiceovers = pgTable("step_voiceovers", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   locale: text("locale").default("en").notNull(),
   voice: text("voice").default("alloy").notNull(), // OpenAI voice: alloy, echo, fable, onyx, nova, shimmer
   audioUrl: text("audio_url"), // URL to generated audio file
-  duration: integer("duration"), // Duration in seconds
   status: voiceoverStatusEnum("status").default("pending").notNull(),
   sourceText: text("source_text"), // Text used for generation
   sourceHash: text("source_hash"), // Hash for change detection
@@ -460,7 +493,7 @@ export const stepVoiceovers = pgTable("step_voiceovers", {
 export const redactionRegions = pgTable("redaction_regions", {
   id: serial("id").primaryKey(),
   stepId: integer("step_id").references(() => steps.id).notNull(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   x: integer("x").notNull(), // X position as percentage (0-100)
   y: integer("y").notNull(), // Y position as percentage (0-100)
   width: integer("width").notNull(), // Width as percentage (0-100)
@@ -477,10 +510,10 @@ export const redactionRegions = pgTable("redaction_regions", {
 
 export const captureStatusEnum = pgEnum("capture_status", ["active", "stopped", "expired"]);
 
-// Capture sessions - Track active recording sessions for guides
+// Capture sessions - Track active capturing sessions for flows
 export const captureSessions = pgTable("capture_sessions", {
   id: serial("id").primaryKey(),
-  guideId: integer("guide_id").references(() => guides.id).notNull(),
+  flowId: integer("flow_id").references(() => flows.id).notNull(),
   userId: text("user_id").references(() => users.id).notNull(),
   token: text("token").unique().notNull(), // Unique session token for extension auth
   status: captureStatusEnum("status").default("active").notNull(),
@@ -744,9 +777,9 @@ export const stepAssignmentsRelations = relations(stepAssignments, ({ one }) => 
     fields: [stepAssignments.stepId],
     references: [steps.id],
   }),
-  guide: one(guides, {
-    fields: [stepAssignments.guideId],
-    references: [guides.id],
+  flow: one(flows, {
+    fields: [stepAssignments.flowId],
+    references: [flows.id],
   }),
   workspace: one(workspaces, {
     fields: [stepAssignments.workspaceId],
@@ -762,33 +795,36 @@ export const stepAssignmentsRelations = relations(stepAssignments, ({ one }) => 
   }),
 }));
 
-export const guideApprovalsRelations = relations(guideApprovals, ({ one }) => ({
-  guide: one(guides, {
-    fields: [guideApprovals.guideId],
-    references: [guides.id],
+export const flowApprovalsRelations = relations(flowApprovals, ({ one }) => ({
+  flow: one(flows, {
+    fields: [flowApprovals.flowId],
+    references: [flows.id],
   }),
   workspace: one(workspaces, {
-    fields: [guideApprovals.workspaceId],
+    fields: [flowApprovals.workspaceId],
     references: [workspaces.id],
   }),
   requestedBy: one(users, {
-    fields: [guideApprovals.requestedById],
+    fields: [flowApprovals.requestedById],
     references: [users.id],
   }),
   reviewer: one(users, {
-    fields: [guideApprovals.reviewerId],
+    fields: [flowApprovals.reviewerId],
     references: [users.id],
   }),
 }));
+
+// Alias for backward compatibility
+export const guideApprovalsRelations = flowApprovalsRelations;
 
 export const stepCommentsRelations = relations(stepComments, ({ one, many }) => ({
   step: one(steps, {
     fields: [stepComments.stepId],
     references: [steps.id],
   }),
-  guide: one(guides, {
-    fields: [stepComments.guideId],
-    references: [guides.id],
+  flow: one(flows, {
+    fields: [stepComments.flowId],
+    references: [flows.id],
   }),
   workspace: one(workspaces, {
     fields: [stepComments.workspaceId],
@@ -817,9 +853,9 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     fields: [notifications.workspaceId],
     references: [workspaces.id],
   }),
-  guide: one(guides, {
-    fields: [notifications.guideId],
-    references: [guides.id],
+  flow: one(flows, {
+    fields: [notifications.flowId],
+    references: [flows.id],
   }),
   step: one(steps, {
     fields: [notifications.stepId],
@@ -915,37 +951,43 @@ export const guidesRelations = relations(guides, ({ one, many }) => ({
 }));
 
 export const stepsRelations = relations(steps, ({ one, many }) => ({
-  guide: one(guides, {
-    fields: [steps.guideId],
-    references: [guides.id],
+  flow: one(flows, {
+    fields: [steps.flowId],
+    references: [flows.id],
   }),
   translations: many(stepTranslations),
 }));
 
-export const guideTranslationsRelations = relations(guideTranslations, ({ one }) => ({
-  guide: one(guides, {
-    fields: [guideTranslations.guideId],
-    references: [guides.id],
+export const flowTranslationsRelations = relations(flowTranslations, ({ one }) => ({
+  flow: one(flows, {
+    fields: [flowTranslations.flowId],
+    references: [flows.id],
   }),
 }));
+
+// Alias for backward compatibility
+export const guideTranslationsRelations = flowTranslationsRelations;
 
 export const stepTranslationsRelations = relations(stepTranslations, ({ one }) => ({
   step: one(steps, {
     fields: [stepTranslations.stepId],
     references: [steps.id],
   }),
-  guide: one(guides, {
-    fields: [stepTranslations.guideId],
-    references: [guides.id],
+  flow: one(flows, {
+    fields: [stepTranslations.flowId],
+    references: [flows.id],
   }),
 }));
 
-export const guideSharesRelations = relations(guideShares, ({ one }) => ({
-  guide: one(guides, {
-    fields: [guideShares.guideId],
-    references: [guides.id],
+export const flowSharesRelations = relations(flowShares, ({ one }) => ({
+  flow: one(flows, {
+    fields: [flowShares.flowId],
+    references: [flows.id],
   }),
 }));
+
+// Alias for backward compatibility
+export const guideSharesRelations = flowSharesRelations;
 
 export const blogPostsRelations = relations(blogPosts, ({ one }) => ({
   author: one(users, {
@@ -979,13 +1021,29 @@ export const insertFolderSchema = createInsertSchema(folders).omit({
   createdAt: true
 });
 
-export const insertGuideShareSchema = createInsertSchema(guideShares).omit({
+export const insertCollectionSchema = createInsertSchema(collections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+export const insertFlowSchema = createInsertSchema(flows).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+  viewCount: true
+});
+
+export const insertFlowShareSchema = createInsertSchema(flowShares).omit({
   id: true,
   accessCount: true,
   lastAccessedAt: true,
   createdAt: true,
   updatedAt: true
 });
+
+// Alias for backward compatibility
+export const insertGuideShareSchema = insertFlowShareSchema;
 
 export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
   id: true,
@@ -1040,17 +1098,28 @@ export const insertWorkspaceInvitationSchema = createInsertSchema(workspaceInvit
 export type Workspace = typeof workspaces.$inferSelect;
 export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
 
-export type Guide = typeof guides.$inferSelect;
-export type InsertGuide = z.infer<typeof insertGuideSchema>;
-
 export type Step = typeof steps.$inferSelect;
 export type InsertStep = z.infer<typeof insertStepSchema>;
 
 export type Folder = typeof folders.$inferSelect;
 export type InsertFolder = z.infer<typeof insertFolderSchema>;
 
-export type GuideShare = typeof guideShares.$inferSelect;
-export type InsertGuideShare = z.infer<typeof insertGuideShareSchema>;
+export type Collection = typeof collections.$inferSelect;
+export type InsertCollection = z.infer<typeof insertCollectionSchema>;
+
+export type Flow = typeof flows.$inferSelect;
+export type InsertFlow = z.infer<typeof insertFlowSchema>;
+
+// Aliases for backward compatibility
+export type Guide = Flow;
+export type InsertGuide = InsertFlow;
+
+export type FlowShare = typeof flowShares.$inferSelect;
+export type InsertFlowShare = z.infer<typeof insertFlowShareSchema>;
+
+// Aliases for backward compatibility
+export type GuideShare = FlowShare;
+export type InsertGuideShare = InsertFlowShare;
 
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
@@ -1064,14 +1133,26 @@ export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;
 export type DiscountCode = typeof discountCodes.$inferSelect;
 export type InsertDiscountCode = z.infer<typeof insertDiscountCodeSchema>;
 
-export type GuideAnalytics = typeof guideAnalytics.$inferSelect;
-export type InsertGuideAnalytics = typeof guideAnalytics.$inferInsert;
+export type FlowAnalytics = typeof flowAnalytics.$inferSelect;
+export type InsertFlowAnalytics = typeof flowAnalytics.$inferInsert;
 
-export type GuideTemplate = typeof guideTemplates.$inferSelect;
-export type InsertGuideTemplate = typeof guideTemplates.$inferInsert;
+// Aliases for backward compatibility
+export type GuideAnalytics = FlowAnalytics;
+export type InsertGuideAnalytics = InsertFlowAnalytics;
 
-export type GuideVersion = typeof guideVersions.$inferSelect;
-export type InsertGuideVersion = typeof guideVersions.$inferInsert;
+export type FlowTemplate = typeof flowTemplates.$inferSelect;
+export type InsertFlowTemplate = typeof flowTemplates.$inferInsert;
+
+// Aliases for backward compatibility
+export type GuideTemplate = FlowTemplate;
+export type InsertGuideTemplate = InsertFlowTemplate;
+
+export type FlowVersion = typeof flowVersions.$inferSelect;
+export type InsertFlowVersion = typeof flowVersions.$inferInsert;
+
+// Aliases for backward compatibility
+export type GuideVersion = FlowVersion;
+export type InsertGuideVersion = InsertFlowVersion;
 
 export type WorkspaceSettingsType = typeof workspaceSettings.$inferSelect;
 export type InsertWorkspaceSettings = typeof workspaceSettings.$inferInsert;
@@ -1092,8 +1173,12 @@ export type InsertWorkspaceInvitation = z.infer<typeof insertWorkspaceInvitation
 export type CreateWorkspaceRequest = InsertWorkspace;
 export type UpdateWorkspaceRequest = Partial<InsertWorkspace>;
 
-export type CreateGuideRequest = InsertGuide;
-export type UpdateGuideRequest = Partial<InsertGuide>;
+export type CreateFlowRequest = InsertFlow;
+export type UpdateFlowRequest = Partial<InsertFlow>;
+
+// Aliases for backward compatibility
+export type CreateGuideRequest = CreateFlowRequest;
+export type UpdateGuideRequest = UpdateFlowRequest;
 
 export type CreateStepRequest = InsertStep;
 export type UpdateStepRequest = Partial<InsertStep>;
@@ -1101,9 +1186,15 @@ export type ReorderStepsRequest = { stepIds: number[] }; // Ordered list of IDs
 
 export type CreateFolderRequest = InsertFolder;
 
+export type CreateCollectionRequest = InsertCollection;
+export type UpdateCollectionRequest = Partial<InsertCollection>;
+
 // Response types including relations
-export type GuideWithSteps = Guide & { steps: Step[] };
+export type FlowWithSteps = Flow & { steps: Step[] };
 export type WorkspaceWithMembers = Workspace & { members: (typeof workspaceMembers.$inferSelect & { user: typeof users.$inferSelect })[] };
+
+// Alias for backward compatibility
+export type GuideWithSteps = FlowWithSteps;
 
 // === COLLABORATION SCHEMAS ===
 

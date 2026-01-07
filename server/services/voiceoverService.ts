@@ -39,7 +39,7 @@ export class VoiceoverService {
     return await db.select()
       .from(stepVoiceovers)
       .where(and(
-        eq(stepVoiceovers.guideId, guideId),
+        eq(stepVoiceovers.flowId, guideId),
         eq(stepVoiceovers.locale, locale)
       ));
   }
@@ -74,7 +74,7 @@ export class VoiceoverService {
       : await db.insert(stepVoiceovers)
           .values({
             stepId,
-            guideId,
+            flowId: guideId,
             locale,
             voice,
             sourceText: text,
@@ -135,12 +135,9 @@ export class VoiceoverService {
         throw new Error(`Failed to upload audio to object storage: ${storageError.message}`);
       }
 
-      const durationEstimate = Math.ceil(text.length / 15);
-
       const [updated] = await db.update(stepVoiceovers)
         .set({
           audioUrl,
-          duration: durationEstimate,
           status: 'completed',
           generatedAt: new Date(),
           updatedAt: new Date()
@@ -167,7 +164,7 @@ export class VoiceoverService {
   async generateGuideVoiceovers(guideId: number, voice: Voice = 'alloy', locale: string = 'en') {
     const guideSteps = await db.select()
       .from(steps)
-      .where(eq(steps.guideId, guideId))
+      .where(eq(steps.flowId, guideId))
       .orderBy(steps.order);
 
     const results = [];

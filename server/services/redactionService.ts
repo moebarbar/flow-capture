@@ -75,7 +75,7 @@ export const redactionService = {
     for (const region of detected) {
       const [saved] = await db.insert(redactionRegions).values({
         stepId,
-        guideId,
+        flowId: guideId,
         x: region.x,
         y: region.y,
         width: region.width,
@@ -100,7 +100,7 @@ export const redactionService = {
   async getRegionsByGuide(guideId: number): Promise<typeof redactionRegions.$inferSelect[]> {
     return db.select()
       .from(redactionRegions)
-      .where(eq(redactionRegions.guideId, guideId));
+      .where(eq(redactionRegions.flowId, guideId));
   },
 
   async createRegion(region: {
@@ -114,8 +114,14 @@ export const redactionService = {
     detectedType?: string;
   }): Promise<typeof redactionRegions.$inferSelect> {
     const [created] = await db.insert(redactionRegions).values({
-      ...region,
+      stepId: region.stepId,
+      flowId: region.guideId,
+      x: region.x,
+      y: region.y,
+      width: region.width,
+      height: region.height,
       type: region.type || 'blur',
+      detectedType: region.detectedType,
       isAutoDetected: false,
       isEnabled: true,
     }).returning();

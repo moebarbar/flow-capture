@@ -39,7 +39,7 @@ export async function translateGuide(
 
     const existing = await db.query.guideTranslations.findFirst({
       where: and(
-        eq(guideTranslations.guideId, guideId),
+        eq(guideTranslations.flowId, guideId),
         eq(guideTranslations.locale, targetLocale)
       )
     });
@@ -54,7 +54,7 @@ export async function translateGuide(
         .where(eq(guideTranslations.id, existing.id));
     } else {
       await db.insert(guideTranslations).values({
-        guideId,
+        flowId: guideId,
         locale: targetLocale,
         title: guide.title || 'Untitled',
         description: guide.description,
@@ -96,7 +96,7 @@ Maintain the same tone and style. Return JSON: { "title": "...", "description": 
         updatedAt: new Date()
       })
       .where(and(
-        eq(guideTranslations.guideId, guideId),
+        eq(guideTranslations.flowId, guideId),
         eq(guideTranslations.locale, targetLocale)
       ))
       .returning();
@@ -108,7 +108,7 @@ Maintain the same tone and style. Return JSON: { "title": "...", "description": 
     await db.update(guideTranslations)
       .set({ status: 'failed', updatedAt: new Date() })
       .where(and(
-        eq(guideTranslations.guideId, guideId),
+        eq(guideTranslations.flowId, guideId),
         eq(guideTranslations.locale, targetLocale)
       ));
     
@@ -149,7 +149,7 @@ export async function translateStep(
     } else {
       await db.insert(stepTranslations).values({
         stepId,
-        guideId,
+        flowId: guideId,
         locale: targetLocale,
         title: step.title,
         description: step.description,
@@ -215,7 +215,7 @@ export async function translateGuideWithSteps(
   targetLocales: string[]
 ): Promise<{ success: boolean; translations: { locale: string; guideTranslation: GuideTranslation | null; stepTranslations: (StepTranslation | null)[] }[] }> {
   const stepsResult = await db.query.steps.findMany({
-    where: eq(steps.guideId, guideId),
+    where: eq(steps.flowId, guideId),
     orderBy: (steps, { asc }) => [asc(steps.order)]
   });
 
@@ -235,22 +235,22 @@ export async function translateGuideWithSteps(
 
 export async function getGuideTranslations(guideId: number): Promise<GuideTranslation[]> {
   return db.query.guideTranslations.findMany({
-    where: eq(guideTranslations.guideId, guideId)
+    where: eq(guideTranslations.flowId, guideId)
   });
 }
 
 export async function getStepTranslations(guideId: number, locale: string): Promise<StepTranslation[]> {
   return db.query.stepTranslations.findMany({
     where: and(
-      eq(stepTranslations.guideId, guideId),
+      eq(stepTranslations.flowId, guideId),
       eq(stepTranslations.locale, locale)
     )
   });
 }
 
 export async function deleteGuideTranslations(guideId: number): Promise<void> {
-  await db.delete(guideTranslations).where(eq(guideTranslations.guideId, guideId));
-  await db.delete(stepTranslations).where(eq(stepTranslations.guideId, guideId));
+  await db.delete(guideTranslations).where(eq(guideTranslations.flowId, guideId));
+  await db.delete(stepTranslations).where(eq(stepTranslations.flowId, guideId));
 }
 
 export function getSupportedLanguages() {

@@ -1,0 +1,296 @@
+SIMPLIFIED TESTING & DEBUGGING PROMPT
+═══════════════════════════════════════════════════════════════════════════════
+
+Test the entire application end-to-end and fix all bugs. Ensure the Chrome extension, web platform, and backend communicate correctly.
+
+STEP 1: TEST EXTENSION FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Test these flows and fix any errors:
+
+1. Extension Installation:
+   - Load extension in Chrome (chrome://extensions → Load unpacked)
+   - Verify no console errors
+   - Extension icon appears in toolbar
+   - Click icon → Popup opens correctly
+
+2. User Authentication in Extension:
+   - User can login from extension
+   - JWT token saved in chrome.storage
+   - Token persists after browser restart
+   - If not logged in, show login prompt
+
+3. Tab Selection:
+   - Click "New Flow Capture" button
+   - Modal shows ALL open Chrome tabs
+   - Each tab displays: favicon, title, URL
+   - Click any tab → Extension switches to that tab
+   - Side panel opens on selected tab
+
+4. Capturing Workflow:
+   - Click on webpage elements
+   - Each click creates new step in side panel
+   - Screenshot captures correctly
+   - Description auto-generates accurately
+   - Steps appear in real-time (no delay)
+   - Step numbers increment correctly (1, 2, 3...)
+
+5. Side Panel Controls:
+   - Pause button → Stops capturing new steps
+   - Resume button → Restarts capturing
+   - Restart button → Clears all steps (with confirmation)
+   - Delete button → Cancels flow (with confirmation)
+   - Complete button → Saves flow and opens editor
+
+6. Save to Backend:
+   - Complete button uploads all screenshots
+   - Shows "Saving..." loading state
+   - Shows progress: "Uploading 3 of 5 screenshots"
+   - Creates flow in database
+   - Returns flowId
+   - Opens editor in new tab: yourapp.com/flows/{flowId}/edit
+   - If error, shows clear error message
+
+STEP 2: TEST WEB APP FUNCTIONALITY
+═══════════════════════════════════════════════════════════════════════════════
+
+Test these and fix issues:
+
+1. User Registration & Login:
+   - Sign up form works
+   - Email validation works
+   - Password strength check works
+   - User receives verification email
+   - Login with correct credentials works
+   - Wrong password shows error
+   - JWT token stored in localStorage
+   - Token includes in API requests
+
+2. Dashboard:
+   - Loads without errors
+   - Shows user's flows
+   - Shows correct flow count
+   - Recent flows display correctly
+   - Click flow → Opens editor
+
+3. Collections (Folders):
+   - "Create Collection" button works
+   - New collection appears in list
+   - Can create nested collections
+   - Can rename collections
+   - Can delete empty collections
+   - Can move flows into collections
+   - Collection filter works
+
+4. Flow Editor:
+   - Opens with all captured steps
+   - All screenshots load correctly
+   - Flow title is editable
+   - Step descriptions are editable
+   - Can reorder steps by dragging
+   - Can delete individual steps
+   - Auto-saves changes (debounced)
+   - Shows "Saved" indicator
+
+5. Sharing:
+   - Generate share link works
+   - Copy link works
+   - Share link opens in new tab (incognito mode test)
+   - Public view shows flow correctly
+   - Public view doesn't require login
+
+STEP 3: TEST BACKEND API
+═══════════════════════════════════════════════════════════════════════════════
+
+Test all endpoints and fix errors:
+
+1. Authentication Endpoints:
+   - POST /api/auth/signup → Creates user, returns token
+   - POST /api/auth/login → Returns token
+   - GET /api/auth/me → Returns user data (requires token)
+   - Invalid token → Returns 401 error
+
+2. Flow Endpoints:
+   - GET /api/flows → Returns user's flows
+   - POST /api/flows → Creates new flow, returns flowId
+   - GET /api/flows/:id → Returns flow with all steps
+   - PUT /api/flows/:id → Updates flow
+   - DELETE /api/flows/:id → Deletes flow
+
+3. Collection Endpoints:
+   - GET /api/collections → Returns all collections
+   - POST /api/collections → Creates new collection
+   - PUT /api/collections/:id → Updates collection
+   - DELETE /api/collections/:id → Deletes collection
+
+4. Upload Endpoint:
+   - POST /api/upload/screenshot → Accepts image file
+   - Uploads to S3/R2/storage
+   - Returns public URL
+   - Validates file type (only images)
+   - Validates file size (max 5MB)
+
+5. Step Endpoints:
+   - POST /api/flows/:id/steps → Creates step with screenshot URL
+   - PUT /api/steps/:id → Updates step
+   - DELETE /api/steps/:id → Deletes step
+   - POST /api/flows/:id/steps/reorder → Reorders steps
+
+STEP 4: TEST EXTENSION ↔ BACKEND COMMUNICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Verify data flows correctly:
+
+1. Extension Gets User Data:
+   - Extension reads JWT token from chrome.storage
+   - Extension calls GET /api/auth/me with token
+   - Extension receives and displays user's workspace
+
+2. Extension Sends Captured Data:
+   - When Complete clicked, extension sends:
+     - Flow title
+     - All steps with screenshots (base64)
+     - User's workspace ID
+   - Backend receives data correctly
+   - Backend creates flow in database
+   - Backend returns flowId
+
+3. Extension Uploads Screenshots:
+   - For each screenshot (base64 data):
+     - Convert to Blob
+     - Create FormData
+     - POST to /api/upload/screenshot
+     - Receive image URL
+     - Include URL in step data
+   - All screenshots upload successfully
+   - No failed uploads
+
+4. Error Handling:
+   - If token expired → Extension shows "Please login again"
+   - If upload fails → Extension shows "Upload failed, retrying..."
+   - If network error → Extension shows "Connection error"
+   - All errors have clear messages
+   - User can retry failed actions
+
+STEP 5: FIX COMMON ISSUES
+═══════════════════════════════════════════════════════════════════════════════
+
+Check and fix these common problems:
+
+1. CORS Errors:
+   - Backend allows requests from extension origin
+   - Add to backend server.js:
+```javascript
+   app.use(cors({
+     origin: ['chrome-extension://*', 'https://yourapp.com'],
+     credentials: true
+   }));
+```
+
+2. Authentication Issues:
+   - Extension includes token in all API calls:
+```javascript
+   headers: {
+     'Authorization': `Bearer ${token}`,
+     'Content-Type': 'application/json'
+   }
+```
+   - Backend verifies token on protected routes
+
+3. Screenshot Upload Issues:
+   - Convert base64 to blob correctly:
+```javascript
+   const blob = await fetch(base64Data).then(r => r.blob());
+```
+   - Backend accepts multipart/form-data
+   - Storage bucket has correct permissions (public-read for images)
+
+4. Database Issues:
+   - Foreign keys are correct
+   - Cascade deletes work (deleting flow deletes steps)
+   - Migrations ran successfully
+   - Connection string is correct
+
+5. State Management:
+   - Extension remembers user's workspace
+   - Extension doesn't lose data on tab switch
+   - Web app updates when new flow created
+   - No duplicate flows created
+
+STEP 6: CONSOLE ERROR CHECK
+═══════════════════════════════════════════════════════════════════════════════
+
+Open browser console and check:
+
+Extension Console (popup, side panel, background):
+- No "undefined" errors
+- No failed API calls (check Network tab)
+- No permission errors
+- All chrome.* API calls work
+
+Web App Console:
+- No React errors
+- No 404 errors for images/assets
+- No failed API calls
+- No CORS errors
+
+Backend Logs:
+- No uncaught exceptions
+- No database connection errors
+- All endpoints respond correctly
+- No 500 errors
+
+STEP 7: COMPLETE TEST SCENARIO
+═══════════════════════════════════════════════════════════════════════════════
+
+Run this full test and fix any issues:
+
+1. Open Chrome, install extension
+2. Click extension icon
+3. Login if needed
+4. Click "New Flow Capture"
+5. Select a tab (e.g., GitHub.com)
+6. Perform 5 actions on the page (clicks, inputs)
+7. Verify 5 steps appear in side panel
+8. Click "Complete" button
+9. Wait for upload (should take 3-10 seconds)
+10. Verify editor opens with all 5 steps
+11. Verify all 5 screenshots loaded
+12. Edit a step description
+13. Reorder steps by dragging
+14. Delete one step
+15. Click "Share" button
+16. Copy share link
+17. Open link in incognito window
+18. Verify flow displays correctly
+
+If ANY step fails, debug and fix before moving on.
+
+STEP 8: FINAL VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Confirm everything works:
+
+✅ Extension installs without errors
+✅ Extension communicates with backend successfully
+✅ Screenshots upload correctly
+✅ Flows save to database
+✅ Editor opens with all data
+✅ Editor is functional
+✅ Share links work
+✅ Collections/folders work
+✅ No console errors anywhere
+✅ No broken images
+✅ No failed API calls
+✅ User can complete full workflow without issues
+
+Fix any remaining bugs, then application is ready for deployment.
+
+═══════════════════════════════════════════════════════════════════════════════
+
+This single comprehensive prompt will:
+- Test everything systematically
+- Identify all bugs and errors
+- Ensure proper communication between extension, frontend, and backend
+- Provide clear fixes for common issues
+- Verify the complete user flow works end-to-endClaude is AI and can make mistakes. Please double-check responses. Sonnet 4.5Claude is AI and can make mistakes. Please double-check responses.

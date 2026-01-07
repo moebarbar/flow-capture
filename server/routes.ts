@@ -590,7 +590,7 @@ export async function registerRoutes(
     
     const shareToken = crypto.randomBytes(16).toString('hex');
     const created = await storage.createGuideShare({
-      guideId,
+      flowId: guideId,
       shareToken,
       passwordHash,
       enabled,
@@ -637,12 +637,12 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Guide not found or sharing is disabled" });
       }
       
-      const guide = await storage.getGuide(share.guideId);
+      const guide = await storage.getGuide(share.flowId);
       if (!guide) {
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const translations = await storage.getGuideTranslations(share.guideId);
+      const translations = await storage.getGuideTranslations(share.flowId);
       const completedTranslations = translations.filter(t => t.status === 'completed');
       const availableLanguages = completedTranslations.map(t => ({
         code: t.locale,
@@ -685,17 +685,17 @@ export async function registerRoutes(
       
       await storage.incrementShareAccessCount(share.id);
       
-      const guide = await storage.getGuide(share.guideId);
+      const guide = await storage.getGuide(share.flowId);
       if (!guide) {
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const steps = await storage.getStepsByGuide(share.guideId);
+      const steps = await storage.getStepsByGuide(share.flowId);
       
       let translations = undefined;
       if (locale && locale !== 'en') {
-        const guideTranslation = await storage.getGuideTranslation(share.guideId, locale);
-        const stepTranslations = await storage.getStepTranslationsByGuide(share.guideId, locale);
+        const guideTranslation = await storage.getGuideTranslation(share.flowId, locale);
+        const stepTranslations = await storage.getStepTranslationsByGuide(share.flowId, locale);
         
         if (guideTranslation && guideTranslation.status === 'completed') {
           translations = {
@@ -853,12 +853,12 @@ export async function registerRoutes(
       
       await storage.incrementShareAccessCount(share.id);
       
-      const guide = await storage.getGuide(share.guideId);
+      const guide = await storage.getGuide(share.flowId);
       if (!guide) {
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const steps = await storage.getStepsByGuide(share.guideId);
+      const steps = await storage.getStepsByGuide(share.flowId);
       
       res.json({
         guide: {
@@ -1186,7 +1186,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         return res.status(404).json({ message: "Step not found" });
       }
       
-      const guide = await storage.getGuide(step.guideId);
+      const guide = await storage.getGuide(step.flowId);
       if (!guide) {
         return res.status(404).json({ message: "Guide not found" });
       }
@@ -1206,7 +1206,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       const voiceoverText = text || step.description || step.title || `Step ${step.order + 1}`;
       const voiceover = await voiceoverService.generateVoiceover(
         stepId,
-        step.guideId,
+        step.flowId,
         voiceoverText,
         voice || 'alloy',
         locale || 'en'
@@ -1297,7 +1297,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         return res.status(404).json({ message: "Step not found" });
       }
       
-      const guide = await storage.getGuide(step.guideId);
+      const guide = await storage.getGuide(step.flowId);
       if (!guide) {
         return res.status(404).json({ message: "Guide not found" });
       }
@@ -1314,7 +1314,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       }
       
       const { redactionService } = await import("./services/redactionService");
-      const regions = await redactionService.autoDetectAndSave(stepId, step.guideId);
+      const regions = await redactionService.autoDetectAndSave(stepId, step.flowId);
       res.json(regions);
     } catch (error) {
       console.error("Detect sensitive data error:", error);
@@ -1335,7 +1335,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         return res.status(404).json({ message: "Step not found" });
       }
       
-      const guide = await storage.getGuide(step.guideId);
+      const guide = await storage.getGuide(step.flowId);
       if (!guide) {
         return res.status(404).json({ message: "Guide not found" });
       }
@@ -1354,7 +1354,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       const { redactionService } = await import("./services/redactionService");
       const region = await redactionService.createRegion({
         stepId,
-        guideId: step.guideId,
+        guideId: step.flowId,
         x,
         y,
         width,
@@ -1459,7 +1459,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       res.json({
         token: result.token,
         expiresAt: result.expiresAt,
-        guideId: result.guideId,
+        flowId: result.flowId,
       });
     } catch (error) {
       console.error("Start capture error:", error);
@@ -2542,7 +2542,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
                           step.type === 'element_capture' ? 'custom' : 'custom';
 
         await storage.createStep({
-          guideId: guide.id,
+          flowId: guide.id,
           order: i + 1,
           title: step.description,
           description: step.description,
@@ -2862,7 +2862,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       const [stepData] = await db.select().from(steps).where(eq(steps.id, stepId));
       if (!stepData) return res.status(404).json({ message: 'Step not found' });
 
-      const guide = await storage.getGuide(stepData.guideId);
+      const guide = await storage.getGuide(stepData.flowId);
       if (!guide) return res.status(404).json({ message: 'Guide not found' });
 
       const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId, ['owner', 'admin', 'editor']);
@@ -2870,7 +2870,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
       const assignment = await storage.createStepAssignment({
         stepId,
-        guideId: guide.id,
+        flowId: guide.id,
         workspaceId: guide.workspaceId,
         assigneeId,
         assignedById: user.claims.sub,
@@ -2886,7 +2886,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         title: 'New Step Assignment',
         message: `You have been assigned a step in "${guide.title}"`,
         workspaceId: guide.workspaceId,
-        guideId: guide.id,
+        flowId: guide.id,
         stepId,
         referenceId: assignment.id,
         actorId: user.claims.sub,
@@ -2947,7 +2947,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
           title: 'Assignment Completed',
           message: `Step assignment has been completed`,
           workspaceId: assignment.workspaceId,
-          guideId: assignment.guideId,
+          flowId: assignment.flowId,
           stepId: assignment.stepId,
           referenceId: assignment.id,
           actorId: user.claims.sub,
@@ -3023,7 +3023,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       if (!access.allowed) return res.status(403).json({ message: 'Not a workspace member' });
 
       const approval = await storage.createGuideApproval({
-        guideId,
+        flowId: guideId,
         workspaceId: guide.workspaceId,
         requestedById: user.claims.sub,
         reviewerId: reviewerId || null,
@@ -3040,7 +3040,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
           title: 'Approval Request',
           message: `"${guide.title}" needs your approval`,
           workspaceId: guide.workspaceId,
-          guideId,
+          flowId: guideId,
           referenceId: approval.id,
           actorId: user.claims.sub,
           isRead: false,
@@ -3088,20 +3088,20 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
       // If approved, publish the guide
       if (status === 'approved') {
-        await storage.updateGuide(approval.guideId, { status: 'published' });
+        await storage.updateGuide(approval.flowId, { status: 'published' });
       }
 
       // Notify requester
       const notificationType = status === 'approved' ? 'approval_approved' : 
                                status === 'rejected' ? 'approval_rejected' : 'approval_revision';
-      const guide = await storage.getGuide(approval.guideId);
+      const guide = await storage.getGuide(approval.flowId);
       await storage.createNotification({
         userId: approval.requestedById,
         type: notificationType,
         title: status === 'approved' ? 'Guide Approved' : status === 'rejected' ? 'Guide Rejected' : 'Revision Requested',
         message: `"${guide?.title}" has been ${status.replace('_', ' ')}`,
         workspaceId: approval.workspaceId,
-        guideId: approval.guideId,
+        flowId: approval.flowId,
         referenceId: approval.id,
         actorId: user.claims.sub,
         isRead: false,
@@ -3148,7 +3148,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       const [stepData] = await db.select().from(steps).where(eq(steps.id, stepId));
       if (!stepData) return res.status(404).json({ message: 'Step not found' });
 
-      const guide = await storage.getGuide(stepData.guideId);
+      const guide = await storage.getGuide(stepData.flowId);
       if (!guide) return res.status(404).json({ message: 'Guide not found' });
 
       const access = await checkWorkspaceAccess(user.claims.sub, guide.workspaceId);
@@ -3156,7 +3156,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
       const comment = await storage.createStepComment({
         stepId,
-        guideId: guide.id,
+        flowId: guide.id,
         workspaceId: guide.workspaceId,
         authorId: user.claims.sub,
         parentId: parentId || null,
@@ -3178,7 +3178,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
           title: parentId ? 'New Reply' : 'New Comment',
           message: `New ${parentId ? 'reply' : 'comment'} on "${guide.title}"`,
           workspaceId: guide.workspaceId,
-          guideId: guide.id,
+          flowId: guide.id,
           stepId,
           referenceId: comment.id,
           actorId: user.claims.sub,
@@ -3198,7 +3198,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
               title: 'You were mentioned',
               message: `You were mentioned in a comment on "${guide.title}"`,
               workspaceId: guide.workspaceId,
-              guideId: guide.id,
+              flowId: guide.id,
               stepId,
               referenceId: comment.id,
               actorId: user.claims.sub,
@@ -3857,7 +3857,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       if (!access.allowed) return res.status(403).json({ message: 'Access denied' });
 
       const versions = await db.select().from(guideVersions)
-        .where(eq(guideVersions.guideId, guideId))
+        .where(eq(guideVersions.flowId, guideId))
         .orderBy(desc(guideVersions.versionNumber));
       res.json(versions);
     } catch (error) {
@@ -3882,11 +3882,11 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
       const stepsList = await storage.getStepsByGuide(guideId);
       const existingVersions = await db.select().from(guideVersions)
-        .where(eq(guideVersions.guideId, guideId));
+        .where(eq(guideVersions.flowId, guideId));
       const nextVersion = existingVersions.length + 1;
 
       const [version] = await db.insert(guideVersions).values({
-        guideId,
+        flowId: guideId,
         versionNumber: nextVersion,
         title: guide.title,
         description: guide.description,
@@ -3918,7 +3918,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
       const [version] = await db.select().from(guideVersions)
         .where(eq(guideVersions.id, versionId));
-      if (!version || version.guideId !== guideId) {
+      if (!version || version.flowId !== guideId) {
         return res.status(404).json({ message: "Version not found" });
       }
 
@@ -3937,7 +3937,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         for (let idx = 0; idx < stepsSnapshot.length; idx++) {
           const stepData = stepsSnapshot[idx];
           await storage.createStep({
-            guideId,
+            flowId: guideId,
             order: typeof stepData.order === 'number' ? stepData.order : idx,
             title: stepData.title || null,
             description: stepData.description || null,
@@ -3967,7 +3967,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
         return res.status(404).json({ message: "Demo not available" });
       }
 
-      const guide = await storage.getGuide(guideShare.guideId);
+      const guide = await storage.getGuide(guideShare.flowId);
       if (!guide) {
         return res.status(404).json({ message: "Guide not found" });
       }

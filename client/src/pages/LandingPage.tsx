@@ -120,7 +120,7 @@ export default function LandingPage() {
             <Button asChild size="sm" className="rounded-full px-3 sm:px-6 bg-brand-600 text-white shadow-lg shadow-brand-500/25">
               <a href="/api/login" data-testid="link-nav-get-started">
                 <span className="hidden sm:inline">Get Started</span>
-                <span className="sm:hidden">Start</span>
+                <span className="sm:hidden">Capture</span>
                 <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
               </a>
             </Button>
@@ -710,7 +710,7 @@ export default function LandingPage() {
             </motion.div>
 
             <motion.div {...fadeInUp} transition={{ delay: 0.2 }} data-testid="card-collab-approvals">
-              <Card className="p-6 h-full border-green-200/50 dark:border-green-800/50">
+              <Card className="p-6 h-full">
                 <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white flex items-center justify-center mb-4">
                   <CheckCheck className="h-6 w-6" />
                 </div>
@@ -762,7 +762,7 @@ export default function LandingPage() {
             </motion.div>
 
             <motion.div {...fadeInUp} transition={{ delay: 0.5 }} data-testid="card-collab-sharing">
-              <Card className="p-6 h-full border-brand-200/50 dark:border-brand-800/50">
+              <Card className="p-6 h-full">
                 <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white flex items-center justify-center mb-4">
                   <Link2 className="h-6 w-6" />
                 </div>
@@ -832,7 +832,7 @@ export default function LandingPage() {
             </motion.div>
 
             <motion.div {...fadeInUp} transition={{ delay: 0.2 }} data-testid="card-integration-webhooks">
-              <Card className="p-6 h-full text-center group border-brand-200/50 dark:border-brand-800/50">
+              <Card className="p-6 h-full text-center group">
                 <div className="h-16 w-16 rounded-2xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                   <Workflow className="h-8 w-8 text-brand-600" />
                 </div>

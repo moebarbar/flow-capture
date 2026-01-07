@@ -116,13 +116,31 @@ export async function registerRoutes(
   });
 
   // Create flow with steps from extension
+  const flowStepSchema = z.object({
+    order: z.coerce.number().int().min(1).optional(),
+    type: z.enum(['click', 'input', 'scroll', 'navigate', 'hover', 'select']).default('click'),
+    description: z.string().nullable().optional().transform(v => v?.trim() || null),
+    imageUrl: z.string().nullable().optional(),
+    selector: z.string().nullable().optional(),
+    url: z.string().nullable().optional(),
+    metadata: z.any().optional()
+  });
+  
+  const createFlowSchema = z.object({
+    title: z.string().min(1).default('Untitled Flow'),
+    workspaceId: z.coerce.number().optional(),
+    steps: z.array(flowStepSchema).min(1, "At least one step is required")
+  });
+  
   app.post('/api/flows', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     const user = req.user as any;
     const userId = user.claims.sub;
     
     try {
-      const { title, steps: flowSteps, workspaceId } = req.body;
+      // Validate input with Zod
+      const validatedInput = createFlowSchema.parse(req.body);
+      const { title, steps: flowSteps, workspaceId } = validatedInput;
       
       // Get or create default workspace if not provided
       let targetWorkspaceId = workspaceId;
@@ -151,25 +169,34 @@ export async function registerRoutes(
         status: 'draft'
       });
       
-      // Create steps if provided
-      if (flowSteps && Array.isArray(flowSteps)) {
-        for (const stepData of flowSteps) {
-          await storage.createStep({
-            flowId: guide.id,
-            order: stepData.order || 0,
-            title: stepData.description || `Step ${stepData.order}`,
-            description: stepData.description,
-            imageUrl: stepData.imageUrl,
-            actionType: stepData.type || 'click',
-            selector: stepData.selector,
-            url: stepData.url,
-            metadata: stepData.metadata
-          });
-        }
+      // Create steps (required minimum 1)
+      for (let i = 0; i < flowSteps.length; i++) {
+        const stepData = flowSteps[i];
+        // Use provided order or fall back to 1-based index
+        const stepOrder = stepData.order !== undefined && stepData.order >= 1 ? stepData.order : (i + 1);
+        const stepTitle = stepData.description || `Step ${stepOrder}`;
+        
+        await storage.createStep({
+          flowId: guide.id,
+          order: stepOrder,
+          title: stepTitle,
+          description: stepData.description || null,
+          imageUrl: stepData.imageUrl || null,
+          actionType: stepData.type || 'click',
+          selector: stepData.selector || null,
+          url: stepData.url || null,
+          metadata: stepData.metadata || null
+        });
       }
       
       res.status(201).json({ id: guide.id, ...guide });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: error.errors[0].message,
+          field: error.errors[0].path.join('.'),
+        });
+      }
       console.error("Create flow error:", error);
       res.status(500).json({ message: "Failed to create flow" });
     }

@@ -325,6 +325,174 @@ export async function registerRoutes(
     }
   });
 
+  // === COLLECTIONS ===
+  
+  // Helper to check workspace access
+  async function canAccessWorkspace(userId: string, workspaceId: number): Promise<boolean> {
+    const workspace = await storage.getWorkspace(workspaceId);
+    if (!workspace) return false;
+    if (workspace.ownerId === userId) return true;
+    const members = await storage.getWorkspaceMembers(workspaceId);
+    return members.some(m => m.userId === userId);
+  }
+
+  app.get('/api/workspaces/:workspaceId/collections', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const workspaceId = Number(req.params.workspaceId);
+    
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    const collectionsList = await storage.getCollectionsByWorkspace(workspaceId);
+    
+    const collectionsWithCounts = await Promise.all(
+      collectionsList.map(async (collection) => ({
+        ...collection,
+        flowCount: await storage.getCollectionFlowCount(collection.id)
+      }))
+    );
+    
+    res.json(collectionsWithCounts);
+  });
+
+  app.post('/api/workspaces/:workspaceId/collections', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const workspaceId = Number(req.params.workspaceId);
+    
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    try {
+      const { name, description, color, icon, parentId } = req.body;
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ message: "Collection name is required" });
+      }
+      
+      const collection = await storage.createCollection({
+        name: name.trim(),
+        description: description || null,
+        color: color || null,
+        icon: icon || null,
+        parentId: parentId || null,
+        workspaceId
+      });
+      
+      res.status(201).json(collection);
+    } catch (err) {
+      console.error('Error creating collection:', err);
+      res.status(500).json({ message: "Failed to create collection" });
+    }
+  });
+
+  app.get('/api/collections/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    
+    const collection = await storage.getCollection(Number(req.params.id));
+    if (!collection) return res.status(404).json({ message: "Collection not found" });
+    
+    if (!await canAccessWorkspace(userId, collection.workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    const flowCount = await storage.getCollectionFlowCount(collection.id);
+    res.json({ ...collection, flowCount });
+  });
+
+  app.put('/api/collections/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    
+    try {
+      const collection = await storage.getCollection(Number(req.params.id));
+      if (!collection) return res.status(404).json({ message: "Collection not found" });
+      
+      if (!await canAccessWorkspace(userId, collection.workspaceId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { name, description, color, icon, parentId } = req.body;
+      const updated = await storage.updateCollection(Number(req.params.id), {
+        name,
+        description,
+        color,
+        icon,
+        parentId
+      });
+      res.json(updated);
+    } catch (err) {
+      console.error('Error updating collection:', err);
+      res.status(500).json({ message: "Failed to update collection" });
+    }
+  });
+
+  app.delete('/api/collections/:id', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    
+    const collectionId = Number(req.params.id);
+    const collection = await storage.getCollection(collectionId);
+    if (!collection) return res.status(404).json({ message: "Collection not found" });
+    
+    if (!await canAccessWorkspace(userId, collection.workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    const flowCount = await storage.getCollectionFlowCount(collectionId);
+    
+    if (flowCount > 0) {
+      return res.status(400).json({ 
+        message: "Cannot delete collection that contains flows. Move or delete the flows first." 
+      });
+    }
+    
+    await storage.deleteCollection(collectionId);
+    res.status(204).send();
+  });
+
+  app.post('/api/flows/:id/move', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    
+    try {
+      const flowId = Number(req.params.id);
+      const { collectionId } = req.body;
+      
+      const flow = await storage.getGuide(flowId);
+      if (!flow) return res.status(404).json({ message: "Flow not found" });
+      
+      if (!await canAccessWorkspace(userId, flow.workspaceId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      if (collectionId) {
+        const collection = await storage.getCollection(collectionId);
+        if (!collection || collection.workspaceId !== flow.workspaceId) {
+          return res.status(400).json({ message: "Invalid collection" });
+        }
+      }
+      
+      const guide = await storage.updateGuide(flowId, {
+        collectionId: collectionId || null
+      });
+      
+      res.json(guide);
+    } catch (err) {
+      console.error('Error moving flow:', err);
+      res.status(500).json({ message: "Failed to move flow" });
+    }
+  });
+
   // === GUIDE SHARING (Password-Protected) ===
   
   // Helper to check if user can manage guide sharing

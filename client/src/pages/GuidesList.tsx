@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
+import { useCollections } from "@/hooks/use-collections";
 import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Search, LayoutGrid, List as ListIcon, FolderOpen } from "lucide-react";
 import { Link } from "wouter";
 import { EmptyState } from "@/components/EmptyState";
 import { formatDistanceToNow } from "date-fns";
@@ -25,9 +27,11 @@ export default function GuidesList() {
 
   const workspaceId = workspaces?.[0]?.id;
   const { data: guides, isLoading } = useGuides({ workspaceId });
+  const { data: collections } = useCollections(workspaceId);
   const { mutate: createGuide, isPending: isCreating } = useCreateGuide();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState("");
+  const [collectionFilter, setCollectionFilter] = useState<string>("all");
 
   const handleCreateGuide = () => {
     if (!workspaceId) return;
@@ -46,9 +50,13 @@ export default function GuidesList() {
     );
   };
 
-  const filteredGuides = guides?.data?.filter(g => 
-    g.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredGuides = guides?.data?.filter(g => {
+    const matchesSearch = g.title.toLowerCase().includes(search.toLowerCase());
+    const matchesCollection = collectionFilter === "all" 
+      || (collectionFilter === "none" && !g.collectionId)
+      || (g.collectionId?.toString() === collectionFilter);
+    return matchesSearch && matchesCollection;
+  });
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -84,13 +92,40 @@ export default function GuidesList() {
             <div className="relative flex-1 max-w-full sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Search guides..." 
+                placeholder="Search flows..." 
                 className="pl-9 bg-card border-border rounded-xl" 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 data-testid="input-search-guides"
               />
             </div>
+            
+            {collections && collections.length > 0 && (
+              <Select value={collectionFilter} onValueChange={setCollectionFilter}>
+                <SelectTrigger className="w-[180px] bg-card border-border rounded-xl" data-testid="select-collection-filter">
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="All Collections" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Collections</SelectItem>
+                  <SelectItem value="none">Uncategorized</SelectItem>
+                  {collections.map((collection) => (
+                    <SelectItem key={collection.id} value={collection.id.toString()}>
+                      <span className="flex items-center gap-2">
+                        {collection.color && (
+                          <span 
+                            className="h-2 w-2 rounded-full shrink-0" 
+                            style={{ backgroundColor: collection.color }}
+                          />
+                        )}
+                        {collection.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            
             <div className="flex bg-muted p-1 rounded-lg self-start">
               <button 
                 onClick={() => setViewMode('grid')}

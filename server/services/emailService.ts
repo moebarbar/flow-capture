@@ -279,7 +279,7 @@ class EmailService {
         <p>Get started by:</p>
         <ul>
           <li>Installing our Chrome extension</li>
-          <li>Recording your first workflow</li>
+          <li>Capturing your first workflow</li>
           <li>Sharing guides with your team</li>
         </ul>
         <p>If you have any questions, feel free to reach out!</p>

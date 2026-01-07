@@ -36,6 +36,7 @@ const KnowledgeBaseArticle = lazy(() => import("@/pages/KnowledgeBaseArticle"));
 const KnowledgeBaseCategory = lazy(() => import("@/pages/KnowledgeBaseCategory"));
 const KnowledgeBaseEmbed = lazy(() => import("@/pages/KnowledgeBaseEmbed"));
 const KnowledgeBaseManager = lazy(() => import("@/pages/KnowledgeBaseManager"));
+const Collections = lazy(() => import("@/pages/Collections"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -180,6 +181,12 @@ function Router() {
       </Route>
       <Route path="/guides/:id/edit">
         {() => <ProtectedRoute component={GuideEditor} />}
+      </Route>
+      <Route path="/collections">
+        {() => <ProtectedRoute component={Collections} />}
+      </Route>
+      <Route path="/collections/:id">
+        {() => <ProtectedRoute component={Collections} />}
       </Route>
       <Route path="/settings">
         {() => <ProtectedRoute component={SettingsPage} />}

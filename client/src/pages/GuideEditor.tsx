@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRoute } from "wouter";
 import { useGuide, useUpdateGuide } from "@/hooks/use-guides";
 import { useSteps, useCreateStep, useUpdateStep, useReorderSteps, useDeleteStep } from "@/hooks/use-steps";
+import { useCollections, useMoveFlowToCollection } from "@/hooks/use-collections";
 import { useGenerateDescription } from "@/hooks/use-ai";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -19,7 +20,7 @@ import {
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
-  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen
+  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -34,6 +35,8 @@ export default function GuideEditor() {
   const guideId = parseInt(params?.id || "0");
   const { data: guide, isLoading: guideLoading } = useGuide(guideId);
   const { data: steps, isLoading: stepsLoading } = useSteps(guideId);
+  const { data: collections } = useCollections(guide?.workspaceId);
+  const { mutate: moveFlowToCollection } = useMoveFlowToCollection();
   
   const { mutate: updateGuide } = useUpdateGuide();
   const { mutate: createStep } = useCreateStep();
@@ -69,7 +72,7 @@ export default function GuideEditor() {
       return res.json();
     },
     enabled: guideId > 0,
-    refetchInterval: captureToken ? 5000 : false, // Poll while recording
+    refetchInterval: captureToken ? 5000 : false, // Poll while capturing
   });
 
   // Function to send session to extension via postMessage
@@ -104,8 +107,8 @@ export default function GuideEditor() {
       localStorage.setItem('flowcapture_session', JSON.stringify(session));
       
       toast({ 
-        title: "Recording Started", 
-        description: "The FlowCapture extension is now recording. Navigate to another tab and interact with the page." 
+        title: "Capture Started", 
+        description: "The FlowCapture extension is now capturing. Navigate to another tab and interact with the page." 
       });
     },
     onError: () => {
@@ -128,8 +131,8 @@ export default function GuideEditor() {
       refetchCaptureStatus();
       queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
       toast({ 
-        title: "Recording Stopped", 
-        description: `Captured ${data.stepsCreated} steps in ${Math.round(data.duration)}s` 
+        title: "Capture Complete", 
+        description: `Captured ${data.stepsCreated} steps` 
       });
     },
     onError: () => {
@@ -137,7 +140,7 @@ export default function GuideEditor() {
     },
   });
 
-  const isRecording = captureStatus?.active || captureToken !== null;
+  const isCapturing = captureStatus?.active || captureToken !== null;
 
   // Reconcile session state when server says inactive but we have a local token
   useEffect(() => {
@@ -193,7 +196,7 @@ export default function GuideEditor() {
           console.error('Extension rejected capture session:', event.data.error);
           toast({ 
             title: "Extension Error", 
-            description: "Failed to start recording. Please reinstall the extension.",
+            description: "Failed to start capture. Please reinstall the extension.",
             variant: "destructive" 
           });
         }
@@ -209,8 +212,8 @@ export default function GuideEditor() {
         refetchCaptureStatus();
         queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
         toast({ 
-          title: "Recording Stopped", 
-          description: "The capture session expired. Your captured steps have been saved.",
+          title: "Capture Complete", 
+          description: "The capture session ended. Your captured steps have been saved.",
           variant: "default" 
         });
       }
@@ -473,15 +476,46 @@ export default function GuideEditor() {
             onChange={(e) => updateGuide({ id: guideId, title: e.target.value })}
             className="text-base sm:text-lg font-bold border-none bg-transparent shadow-none focus-visible:ring-0 px-0 min-w-0 flex-1 max-w-xs sm:max-w-sm lg:max-w-md font-display"
           />
+          
+          {collections && collections.length > 0 && (
+            <Select
+              value={guide.collectionId?.toString() || "none"}
+              onValueChange={(value) => {
+                const collectionId = value === "none" ? null : parseInt(value);
+                moveFlowToCollection({ flowId: guideId, collectionId });
+              }}
+            >
+              <SelectTrigger className="w-auto min-w-[140px] max-w-[180px] h-8 text-xs hidden md:flex" data-testid="select-collection">
+                <FolderOpen className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                <SelectValue placeholder="No Collection" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No Collection</SelectItem>
+                {collections.map((collection) => (
+                  <SelectItem key={collection.id} value={collection.id.toString()}>
+                    <span className="flex items-center gap-2">
+                      {collection.color && (
+                        <span 
+                          className="h-2 w-2 rounded-full shrink-0" 
+                          style={{ backgroundColor: collection.color }}
+                        />
+                      )}
+                      {collection.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
-          {isRecording && (
+          {isCapturing && (
             <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full mr-1 sm:mr-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
-              <span className="text-xs sm:text-sm text-red-600 font-medium">Recording</span>
+              <span className="text-xs sm:text-sm text-red-600 font-medium">Capturing</span>
               {captureStatus?.eventsReceived > 0 && (
                 <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline">
                   ({captureStatus.eventsReceived} steps)
@@ -490,7 +524,7 @@ export default function GuideEditor() {
             </div>
           )}
           
-          {isRecording ? (
+          {isCapturing ? (
             <Button 
               size="sm" 
               variant="destructive"

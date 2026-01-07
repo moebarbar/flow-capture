@@ -1,5 +1,5 @@
 import { 
-  users, workspaces, workspaceMembers, guides, steps, folders, blogPosts, siteSettings, discountCodes,
+  users, workspaces, workspaceMembers, guides, steps, folders, collections, blogPosts, siteSettings, discountCodes,
   guideAnalytics, guideTemplates, guideVersions, workspaceSettings, guideShares, contentPages,
   stepAssignments, guideApprovals, stepComments, notifications, teamActivity,
   guideTranslations, stepTranslations, kbCategories, kbArticles, kbArticleViews, kbBrandingSettings,
@@ -8,6 +8,7 @@ import {
   type Guide, type InsertGuide,
   type Step, type InsertStep,
   type Folder, type InsertFolder,
+  type Collection, type InsertCollection,
   type BlogPost, type InsertBlogPost,
   type ContentPage, type InsertContentPage,
   type SiteSettings, type InsertSiteSettings,
@@ -68,6 +69,14 @@ export interface IStorage {
   // Folders
   createFolder(folder: InsertFolder): Promise<Folder>;
   getFoldersByWorkspace(workspaceId: number): Promise<Folder[]>;
+
+  // Collections
+  createCollection(collection: InsertCollection): Promise<Collection>;
+  getCollection(id: number): Promise<Collection | undefined>;
+  getCollectionsByWorkspace(workspaceId: number): Promise<Collection[]>;
+  updateCollection(id: number, collection: Partial<InsertCollection>): Promise<Collection>;
+  deleteCollection(id: number): Promise<void>;
+  getCollectionFlowCount(collectionId: number): Promise<number>;
 
   // Blog Posts
   createBlogPost(post: InsertBlogPost): Promise<BlogPost>;
@@ -399,6 +408,43 @@ export class DatabaseStorage implements IStorage {
     return db.select()
       .from(folders)
       .where(eq(folders.workspaceId, workspaceId));
+  }
+
+  // Collection methods
+  async createCollection(collection: InsertCollection): Promise<Collection> {
+    const [newCollection] = await db.insert(collections).values(collection).returning();
+    return newCollection;
+  }
+
+  async getCollection(id: number): Promise<Collection | undefined> {
+    const [collection] = await db.select().from(collections).where(eq(collections.id, id));
+    return collection;
+  }
+
+  async getCollectionsByWorkspace(workspaceId: number): Promise<Collection[]> {
+    return db.select()
+      .from(collections)
+      .where(eq(collections.workspaceId, workspaceId))
+      .orderBy(asc(collections.name));
+  }
+
+  async updateCollection(id: number, update: Partial<InsertCollection>): Promise<Collection> {
+    const [updated] = await db.update(collections)
+      .set({ ...update, updatedAt: new Date() })
+      .where(eq(collections.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCollection(id: number): Promise<void> {
+    await db.delete(collections).where(eq(collections.id, id));
+  }
+
+  async getCollectionFlowCount(collectionId: number): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(guides)
+      .where(eq(guides.collectionId, collectionId));
+    return Number(result[0]?.count || 0);
   }
 
   // Blog Post methods

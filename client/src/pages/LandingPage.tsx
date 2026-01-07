@@ -200,84 +200,84 @@ export default function LandingPage() {
                 <div className="h-3 w-3 rounded-full bg-green-400/80" />
                 <div className="flex-1 text-center text-xs text-muted-foreground">FlowCapture Editor</div>
               </div>
-              <div className="aspect-[16/9] bg-gradient-to-br from-muted/30 to-muted/10 flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-4 flex gap-4">
-                  {/* Left Panel - Steps */}
-                  <div className="w-1/4 bg-card rounded-xl border border-border p-4 space-y-3">
-                    <div className="flex items-center gap-2 mb-4">
+              <div className="aspect-video md:aspect-[16/9] bg-gradient-to-br from-muted/30 to-muted/10 flex items-center justify-center relative overflow-hidden">
+                <div className="absolute inset-2 sm:inset-4 flex gap-2 sm:gap-4">
+                  {/* Left Panel - Steps (hidden on mobile) */}
+                  <div className="hidden lg:flex w-1/4 bg-card rounded-xl border border-border p-2 sm:p-4 flex-col space-y-2 sm:space-y-3">
+                    <div className="flex items-center gap-2 mb-2 sm:mb-4">
                       <div className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
-                      <div className="h-2 w-20 bg-muted rounded" />
+                      <div className="h-2 w-16 sm:w-20 bg-muted rounded" />
                     </div>
                     {[1, 2, 3, 4].map((step) => (
-                      <div key={step} className={`p-3 rounded-lg border ${step === 2 ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-border'}`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="h-5 w-5 rounded bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-xs font-bold text-brand-600">{step}</div>
+                      <div key={step} className={`p-2 sm:p-3 rounded-lg border ${step === 2 ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-border'}`}>
+                        <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                          <div className="h-4 w-4 sm:h-5 sm:w-5 rounded bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-[10px] sm:text-xs font-bold text-brand-600">{step}</div>
                           <div className="h-2 flex-1 bg-muted rounded" />
                         </div>
-                        <div className="h-12 bg-muted/50 rounded" />
+                        <div className="h-8 sm:h-12 bg-muted/50 rounded" />
                       </div>
                     ))}
                   </div>
                   {/* Center Panel - Screenshot */}
-                  <div className="flex-1 bg-card rounded-xl border border-border p-4 flex flex-col">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="flex-1 bg-card rounded-xl border border-border p-2 sm:p-4 flex flex-col">
+                    <div className="flex items-center justify-between mb-2 sm:mb-4">
                       <div className="flex items-center gap-2">
-                        <Camera className="h-4 w-4 text-muted-foreground" />
-                        <div className="h-2 w-24 bg-muted rounded" />
+                        <Camera className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                        <div className="h-2 w-16 sm:w-24 bg-muted rounded" />
                       </div>
-                      <div className="flex gap-2">
-                        <div className="h-6 w-6 rounded bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center">
-                          <Wand2 className="h-3 w-3 text-brand-600" />
+                      <div className="flex gap-1 sm:gap-2">
+                        <div className="h-5 w-5 sm:h-6 sm:w-6 rounded bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center">
+                          <Wand2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-brand-600" />
                         </div>
-                        <div className="h-6 w-6 rounded bg-muted flex items-center justify-center">
-                          <Languages className="h-3 w-3 text-muted-foreground" />
+                        <div className="h-5 w-5 sm:h-6 sm:w-6 rounded bg-muted flex items-center justify-center">
+                          <Languages className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground" />
                         </div>
                       </div>
                     </div>
-                    <div className="flex-1 bg-gradient-to-br from-brand-50 to-brand-100/50 dark:from-gray-800 dark:to-gray-900 rounded-lg border border-border flex items-center justify-center relative">
-                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-8 rounded border-2 border-brand-500 border-dashed flex items-center justify-center">
-                        <MousePointer className="h-4 w-4 text-brand-500" />
+                    <div className="flex-1 bg-gradient-to-br from-brand-50 to-brand-100/50 dark:from-gray-800 dark:to-gray-900 rounded-lg border border-border flex items-center justify-center relative min-h-[120px] sm:min-h-0">
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 sm:w-32 h-6 sm:h-8 rounded border-2 border-brand-500 border-dashed flex items-center justify-center">
+                        <MousePointer className="h-3 w-3 sm:h-4 sm:w-4 text-brand-500" />
                       </div>
-                      <div className="absolute bottom-4 left-4 right-4 bg-black/70 backdrop-blur-sm rounded-lg p-3 text-left">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Sparkles className="h-3 w-3 text-brand-400" />
-                          <span className="text-xs text-brand-400 font-medium">AI Generated</span>
+                      <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4 bg-black/70 backdrop-blur-sm rounded-lg p-2 sm:p-3 text-left">
+                        <div className="flex items-center gap-1 sm:gap-2 mb-1">
+                          <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-brand-400" />
+                          <span className="text-[10px] sm:text-xs text-brand-400 font-medium">AI Generated</span>
                         </div>
-                        <div className="h-2 w-3/4 bg-white/30 rounded" />
+                        <div className="h-1.5 sm:h-2 w-3/4 bg-white/30 rounded" />
                       </div>
                     </div>
                   </div>
-                  {/* Right Panel - AI Features */}
-                  <div className="w-1/4 space-y-3">
-                    <div className="bg-card rounded-xl border border-border p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Sparkles className="h-4 w-4 text-brand-600" />
-                        <span className="text-xs font-medium">AI Assistant</span>
+                  {/* Right Panel - AI Features (hidden on mobile) */}
+                  <div className="hidden md:flex w-1/4 lg:w-1/4 flex-col space-y-2 sm:space-y-3">
+                    <div className="bg-card rounded-xl border border-border p-2 sm:p-4">
+                      <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                        <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 text-brand-600" />
+                        <span className="text-[10px] sm:text-xs font-medium">AI Assistant</span>
                       </div>
-                      <div className="space-y-2">
-                        <div className="h-2 w-full bg-muted rounded" />
-                        <div className="h-2 w-3/4 bg-muted rounded" />
+                      <div className="space-y-1 sm:space-y-2">
+                        <div className="h-1.5 sm:h-2 w-full bg-muted rounded" />
+                        <div className="h-1.5 sm:h-2 w-3/4 bg-muted rounded" />
                       </div>
                     </div>
-                    <div className="bg-card rounded-xl border border-border p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <BarChart3 className="h-4 w-4 text-green-600" />
-                        <span className="text-xs font-medium">Analytics</span>
+                    <div className="bg-card rounded-xl border border-border p-2 sm:p-4">
+                      <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                        <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
+                        <span className="text-[10px] sm:text-xs font-medium">Analytics</span>
                       </div>
-                      <div className="flex items-end gap-1 h-12">
+                      <div className="flex items-end gap-0.5 sm:gap-1 h-8 sm:h-12">
                         {[40, 65, 45, 80, 55, 70, 90].map((h, i) => (
                           <div key={i} className="flex-1 bg-brand-200 dark:bg-brand-800 rounded-sm" style={{ height: `${h}%` }} />
                         ))}
                       </div>
                     </div>
-                    <div className="bg-card rounded-xl border border-border p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Globe className="h-4 w-4 text-blue-600" />
-                        <span className="text-xs font-medium">Languages</span>
+                    <div className="bg-card rounded-xl border border-border p-2 sm:p-4 hidden lg:block">
+                      <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                        <Globe className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
+                        <span className="text-[10px] sm:text-xs font-medium">Languages</span>
                       </div>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-0.5 sm:gap-1">
                         {['EN', 'ES', 'FR', 'DE', 'JP'].map((lang) => (
-                          <Badge key={lang} variant="secondary" className="text-[10px] px-1.5 py-0">{lang}</Badge>
+                          <Badge key={lang} variant="secondary" className="text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0">{lang}</Badge>
                         ))}
                       </div>
                     </div>

@@ -28,6 +28,13 @@ import { RedactionPanel } from "@/components/RedactionPanel";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Guide, KbCategory } from "@shared/schema";
 
 export default function GuideEditor() {
@@ -558,6 +565,7 @@ export default function GuideEditor() {
           
           <div className="h-6 w-px bg-border mx-1 hidden lg:block" />
           
+          {/* Desktop buttons - hidden on smaller screens */}
           <Button 
             variant="outline" 
             size="sm" 
@@ -594,21 +602,61 @@ export default function GuideEditor() {
           >
             <BookOpen className="h-4 w-4 xl:mr-2" /> <span className="hidden xl:inline">Publish to KB</span>
           </Button>
+          
+          {/* Mobile dropdown for additional options */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="xl:hidden" 
+                data-testid="button-more-options"
+                aria-label="More options"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => setTranslationDialogOpen(true)} data-testid="menu-translate">
+                <Languages className="h-4 w-4 mr-2" /> Translate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setVoiceoverDialogOpen(true)} data-testid="menu-voiceover">
+                <Volume2 className="h-4 w-4 mr-2" /> Voice-over
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setRedactionDialogOpen(true)} data-testid="menu-redact">
+                <EyeOff className="h-4 w-4 mr-2" /> Redact Data
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setKbConvertDialogOpen(true)} data-testid="menu-publish-kb">
+                <BookOpen className="h-4 w-4 mr-2" /> Publish to KB
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setShareDialogOpen(true)} data-testid="menu-share">
+                <Share2 className="h-4 w-4 mr-2" /> Share
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)} data-testid="menu-settings">
+                <Settings className="h-4 w-4 mr-2" /> Settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Always visible buttons */}
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => setShareDialogOpen(true)}
             data-testid="button-share-guide"
+            className="hidden xl:flex"
           >
-            <Share2 className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Share</span>
+            <Share2 className="h-4 w-4 mr-2" /> Share
           </Button>
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => setSettingsDialogOpen(true)}
             data-testid="button-settings-guide"
+            className="hidden sm:flex xl:hidden"
           >
-            <Settings className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Settings</span>
+            <Settings className="h-4 w-4" />
           </Button>
           <Button size="sm" className="bg-brand-600 hover:bg-brand-700">
             <Save className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Publish</span>
@@ -616,13 +664,44 @@ export default function GuideEditor() {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel: Step List */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {/* Mobile Step Navigation - visible only on small screens */}
+        <div className="md:hidden flex items-center gap-2 p-2 border-b border-border bg-muted/30 shrink-0 overflow-x-auto">
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            onClick={handleAddStep} 
+            className="h-8 shrink-0"
+            data-testid="button-add-step-mobile"
+            aria-label="Add step"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          <div className="flex gap-1.5 overflow-x-auto">
+            {sortedSteps.map((step, index) => (
+              <Button
+                key={step.id}
+                size="sm"
+                variant={selectedStepId === step.id ? "default" : "outline"}
+                onClick={() => setSelectedStepId(step.id)}
+                className={cn(
+                  "h-8 min-w-[40px] px-2 shrink-0",
+                  selectedStepId === step.id && "bg-brand-600"
+                )}
+                data-testid={`button-step-mobile-${step.id}`}
+              >
+                {index + 1}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Left Panel: Step List - hidden on mobile */}
         <div className="hidden md:flex w-56 lg:w-72 border-r border-border bg-muted/10 flex-col shrink-0">
-          <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="p-4 border-b border-border flex items-center justify-between gap-2">
             <h3 className="font-semibold text-sm">Steps ({sortedSteps.length})</h3>
             <Button size="sm" variant="ghost" onClick={handleAddStep} className="h-8 w-8 p-0">
-              <PlusIcon className="h-4 w-4" />
+              <Plus className="h-4 w-4" />
             </Button>
           </div>
           
@@ -681,7 +760,7 @@ export default function GuideEditor() {
         </div>
 
         {/* Center: Main Canvas */}
-        <div className="flex-1 bg-muted/30 p-8 flex items-center justify-center overflow-auto relative">
+        <div className="flex-1 bg-muted/30 p-4 sm:p-6 lg:p-8 flex items-center justify-center overflow-auto relative">
           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
           
           {selectedStep ? (

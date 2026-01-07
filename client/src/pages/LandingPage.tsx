@@ -112,13 +112,17 @@ export default function LandingPage() {
             <a href="#enterprise" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-enterprise">Enterprise</a>
             <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-pricing">Pricing</a>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <Button variant="ghost" asChild className="hidden sm:inline-flex">
               <a href="/api/login" data-testid="link-nav-login">Log in</a>
             </Button>
-            <Button asChild className="rounded-full px-6 bg-brand-600 text-white shadow-lg shadow-brand-500/25">
-              <a href="/api/login" data-testid="link-nav-get-started">Get Started <ArrowRight className="ml-2 h-4 w-4" /></a>
+            <Button asChild size="sm" className="rounded-full px-3 sm:px-6 bg-brand-600 text-white shadow-lg shadow-brand-500/25">
+              <a href="/api/login" data-testid="link-nav-get-started">
+                <span className="hidden sm:inline">Get Started</span>
+                <span className="sm:hidden">Start</span>
+                <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
+              </a>
             </Button>
           </div>
         </div>
@@ -164,14 +168,14 @@ export default function LandingPage() {
               Capture any workflow, get AI-generated guides with screenshots, translations, and analytics.
               The complete documentation platform for modern teams.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-              <Button size="lg" className="rounded-full text-lg h-14 px-10 bg-brand-600 text-white shadow-xl shadow-brand-500/30 transition-all" asChild>
-                <a href={branding?.extensionLink || "#install-extension"} target={branding?.extensionLink?.startsWith('http') ? "_blank" : undefined} rel={branding?.extensionLink?.startsWith('http') ? "noopener noreferrer" : undefined} data-testid="button-hero-install-extension">
-                  <SiGooglechrome className="mr-2 h-5 w-5" />
-                  Install Chrome Extension – It's Free
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 w-full px-4 sm:px-0">
+              <Button size="lg" className="w-full sm:w-auto rounded-full text-base sm:text-lg h-12 sm:h-14 px-6 sm:px-10 bg-brand-600 text-white shadow-xl shadow-brand-500/30 transition-all" asChild>
+                <a href={branding?.extensionLink || "#install-extension"} target={branding?.extensionLink?.startsWith('http') ? "_blank" : undefined} rel={branding?.extensionLink?.startsWith('http') ? "noopener noreferrer" : undefined} data-testid="button-hero-install-extension" className="flex items-center justify-center">
+                  <SiGooglechrome className="mr-2 h-5 w-5 shrink-0" />
+                  <span className="whitespace-nowrap">Install Chrome Extension – It's Free</span>
                 </a>
               </Button>
-              <Button size="lg" variant="outline" className="rounded-full text-lg h-14 px-8 border-2" asChild>
+              <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-full text-base sm:text-lg h-12 sm:h-14 px-6 sm:px-8 border-2" asChild>
                 <a href={branding?.demoLink || "#how-it-works"} target={branding?.demoLink?.startsWith('http') ? "_blank" : undefined} rel={branding?.demoLink?.startsWith('http') ? "noopener noreferrer" : undefined} data-testid="link-how-it-works">
                   <PlayCircle className="mr-2 h-5 w-5" />
                   Watch Demo

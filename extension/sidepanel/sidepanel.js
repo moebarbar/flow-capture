@@ -316,7 +316,7 @@ async function handleComplete() {
     });
     
     chrome.tabs.create({
-      url: `${API_URL.replace('/api', '')}/flows/${flowId}/edit`
+      url: `${API_URL.replace('/api', '')}/guides/${flowId}/edit`
     });
     
     hideLoadingOverlay();

@@ -232,6 +232,26 @@ export default function GuideEditor() {
           description: "The capture session ended. Your captured steps have been saved.",
           variant: "default" 
         });
+      } else if (event.data?.type === 'FLOWCAPTURE_EXTENSION_UPDATED') {
+        // Extension was updated - resync session if we have one
+        console.log('Extension updated to version:', event.data.version);
+        const stored = localStorage.getItem('flowcapture_session');
+        if (stored) {
+          try {
+            const session = JSON.parse(stored);
+            if (session.guideId === guideId && new Date(session.expiresAt) > new Date()) {
+              console.log('Resyncing capture session after extension update');
+              sendSessionToExtension(session);
+              toast({ 
+                title: "Extension Updated", 
+                description: "FlowCapture extension was updated. Capture session restored.",
+                variant: "default" 
+              });
+            }
+          } catch (e) {
+            console.error('Failed to resync session after update:', e);
+          }
+        }
       }
     };
 

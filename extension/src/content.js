@@ -233,6 +233,14 @@ if (window.__flowcaptureInitialized) {
     } else if (message.type === 'SESSION_EXPIRED') {
       window.postMessage({ type: 'FLOWCAPTURE_SESSION_EXPIRED' }, window.origin);
       sendResponse({ success: true });
+    } else if (message.type === 'EXTENSION_UPDATED') {
+      // Notify the web app that the extension was updated
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_EXTENSION_UPDATED',
+        version: message.version,
+        hadActiveSession: message.hadActiveSession
+      }, window.origin);
+      sendResponse({ success: true });
     }
     return true;
   });

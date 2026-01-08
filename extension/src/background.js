@@ -50,16 +50,58 @@ async function getConfiguredApiUrl() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.set({ 
-    isRecording: false, 
-    steps: [],
-    guideId: null,
-    selectedWorkspaceId: null,
-    apiBaseUrl: 'https://flowcapture.replit.app',
-    borderColor: '#ef4444',
-    captureSession: null
-  });
+chrome.runtime.onInstalled.addListener(async (details) => {
+  const manifest = chrome.runtime.getManifest();
+  console.log(`FlowCapture extension ${details.reason}: v${manifest.version}`);
+  
+  if (details.reason === 'install') {
+    // Fresh install - reset everything
+    await chrome.storage.local.set({ 
+      isRecording: false, 
+      steps: [],
+      guideId: null,
+      selectedWorkspaceId: null,
+      apiBaseUrl: 'https://flowcapture.replit.app',
+      borderColor: '#ef4444',
+      captureSession: null,
+      extensionVersion: manifest.version
+    });
+  } else if (details.reason === 'update') {
+    // Update - preserve capture session but update version
+    const { captureSession, isRecording: wasRecording } = await chrome.storage.local.get(['captureSession', 'isRecording']);
+    
+    // Store new version
+    await chrome.storage.local.set({ extensionVersion: manifest.version });
+    
+    // Notify all FlowCapture tabs about the update so they can resync
+    try {
+      const tabs = await chrome.tabs.query({});
+      for (const tab of tabs) {
+        if (tab.url && (tab.url.includes('flowcapture') || tab.url.includes('replit'))) {
+          try {
+            await chrome.tabs.sendMessage(tab.id, { 
+              type: 'EXTENSION_UPDATED',
+              version: manifest.version,
+              hadActiveSession: !!captureSession
+            });
+          } catch (e) {
+            // Tab might not have content script
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to notify tabs of update:', e);
+    }
+    
+    // If there was an active session, try to restore recording
+    if (captureSession && wasRecording) {
+      console.log('Restoring capture session after update');
+      activeSessionToken = captureSession.token;
+      activeGuideId = captureSession.guideId;
+      isRecording = true;
+      setTimeout(() => startRecordingOnAllTabs(), 1000);
+    }
+  }
 });
 
 // Restore session on startup (browser launch)

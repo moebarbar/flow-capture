@@ -51,7 +51,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar, SidebarProvider } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { KbArticle, KbCategory, Guide } from "@shared/schema";
 
@@ -165,16 +166,94 @@ export default function KnowledgeBaseManager() {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
-          <div className="container mx-auto px-4 py-8">
-            <div className="flex items-center justify-between gap-4 flex-wrap mb-8">
+      <KnowledgeBaseManagerContent
+        toast={toast}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        categoryFilter={categoryFilter}
+        setCategoryFilter={setCategoryFilter}
+        createArticleOpen={createArticleOpen}
+        setCreateArticleOpen={setCreateArticleOpen}
+        createCategoryOpen={createCategoryOpen}
+        setCreateCategoryOpen={setCreateCategoryOpen}
+        importGuideOpen={importGuideOpen}
+        setImportGuideOpen={setImportGuideOpen}
+        deleteArticleId={deleteArticleId}
+        setDeleteArticleId={setDeleteArticleId}
+        settingsOpen={settingsOpen}
+        setSettingsOpen={setSettingsOpen}
+        shareOpen={shareOpen}
+        setShareOpen={setShareOpen}
+        branding={branding}
+        saveBrandingMutation={saveBrandingMutation}
+        articles={articles}
+        articlesLoading={articlesLoading}
+        categories={categories}
+        categoriesLoading={categoriesLoading}
+        guides={guides}
+        filteredArticles={filteredArticles}
+        deleteArticleMutation={deleteArticleMutation}
+        publishArticleMutation={publishArticleMutation}
+        stats={stats}
+      />
+    </SidebarProvider>
+  );
+}
+
+function KnowledgeBaseManagerContent({
+  toast,
+  searchTerm,
+  setSearchTerm,
+  statusFilter,
+  setStatusFilter,
+  categoryFilter,
+  setCategoryFilter,
+  createArticleOpen,
+  setCreateArticleOpen,
+  createCategoryOpen,
+  setCreateCategoryOpen,
+  importGuideOpen,
+  setImportGuideOpen,
+  deleteArticleId,
+  setDeleteArticleId,
+  settingsOpen,
+  setSettingsOpen,
+  shareOpen,
+  setShareOpen,
+  branding,
+  saveBrandingMutation,
+  articles,
+  articlesLoading,
+  categories,
+  categoriesLoading,
+  guides,
+  filteredArticles,
+  deleteArticleMutation,
+  publishArticleMutation,
+  stats,
+}: any) {
+  const { isCollapsed } = useSidebarState();
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <main className={cn(
+        "flex-1 overflow-auto transition-all duration-200",
+        "lg:ml-64",
+        isCollapsed && "lg:ml-16"
+      )}>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-8">
+            <div className="flex items-center gap-3">
+              <MobileMenuTrigger />
               <div>
                 <h1 className="text-3xl font-bold" data-testid="text-page-title">Knowledge Base</h1>
                 <p className="text-muted-foreground mt-1">Create and manage your help center articles</p>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   variant="outline"
                   onClick={() => window.open('/help', '_blank')}
@@ -416,7 +495,6 @@ export default function KnowledgeBaseManager() {
             </Tabs>
           </div>
         </main>
-      </div>
 
       <CreateArticleDialog 
         open={createArticleOpen} 
@@ -474,7 +552,7 @@ export default function KnowledgeBaseManager() {
         open={shareOpen}
         onOpenChange={setShareOpen}
       />
-    </SidebarProvider>
+    </div>
   );
 }
 

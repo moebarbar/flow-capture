@@ -23,7 +23,7 @@ import {
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
-  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen
+  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -69,6 +69,7 @@ export default function GuideEditor() {
   const [kbConvertDialogOpen, setKbConvertDialogOpen] = useState(false);
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [captureToken, setCaptureToken] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +100,58 @@ export default function GuideEditor() {
     window.postMessage({ type: 'FLOWCAPTURE_CLEAR_SESSION' }, window.origin);
   };
 
+  // Function to pause capture (waits for confirmation)
+  const pauseCapture = () => {
+    return new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve(false);
+      }, 3000);
+      
+      const handler = (event: MessageEvent) => {
+        if (event.data?.type === 'FLOWCAPTURE_PAUSE_RESULT') {
+          clearTimeout(timeout);
+          window.removeEventListener('message', handler);
+          if (event.data.success) {
+            setIsPaused(true);
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        }
+      };
+      
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'FLOWCAPTURE_PAUSE_CAPTURE' }, window.origin);
+    });
+  };
+
+  // Function to resume capture (waits for confirmation)
+  const resumeCapture = () => {
+    return new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve(false);
+      }, 3000);
+      
+      const handler = (event: MessageEvent) => {
+        if (event.data?.type === 'FLOWCAPTURE_RESUME_RESULT') {
+          clearTimeout(timeout);
+          window.removeEventListener('message', handler);
+          if (event.data.success) {
+            setIsPaused(false);
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        }
+      };
+      
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'FLOWCAPTURE_RESUME_CAPTURE' }, window.origin);
+    });
+  };
+
   const startCaptureMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', `/api/guides/${guideId}/capture/start`, {});
@@ -106,6 +159,7 @@ export default function GuideEditor() {
     },
     onSuccess: (data) => {
       setCaptureToken(data.token);
+      setIsPaused(false); // Reset pause state
       refetchCaptureStatus();
       
       // Send session to extension via postMessage bridge
@@ -136,6 +190,7 @@ export default function GuideEditor() {
     },
     onSuccess: (data) => {
       setCaptureToken(null);
+      setIsPaused(false); // Reset pause state
       
       // Clear session from extension
       clearSessionFromExtension();
@@ -251,6 +306,12 @@ export default function GuideEditor() {
           } catch (e) {
             console.error('Failed to resync session after update:', e);
           }
+        }
+      } else if (event.data?.type === 'FLOWCAPTURE_STATE_UPDATE') {
+        // Sync pause state from extension
+        console.log('Extension state update:', event.data);
+        if (typeof event.data.isPaused === 'boolean') {
+          setIsPaused(event.data.isPaused);
         }
       }
     };
@@ -546,12 +607,27 @@ export default function GuideEditor() {
         </div>
         <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
           {isCapturing && (
-            <div className="flex items-center gap-2 px-2 sm:px-3 py-1 bg-red-500/10 border border-red-500/30 rounded-full mr-1 sm:mr-2">
+            <div className={cn(
+              "flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full mr-1 sm:mr-2",
+              isPaused 
+                ? "bg-yellow-500/10 border border-yellow-500/30" 
+                : "bg-red-500/10 border border-red-500/30"
+            )}>
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                {!isPaused && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                )}
+                <span className={cn(
+                  "relative inline-flex rounded-full h-2 w-2",
+                  isPaused ? "bg-yellow-500" : "bg-red-500"
+                )}></span>
               </span>
-              <span className="text-xs sm:text-sm text-red-600 font-medium">Capturing</span>
+              <span className={cn(
+                "text-xs sm:text-sm font-medium",
+                isPaused ? "text-yellow-600" : "text-red-600"
+              )}>
+                {isPaused ? "Paused" : "Capturing"}
+              </span>
               {captureStatus?.eventsReceived > 0 && (
                 <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline">
                   ({captureStatus.eventsReceived} steps)
@@ -561,20 +637,44 @@ export default function GuideEditor() {
           )}
           
           {isCapturing ? (
-            <Button 
-              size="sm" 
-              variant="destructive"
-              onClick={() => stopCaptureMutation.mutate()}
-              disabled={stopCaptureMutation.isPending}
-              data-testid="button-stop-capture"
-            >
-              {stopCaptureMutation.isPending ? (
-                <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
-              ) : (
-                <Square className="h-4 w-4 sm:mr-2" />
-              )}
-              <span className="hidden sm:inline">Stop</span>
-            </Button>
+            <>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={async () => {
+                  const success = isPaused ? await resumeCapture() : await pauseCapture();
+                  if (!success) {
+                    toast({
+                      title: isPaused ? "Failed to resume" : "Failed to pause",
+                      description: "The extension did not respond. Please try again.",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+                data-testid="button-pause-capture"
+              >
+                {isPaused ? (
+                  <Play className="h-4 w-4 sm:mr-2" />
+                ) : (
+                  <Pause className="h-4 w-4 sm:mr-2" />
+                )}
+                <span className="hidden sm:inline">{isPaused ? "Resume" : "Pause"}</span>
+              </Button>
+              <Button 
+                size="sm" 
+                variant="destructive"
+                onClick={() => stopCaptureMutation.mutate()}
+                disabled={stopCaptureMutation.isPending}
+                data-testid="button-stop-capture"
+              >
+                {stopCaptureMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+                ) : (
+                  <Square className="h-4 w-4 sm:mr-2" />
+                )}
+                <span className="hidden sm:inline">Stop</span>
+              </Button>
+            </>
           ) : (
             <Button 
               size="sm" 

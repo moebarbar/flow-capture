@@ -184,6 +184,26 @@ if (window.__flowcaptureInitialized) {
           error: e.message
         }, responseOrigin);
       }
+    } else if (event.data?.type === 'FLOWCAPTURE_PAUSE_CAPTURE') {
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'PAUSE_CAPTURE' });
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_PAUSE_RESULT', 
+          success: response?.success || false
+        }, responseOrigin);
+      } catch (e) {
+        console.error('FlowCapture: Failed to pause capture:', e);
+      }
+    } else if (event.data?.type === 'FLOWCAPTURE_RESUME_CAPTURE') {
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'RESUME_CAPTURE' });
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_RESUME_RESULT', 
+          success: response?.success || false
+        }, responseOrigin);
+      } catch (e) {
+        console.error('FlowCapture: Failed to resume capture:', e);
+      }
     }
   });
 
@@ -197,6 +217,12 @@ if (window.__flowcaptureInitialized) {
         setupEventListeners();
         showCapturingIndicator();
       }
+      // Broadcast state update to web app
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_STATE_UPDATE',
+        isCapturing,
+        isPaused 
+      }, window.origin);
       sendResponse({ success: true });
     } else if (message.action === 'stopCapture' || message.type === 'STOP_CAPTURE') {
       if (isCapturing) {
@@ -208,14 +234,32 @@ if (window.__flowcaptureInitialized) {
         removeHoverHighlight();
         removeElementCaptureUI();
       }
+      // Broadcast state update to web app
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_STATE_UPDATE',
+        isCapturing,
+        isPaused 
+      }, window.origin);
       sendResponse({ success: true });
     } else if (message.action === 'pauseCapture' || message.type === 'PAUSE_CAPTURE') {
       isPaused = true;
       updateCapturingIndicator();
+      // Broadcast state update to web app
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_STATE_UPDATE',
+        isCapturing,
+        isPaused 
+      }, window.origin);
       sendResponse({ success: true });
     } else if (message.action === 'resumeCapture' || message.type === 'RESUME_CAPTURE') {
       isPaused = false;
       updateCapturingIndicator();
+      // Broadcast state update to web app
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_STATE_UPDATE',
+        isCapturing,
+        isPaused 
+      }, window.origin);
       sendResponse({ success: true });
     } else if (message.type === 'START_ELEMENT_CAPTURE') {
       startElementCaptureMode();

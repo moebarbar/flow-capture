@@ -67,40 +67,59 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       extensionVersion: manifest.version
     });
   } else if (details.reason === 'update') {
-    // Update - preserve capture session but update version
-    const { captureSession, isRecording: wasRecording } = await chrome.storage.local.get(['captureSession', 'isRecording']);
+    // Update - preserve capture session and update version
+    // Read all relevant state first
+    const stored = await chrome.storage.local.get(['captureSession', 'isRecording', 'apiBaseUrl', 'borderColor']);
+    const captureSession = stored.captureSession;
+    const wasRecording = stored.isRecording;
     
-    // Store new version
+    console.log('Extension update - preserved state:', {
+      hasSession: !!captureSession,
+      wasRecording,
+      version: manifest.version
+    });
+    
+    // Store new version (chrome.storage.local.set is additive, won't overwrite other keys)
     await chrome.storage.local.set({ extensionVersion: manifest.version });
     
-    // Notify all FlowCapture tabs about the update so they can resync
-    try {
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (tab.url && (tab.url.includes('flowcapture') || tab.url.includes('replit'))) {
-          try {
-            await chrome.tabs.sendMessage(tab.id, { 
-              type: 'EXTENSION_UPDATED',
-              version: manifest.version,
-              hadActiveSession: !!captureSession
-            });
-          } catch (e) {
-            // Tab might not have content script
-          }
+    // If there was an active session, restore it immediately
+    if (captureSession && captureSession.token) {
+      const now = Date.now();
+      const expiresAt = new Date(captureSession.expiresAt).getTime();
+      if (now < expiresAt) {
+        console.log('Restoring capture session after update');
+        activeSessionToken = captureSession.token;
+        activeGuideId = captureSession.guideId;
+        
+        if (wasRecording) {
+          isRecording = true;
+          // Delay to ensure tabs are ready after update
+          setTimeout(() => startRecordingOnAllTabs(), 1500);
         }
       }
-    } catch (e) {
-      console.error('Failed to notify tabs of update:', e);
     }
     
-    // If there was an active session, try to restore recording
-    if (captureSession && wasRecording) {
-      console.log('Restoring capture session after update');
-      activeSessionToken = captureSession.token;
-      activeGuideId = captureSession.guideId;
-      isRecording = true;
-      setTimeout(() => startRecordingOnAllTabs(), 1000);
-    }
+    // Notify FlowCapture tabs about the update after a short delay (tabs may be reloading)
+    setTimeout(async () => {
+      try {
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (tab.url && (tab.url.includes('flowcapture') || tab.url.includes('replit'))) {
+            try {
+              await chrome.tabs.sendMessage(tab.id, { 
+                type: 'EXTENSION_UPDATED',
+                version: manifest.version,
+                hadActiveSession: !!captureSession
+              });
+            } catch (e) {
+              // Tab might not have content script yet - this is expected
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to notify tabs of update:', e);
+      }
+    }, 2000);
   }
 });
 

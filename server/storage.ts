@@ -351,7 +351,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteGuide(id: number): Promise<void> {
     // Delete steps first (cascade should handle this but let's be safe if we didn't set it up perfectly)
-    await db.delete(steps).where(eq(steps.guideId, id));
+    await db.delete(steps).where(eq(steps.flowId, id));
     await db.delete(guides).where(eq(guides.id, id));
   }
 
@@ -369,7 +369,7 @@ export class DatabaseStorage implements IStorage {
   async getStepsByGuide(guideId: number): Promise<Step[]> {
     return db.select()
       .from(steps)
-      .where(eq(steps.guideId, guideId))
+      .where(eq(steps.flowId, guideId))
       .orderBy(asc(steps.order));
   }
 
@@ -624,7 +624,7 @@ export class DatabaseStorage implements IStorage {
       for (let i = 0; i < stepsData.length; i++) {
         const stepTemplate = stepsData[i];
         await db.insert(steps).values({
-          guideId: guide.id,
+          flowId: guide.id,
           order: i + 1,
           title: stepTemplate.title || `Step ${i + 1}`,
           description: stepTemplate.description || "",
@@ -668,14 +668,14 @@ export class DatabaseStorage implements IStorage {
     
     const existingVersions = await db.select()
       .from(guideVersions)
-      .where(eq(guideVersions.guideId, guideId))
+      .where(eq(guideVersions.flowId, guideId))
       .orderBy(desc(guideVersions.versionNumber))
       .limit(1);
     
     const nextVersion = existingVersions.length > 0 ? existingVersions[0].versionNumber + 1 : 1;
     
     const [version] = await db.insert(guideVersions).values({
-      guideId,
+      flowId: guideId,
       versionNumber: nextVersion,
       title: guide.title,
       description: guide.description,
@@ -690,7 +690,7 @@ export class DatabaseStorage implements IStorage {
   async getGuideVersions(guideId: number): Promise<GuideVersion[]> {
     return db.select()
       .from(guideVersions)
-      .where(eq(guideVersions.guideId, guideId))
+      .where(eq(guideVersions.flowId, guideId))
       .orderBy(desc(guideVersions.versionNumber));
   }
 
@@ -706,7 +706,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getGuideShareByGuideId(guideId: number): Promise<GuideShare | undefined> {
-    const [share] = await db.select().from(guideShares).where(eq(guideShares.guideId, guideId));
+    const [share] = await db.select().from(guideShares).where(eq(guideShares.flowId, guideId));
     return share;
   }
 
@@ -806,7 +806,7 @@ export class DatabaseStorage implements IStorage {
 
   async getAssignmentsByGuide(guideId: number): Promise<StepAssignment[]> {
     return db.select().from(stepAssignments)
-      .where(eq(stepAssignments.guideId, guideId))
+      .where(eq(stepAssignments.flowId, guideId))
       .orderBy(desc(stepAssignments.createdAt));
   }
 
@@ -847,7 +847,7 @@ export class DatabaseStorage implements IStorage {
 
   async getApprovalsByGuide(guideId: number): Promise<GuideApproval[]> {
     return db.select().from(guideApprovals)
-      .where(eq(guideApprovals.guideId, guideId))
+      .where(eq(guideApprovals.flowId, guideId))
       .orderBy(desc(guideApprovals.createdAt));
   }
 
@@ -900,7 +900,7 @@ export class DatabaseStorage implements IStorage {
 
   async getCommentsByGuide(guideId: number): Promise<StepComment[]> {
     return db.select().from(stepComments)
-      .where(eq(stepComments.guideId, guideId))
+      .where(eq(stepComments.flowId, guideId))
       .orderBy(asc(stepComments.createdAt));
   }
 
@@ -1008,13 +1008,13 @@ export class DatabaseStorage implements IStorage {
   // Translation methods
   async getGuideTranslations(guideId: number): Promise<GuideTranslation[]> {
     return db.select().from(guideTranslations)
-      .where(eq(guideTranslations.guideId, guideId));
+      .where(eq(guideTranslations.flowId, guideId));
   }
 
   async getGuideTranslation(guideId: number, locale: string): Promise<GuideTranslation | undefined> {
     const [translation] = await db.select().from(guideTranslations)
       .where(and(
-        eq(guideTranslations.guideId, guideId),
+        eq(guideTranslations.flowId, guideId),
         eq(guideTranslations.locale, locale)
       ));
     return translation;
@@ -1036,7 +1036,7 @@ export class DatabaseStorage implements IStorage {
   async deleteGuideTranslation(guideId: number, locale: string): Promise<void> {
     await db.delete(guideTranslations)
       .where(and(
-        eq(guideTranslations.guideId, guideId),
+        eq(guideTranslations.flowId, guideId),
         eq(guideTranslations.locale, locale)
       ));
   }
@@ -1044,7 +1044,7 @@ export class DatabaseStorage implements IStorage {
   async getStepTranslationsByGuide(guideId: number, locale: string): Promise<StepTranslation[]> {
     return db.select().from(stepTranslations)
       .where(and(
-        eq(stepTranslations.guideId, guideId),
+        eq(stepTranslations.flowId, guideId),
         eq(stepTranslations.locale, locale)
       ));
   }
@@ -1074,7 +1074,7 @@ export class DatabaseStorage implements IStorage {
   async deleteStepTranslations(guideId: number, locale: string): Promise<void> {
     await db.delete(stepTranslations)
       .where(and(
-        eq(stepTranslations.guideId, guideId),
+        eq(stepTranslations.flowId, guideId),
         eq(stepTranslations.locale, locale)
       ));
   }

@@ -64,7 +64,7 @@ export const captureService = {
     await db.update(captureSessions)
       .set({ status: "stopped", stoppedAt: new Date() })
       .where(and(
-        eq(captureSessions.guideId, guideId),
+        eq(captureSessions.flowId, guideId),
         eq(captureSessions.status, "active")
       ));
 
@@ -73,7 +73,7 @@ export const captureService = {
     const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
     const [session] = await db.insert(captureSessions).values({
-      guideId,
+      flowId: guideId,
       userId,
       token,
       status: "active",
@@ -87,7 +87,7 @@ export const captureService = {
     const [session] = await db.update(captureSessions)
       .set({ status: "stopped", stoppedAt: new Date() })
       .where(and(
-        eq(captureSessions.guideId, guideId),
+        eq(captureSessions.flowId, guideId),
         eq(captureSessions.userId, userId),
         eq(captureSessions.status, "active")
       ))
@@ -100,7 +100,7 @@ export const captureService = {
     const [session] = await db.select()
       .from(captureSessions)
       .where(and(
-        eq(captureSessions.guideId, guideId),
+        eq(captureSessions.flowId, guideId),
         eq(captureSessions.status, "active")
       ));
 
@@ -136,7 +136,7 @@ export const captureService = {
     }
 
     // Verify the associated guide still exists
-    const [guide] = await db.select().from(guides).where(eq(guides.id, session.guideId));
+    const [guide] = await db.select().from(guides).where(eq(guides.id, session.flowId));
     if (!guide) {
       await db.update(captureSessions)
         .set({ status: "stopped" })
@@ -165,19 +165,19 @@ export const captureService = {
     // Get current step count for order
     const existingSteps = await db.select()
       .from(steps)
-      .where(eq(steps.guideId, session.guideId));
+      .where(eq(steps.flowId, session.flowId));
 
     const order = existingSteps.length;
 
     // Upload screenshot if provided
     let imageUrl: string | null = null;
     if (stepData.imageData) {
-      imageUrl = await uploadScreenshot(stepData.imageData, session.guideId);
+      imageUrl = await uploadScreenshot(stepData.imageData, session.flowId);
     }
 
     // Create step
     const [step] = await db.insert(steps).values({
-      guideId: session.guideId,
+      flowId: session.flowId,
       order,
       title: stepData.title || `Step ${order + 1}`,
       description: stepData.description || null,
@@ -200,7 +200,7 @@ export const captureService = {
     // Update guide's updatedAt
     await db.update(guides)
       .set({ updatedAt: new Date() })
-      .where(eq(guides.id, session.guideId));
+      .where(eq(guides.id, session.flowId));
 
     return step;
   },
@@ -226,7 +226,7 @@ export const captureService = {
     // Get current step count
     const existingSteps = await db.select()
       .from(steps)
-      .where(eq(steps.guideId, session.guideId));
+      .where(eq(steps.flowId, session.flowId));
 
     let order = existingSteps.length;
 
@@ -234,11 +234,11 @@ export const captureService = {
       // Upload screenshot if provided
       let imageUrl: string | null = null;
       if (event.imageData) {
-        imageUrl = await uploadScreenshot(event.imageData, session.guideId);
+        imageUrl = await uploadScreenshot(event.imageData, session.flowId);
       }
 
       const [step] = await db.insert(steps).values({
-        guideId: session.guideId,
+        flowId: session.flowId,
         order: order++,
         title: event.title || `Step ${order}`,
         description: event.description || this.generateDescription(event),
@@ -264,7 +264,7 @@ export const captureService = {
     // Update guide
     await db.update(guides)
       .set({ updatedAt: new Date() })
-      .where(eq(guides.id, session.guideId));
+      .where(eq(guides.id, session.flowId));
 
     return createdSteps;
   },

@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import { useGuide, useUpdateGuide } from "@/hooks/use-guides";
 import { useSteps, useCreateStep, useUpdateStep, useReorderSteps, useDeleteStep } from "@/hooks/use-steps";
 import { useCollections, useMoveFlowToCollection } from "@/hooks/use-collections";
+import { useWorkspace } from "@/hooks/use-workspaces";
 import { useGenerateDescription } from "@/hooks/use-ai";
 import { useExtensionDetection } from "@/hooks/use-extension-detection";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -48,6 +49,7 @@ export default function GuideEditor() {
   const { data: guide, isLoading: guideLoading } = useGuide(guideId);
   const { data: steps, isLoading: stepsLoading } = useSteps(guideId);
   const { data: collections } = useCollections(guide?.workspaceId);
+  const { data: workspace } = useWorkspace(guide?.workspaceId || 0);
   const { mutate: moveFlowToCollection } = useMoveFlowToCollection();
   
   const { mutate: updateGuide } = useUpdateGuide();
@@ -466,7 +468,8 @@ export default function GuideEditor() {
     toast({ title: "Generating Knowledge Base Article..." });
     try {
       const { generateKnowledgeBaseArticle } = await import("@/lib/knowledgeBaseGenerator");
-      await generateKnowledgeBaseArticle(guide as any, steps as any, null);
+      const workspaceData = workspace ? { name: workspace.name, logoUrl: workspace.logoUrl } : null;
+      await generateKnowledgeBaseArticle(guide as any, steps as any, workspaceData);
       toast({ title: "Knowledge Base Article downloaded successfully" });
     } catch (error) {
       console.error("KB Article generation error:", error);

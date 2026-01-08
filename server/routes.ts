@@ -1015,37 +1015,88 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     
     try {
-      const { stepTitle, actionType, context } = req.body;
+      const { stepTitle, actionType, context, selector, url, previousStep, nextStep } = req.body;
+
+      // Build grounded context from actual captured data
+      const groundedContext = [];
+      if (url) groundedContext.push(`Page URL: ${url}`);
+      if (selector) groundedContext.push(`Element selector: ${selector}`);
+      if (previousStep) groundedContext.push(`Previous step: ${previousStep}`);
+      if (nextStep) groundedContext.push(`Next step: ${nextStep}`);
+      if (context) groundedContext.push(`Additional context: ${context}`);
 
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: "You are a technical writer for a documentation tool. Generate a clear, concise step description based on the action and context. Keep it under 2 sentences."
+            content: `You are a technical writer for a workflow documentation tool. Your job is to write clear, accurate step descriptions.
+
+CRITICAL RULES - FOLLOW EXACTLY:
+1. ONLY describe what is explicitly provided in the input data. Never invent or assume details.
+2. If the action is "click", describe clicking the specified element.
+3. If the action is "input", describe entering information in the specified field.
+4. If the action is "navigation", describe navigating to the specified page.
+5. Keep descriptions to 1-2 sentences maximum.
+6. Use simple, direct language that anyone can follow.
+7. Start with an action verb (Click, Enter, Navigate, Select, etc.)
+8. If information is unclear, write a generic but accurate description based on the action type.
+
+DO NOT:
+- Make up button names, field names, or page names not in the input
+- Assume what the user is trying to accomplish beyond what's stated
+- Add extra steps or details not captured
+- Use technical jargon when simple words work`
           },
           {
             role: "user",
-            content: `Action: ${actionType}\nTitle/Element: ${stepTitle}\nContext: ${context || 'No context'}`
+            content: `Generate a step description based on this captured action:
+
+Action Type: ${actionType}
+Element/Title: ${stepTitle || 'Unknown element'}
+${groundedContext.length > 0 ? '\n' + groundedContext.join('\n') : ''}
+
+Write a clear, accurate description for this step.`
           }
         ],
-        max_tokens: 100
+        max_tokens: 150
       });
 
-      const description = completion.choices[0].message.content || "Description generated.";
+      const description = completion.choices[0].message.content || getDefaultDescription(actionType, stepTitle);
       res.json({ description });
     } catch (error) {
       console.error("AI Generation error:", error);
-      res.status(500).json({ message: "Failed to generate description" });
+      // Fallback to safe default description
+      const { actionType, stepTitle } = req.body;
+      res.json({ description: getDefaultDescription(actionType, stepTitle) });
     }
   });
+
+  // Helper function for safe fallback descriptions
+  function getDefaultDescription(actionType: string, stepTitle: string): string {
+    const element = stepTitle || 'the element';
+    switch (actionType) {
+      case 'click':
+        return `Click on ${element}.`;
+      case 'input':
+        return `Enter the required information in ${element}.`;
+      case 'navigation':
+        return `Navigate to this page.`;
+      case 'scroll':
+        return `Scroll to view more content.`;
+      case 'wait':
+        return `Wait for the page to load.`;
+      default:
+        return `Complete this action: ${element}.`;
+    }
+  }
 
   // AI Screenshot Analysis - analyze screenshot and generate step description
   app.post("/api/ai/analyze-screenshot", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     
     try {
-      const { imageUrl, imageBase64, context } = req.body;
+      const { imageUrl, imageBase64, context, actionType, selector, pageUrl } = req.body;
       
       if (!imageUrl && !imageBase64) {
         return res.status(400).json({ message: "Either imageUrl or imageBase64 is required" });
@@ -1055,22 +1106,42 @@ export async function registerRoutes(
         ? { type: "image_url" as const, image_url: { url: `data:image/png;base64,${imageBase64}` } }
         : { type: "image_url" as const, image_url: { url: imageUrl } };
 
+      // Build grounded context
+      const groundedInfo = [];
+      if (actionType) groundedInfo.push(`Action performed: ${actionType}`);
+      if (selector) groundedInfo.push(`Element selector: ${selector}`);
+      if (pageUrl) groundedInfo.push(`Page URL: ${pageUrl}`);
+      if (context) groundedInfo.push(`Context: ${context}`);
+
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: `You are an expert technical writer for a workflow documentation platform. Analyze the screenshot and provide:
-1. A concise title for this step (max 10 words)
-2. A clear description of what action the user should take (1-2 sentences)
-3. Any UI elements that should be highlighted or called out
+            content: `You are a technical writer analyzing screenshots for workflow documentation.
+
+CRITICAL RULES - FOLLOW EXACTLY:
+1. ONLY describe what you can actually see in the screenshot. Never invent details.
+2. Use the exact text/labels visible in the UI when naming buttons, fields, or links.
+3. If you cannot clearly identify an element, use generic terms like "the button" or "the field".
+4. Keep the title under 10 words and start with an action verb.
+5. Keep the description to 1-2 sentences maximum.
+6. Only list highlights for elements you can clearly see.
+
+DO NOT:
+- Guess at button names or field labels you cannot read
+- Assume the purpose of the workflow beyond what's visible
+- Add steps or actions not shown in the screenshot
+- Make up product names, company names, or specific values
+
+If the screenshot is unclear or messy, provide a simple, accurate description of what IS visible.
 
 Format your response as JSON: { "title": "...", "description": "...", "highlights": ["..."] }`
           },
           {
             role: "user",
             content: [
-              { type: "text", text: `Analyze this screenshot and describe what action the user needs to take. ${context ? `Context: ${context}` : ""}` },
+              { type: "text", text: `Analyze this screenshot and describe the action shown.${groundedInfo.length > 0 ? '\n\nKnown information:\n' + groundedInfo.join('\n') : ''}` },
               imageContent
             ]
           }
@@ -1080,12 +1151,17 @@ Format your response as JSON: { "title": "...", "description": "...", "highlight
       });
 
       const content = completion.choices[0].message.content;
-      const analysis = content ? JSON.parse(content) : { title: "Untitled Step", description: "No description", highlights: [] };
+      const analysis = content ? JSON.parse(content) : { title: "Complete this step", description: "Follow the action shown in the screenshot.", highlights: [] };
       
       res.json(analysis);
     } catch (error) {
       console.error("AI Screenshot Analysis error:", error);
-      res.status(500).json({ message: "Failed to analyze screenshot" });
+      // Return safe fallback instead of error
+      res.json({ 
+        title: "Complete this step", 
+        description: "Follow the action shown in the screenshot.", 
+        highlights: [] 
+      });
     }
   });
 

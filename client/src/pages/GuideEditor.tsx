@@ -254,6 +254,11 @@ export default function GuideEditor() {
     }
   }, [captureStatus, captureToken, guideId]);
 
+  // Request current capture state from extension on mount
+  useEffect(() => {
+    window.postMessage({ type: 'FLOWCAPTURE_GET_STATE' }, window.origin);
+  }, []);
+
   // Listen for extension messages
   useEffect(() => {
     const handleExtensionMessage = (event: MessageEvent) => {

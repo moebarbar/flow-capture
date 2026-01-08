@@ -31,6 +31,13 @@ if (window.__flowcaptureInitialized) {
         setupEventListeners();
         showCapturingIndicator();
       }
+      
+      // Broadcast current state to any listening pages on init
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_STATE_UPDATE',
+        isCapturing,
+        isPaused 
+      }, window.origin);
     } catch (e) {
       console.error('FlowCapture init error:', e);
     }
@@ -204,6 +211,13 @@ if (window.__flowcaptureInitialized) {
       } catch (e) {
         console.error('FlowCapture: Failed to resume capture:', e);
       }
+    } else if (event.data?.type === 'FLOWCAPTURE_GET_STATE') {
+      // Return current capture state to the requesting page
+      window.postMessage({ 
+        type: 'FLOWCAPTURE_STATE_UPDATE',
+        isCapturing,
+        isPaused 
+      }, responseOrigin);
     }
   });
 

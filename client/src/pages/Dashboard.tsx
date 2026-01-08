@@ -155,12 +155,14 @@ function DashboardContent() {
                   <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl ${stat.color}`}>
                     <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
-                  {stat.trend !== undefined && stat.trend !== 0 && (
+                  {stat.trend !== undefined && (
                     <span className={cn(
                       "text-xs font-medium px-2 py-1 rounded-full hidden sm:flex items-center gap-1",
-                      stat.trend > 0 ? "text-green-600 bg-green-50 dark:bg-green-950" : "text-red-600 bg-red-50 dark:bg-red-950"
+                      stat.trend > 0 ? "text-green-600 bg-green-50 dark:bg-green-950" : 
+                      stat.trend < 0 ? "text-red-600 bg-red-50 dark:bg-red-950" :
+                      "text-muted-foreground bg-muted"
                     )}>
-                      {stat.trend > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                      {stat.trend > 0 ? <ArrowUpRight className="h-3 w-3" /> : stat.trend < 0 ? <ArrowDownRight className="h-3 w-3" /> : null}
                       {stat.trend > 0 ? '+' : ''}{stat.trend}% this week
                     </span>
                   )}

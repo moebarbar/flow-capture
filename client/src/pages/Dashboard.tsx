@@ -46,6 +46,13 @@ function DashboardContent() {
   
   const { data: analytics } = useQuery<AnalyticsData>({
     queryKey: ['/api/analytics', workspaceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/analytics?workspaceId=${workspaceId}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch analytics');
+      return res.json();
+    },
     enabled: !!workspaceId,
     staleTime: 60000,
   });
@@ -155,17 +162,15 @@ function DashboardContent() {
                   <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl ${stat.color}`}>
                     <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
-                  {stat.trend !== undefined && (
-                    <span className={cn(
-                      "text-xs font-medium px-2 py-1 rounded-full hidden sm:flex items-center gap-1",
-                      stat.trend > 0 ? "text-green-600 bg-green-50 dark:bg-green-950" : 
-                      stat.trend < 0 ? "text-red-600 bg-red-50 dark:bg-red-950" :
-                      "text-muted-foreground bg-muted"
-                    )}>
-                      {stat.trend > 0 ? <ArrowUpRight className="h-3 w-3" /> : stat.trend < 0 ? <ArrowDownRight className="h-3 w-3" /> : null}
-                      {stat.trend > 0 ? '+' : ''}{stat.trend}% this week
-                    </span>
-                  )}
+                  <span className={cn(
+                    "text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1",
+                    (stat.trend ?? 0) > 0 ? "text-green-600 bg-green-50 dark:bg-green-950" : 
+                    (stat.trend ?? 0) < 0 ? "text-red-600 bg-red-50 dark:bg-red-950" :
+                    "text-muted-foreground bg-muted"
+                  )}>
+                    {(stat.trend ?? 0) > 0 ? <ArrowUpRight className="h-3 w-3" /> : (stat.trend ?? 0) < 0 ? <ArrowDownRight className="h-3 w-3" /> : null}
+                    {(stat.trend ?? 0) > 0 ? '+' : ''}{stat.trend ?? 0}% this week
+                  </span>
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold font-display">{stat.value}</div>
                 <div className="text-xs sm:text-sm text-muted-foreground mt-1">{stat.label}</div>

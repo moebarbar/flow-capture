@@ -53,7 +53,7 @@ export default function GuideEditor() {
   const { mutate: moveFlowToCollection } = useMoveFlowToCollection();
   
   const { mutate: updateGuide } = useUpdateGuide();
-  const { mutate: createStep } = useCreateStep();
+  const { mutate: createStep, isPending: isCreatingStep } = useCreateStep();
   const { mutate: updateStep } = useUpdateStep();
   const { mutate: deleteStep } = useDeleteStep();
   const { mutate: reorderSteps } = useReorderSteps();
@@ -601,12 +601,57 @@ export default function GuideEditor() {
   const currentThumbnail = guide?.coverImageUrl || sortedSteps[0]?.imageUrl || null;
 
   const handleAddStep = () => {
+    if (isCreatingStep) return;
+    const newOrder = (sortedSteps?.length || 0) + 1;
     createStep({
       guideId,
-      order: (steps?.length || 0) + 1,
+      order: newOrder,
       title: "New Step",
       actionType: "click",
-      imageUrl: `https://placehold.co/800x600/f3f4f6/a3a3a3?text=Step+${(steps?.length || 0) + 1}`
+      imageUrl: `https://placehold.co/800x600/f3f4f6/a3a3a3?text=Step+${newOrder}`
+    }, {
+      onSuccess: (newStep) => {
+        setSelectedStepId(newStep.id);
+        toast({ title: "Step added" });
+      },
+      onError: () => {
+        toast({ title: "Failed to add step", variant: "destructive" });
+      }
+    });
+  };
+
+  const handleInsertStep = (afterIndex: number) => {
+    if (isCreatingStep) return;
+    const currentSteps = [...sortedSteps];
+    const newOrder = currentSteps.length + 1;
+    const displayNumber = afterIndex + 2;
+    
+    createStep({
+      guideId,
+      order: newOrder,
+      title: "New Step",
+      actionType: "click",
+      imageUrl: `https://placehold.co/800x600/f3f4f6/a3a3a3?text=Step+${displayNumber}`
+    }, {
+      onSuccess: (newStep) => {
+        const beforeIds = currentSteps.slice(0, afterIndex + 1).map(s => s.id);
+        const afterIds = currentSteps.slice(afterIndex + 1).map(s => s.id);
+        const newStepOrder = [...beforeIds, newStep.id, ...afterIds];
+        
+        reorderSteps({ guideId, stepIds: newStepOrder }, {
+          onSuccess: () => {
+            setSelectedStepId(newStep.id);
+            toast({ title: "Step inserted" });
+          },
+          onError: () => {
+            setSelectedStepId(newStep.id);
+            toast({ title: "Step added but reordering failed", variant: "destructive" });
+          }
+        });
+      },
+      onError: () => {
+        toast({ title: "Failed to add step", variant: "destructive" });
+      }
     });
   };
 
@@ -920,12 +965,17 @@ export default function GuideEditor() {
           <Button 
             size="sm" 
             variant="ghost" 
-            onClick={handleAddStep} 
+            onClick={handleAddStep}
+            disabled={isCreatingStep}
             className="h-8 shrink-0"
             data-testid="button-add-step-mobile"
             aria-label="Add step"
           >
-            <Plus className="h-4 w-4" />
+            {isCreatingStep ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
           </Button>
           <div className="flex gap-1.5 overflow-x-auto">
             {sortedSteps.map((step, index) => (
@@ -950,62 +1000,117 @@ export default function GuideEditor() {
         <div className="hidden md:flex w-56 lg:w-72 border-r border-border bg-muted/10 flex-col shrink-0">
           <div className="p-4 border-b border-border flex items-center justify-between gap-2">
             <h3 className="font-semibold text-sm">Steps ({sortedSteps.length})</h3>
-            <Button size="sm" variant="ghost" onClick={handleAddStep} className="h-8 w-8 p-0">
-              <Plus className="h-4 w-4" />
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={handleAddStep} 
+              disabled={isCreatingStep}
+              className="h-8 w-8 p-0"
+              data-testid="button-add-step"
+            >
+              {isCreatingStep ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
             </Button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-2">
+            {sortedSteps.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-4">
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                  <Plus className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground mb-3">No steps yet</p>
+                <Button 
+                  onClick={handleAddStep} 
+                  disabled={isCreatingStep}
+                  size="sm"
+                  data-testid="button-add-first-step"
+                >
+                  {isCreatingStep ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  Add first step
+                </Button>
+              </div>
+            ) : (
             <DragDropContext onDragEnd={handleDragEnd}>
               <Droppable droppableId="steps">
                 {(provided) => (
-                  <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                  <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-1">
                     {sortedSteps.map((step, index) => (
-                      <Draggable key={step.id} draggableId={String(step.id)} index={index}>
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            onClick={() => setSelectedStepId(step.id)}
-                            className={cn(
-                              "relative group p-3 rounded-lg border transition-all cursor-pointer",
-                              selectedStepId === step.id 
-                                ? "bg-card border-brand-500 shadow-sm ring-1 ring-brand-500/20" 
-                                : "bg-card border-transparent hover:border-border hover:shadow-sm",
-                              snapshot.isDragging && "shadow-xl rotate-2 scale-105 z-50"
-                            )}
-                          >
-                            <div className="flex gap-3">
-                              <div {...provided.dragHandleProps} className="mt-1 text-muted-foreground/50 hover:text-foreground cursor-grab">
-                                <GripVertical className="h-4 w-4" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold shrink-0">
-                                    {index + 1}
-                                  </span>
-                                  <span className="font-medium text-sm truncate">{step.title || "Untitled Step"}</span>
+                      <div key={step.id}>
+                        <Draggable draggableId={String(step.id)} index={index}>
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              onClick={() => setSelectedStepId(step.id)}
+                              className={cn(
+                                "relative group p-3 rounded-lg border transition-all cursor-pointer",
+                                selectedStepId === step.id 
+                                  ? "bg-card border-brand-500 shadow-sm ring-1 ring-brand-500/20" 
+                                  : "bg-card border-transparent hover:border-border hover:shadow-sm",
+                                snapshot.isDragging && "shadow-xl rotate-2 scale-105 z-50"
+                              )}
+                            >
+                              <div className="flex gap-3">
+                                <div {...provided.dragHandleProps} className="mt-1 text-muted-foreground/50 hover:text-foreground cursor-grab">
+                                  <GripVertical className="h-4 w-4" />
                                 </div>
-                                <div className="h-16 w-full bg-muted rounded overflow-hidden relative">
-                                  {step.imageUrl ? (
-                                    <img src={step.imageUrl} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-muted/50">
-                                      <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
-                                    </div>
-                                  )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="flex items-center justify-center h-5 w-5 rounded-full bg-brand-100 text-brand-700 text-[10px] font-bold shrink-0">
+                                      {index + 1}
+                                    </span>
+                                    <span className="font-medium text-sm truncate">{step.title || "Untitled Step"}</span>
+                                  </div>
+                                  <div className="h-16 w-full bg-muted rounded overflow-hidden relative">
+                                    {step.imageUrl ? (
+                                      <img src={step.imageUrl} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-muted/50">
+                                        <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        )}
-                      </Draggable>
+                          )}
+                        </Draggable>
+                        <div className="flex items-center justify-center py-1 group/insert">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleInsertStep(index); }}
+                            disabled={isCreatingStep}
+                            className={cn(
+                              "flex items-center gap-1 px-2 py-0.5 rounded text-xs text-muted-foreground",
+                              "opacity-0 group-hover/insert:opacity-100 transition-opacity",
+                              "hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-brand-900 dark:hover:text-brand-300",
+                              isCreatingStep && "cursor-not-allowed opacity-50"
+                            )}
+                            data-testid={`button-insert-step-${index}`}
+                          >
+                            {isCreatingStep ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Plus className="h-3 w-3" />
+                            )}
+                            <span>Insert step</span>
+                          </button>
+                        </div>
+                      </div>
                     ))}
                     {provided.placeholder}
                   </div>
                 )}
               </Droppable>
             </DragDropContext>
+            )}
           </div>
         </div>
 

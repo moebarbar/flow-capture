@@ -382,8 +382,11 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     
     try {
+      // Validate request body (flowId is omitted from input schema)
       const input = api.steps.create.input.parse(req.body);
-      const step = await storage.createStep(input);
+      // Merge flowId from URL parameter
+      const stepData = { ...input, flowId: Number(req.params.guideId) };
+      const step = await storage.createStep(stepData);
       res.status(201).json(step);
     } catch (err) {
       if (err instanceof z.ZodError) {

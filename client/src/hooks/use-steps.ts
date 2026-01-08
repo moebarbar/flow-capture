@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl, type CreateStepRequest, type UpdateStepRequest } from "@shared/routes";
+import { api, buildUrl, type CreateStepInput, type UpdateStepInput } from "@shared/routes";
 
 export function useSteps(guideId: number) {
   return useQuery({
@@ -17,12 +17,12 @@ export function useSteps(guideId: number) {
 export function useCreateStep() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ guideId, ...data }: { guideId: number } & Omit<CreateStepRequest, "flowId">) => {
+    mutationFn: async ({ guideId, ...data }: { guideId: number } & CreateStepInput) => {
       const url = buildUrl(api.steps.create.path, { guideId });
       const res = await fetch(url, {
         method: api.steps.create.method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, flowId: guideId }),
+        body: JSON.stringify(data),
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to create step");
@@ -38,7 +38,7 @@ export function useCreateStep() {
 export function useUpdateStep() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, guideId, ...updates }: { id: number; guideId: number } & UpdateStepRequest) => {
+    mutationFn: async ({ id, guideId, ...updates }: { id: number; guideId: number } & UpdateStepInput) => {
       const url = buildUrl(api.steps.update.path, { id });
       const res = await fetch(url, {
         method: api.steps.update.method,

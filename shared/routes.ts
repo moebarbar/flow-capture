@@ -12,6 +12,16 @@ import {
 import { users } from './models/auth';
 
 // ============================================
+// STEP API INPUT SCHEMAS
+// These schemas omit flowId since it comes from the URL parameter
+// ============================================
+export const createStepInputSchema = insertStepSchema.omit({ flowId: true });
+export const updateStepInputSchema = insertStepSchema.partial().omit({ flowId: true });
+
+export type CreateStepInput = z.infer<typeof createStepInputSchema>;
+export type UpdateStepInput = z.infer<typeof updateStepInputSchema>;
+
+// ============================================
 // SHARED ERROR SCHEMAS
 // ============================================
 export const errorSchemas = {
@@ -140,6 +150,7 @@ export const api = {
   },
 
   // === STEPS ===
+  // Note: flowId is derived from URL parameter :guideId, not from request body
   steps: {
     list: {
       method: 'GET' as const,
@@ -152,7 +163,7 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/guides/:guideId/steps',
-      input: insertStepSchema,
+      input: createStepInputSchema,
       responses: {
         201: z.custom<typeof steps.$inferSelect>(),
         400: errorSchemas.validation,
@@ -162,7 +173,7 @@ export const api = {
     update: {
       method: 'PUT' as const,
       path: '/api/steps/:id',
-      input: insertStepSchema.partial(),
+      input: updateStepInputSchema,
       responses: {
         200: z.custom<typeof steps.$inferSelect>(),
         400: errorSchemas.validation,

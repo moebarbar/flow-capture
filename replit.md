@@ -52,9 +52,16 @@ Key entities in `shared/schema.ts`:
 - **users** - Replit Auth user profiles
 - **workspaces** - Team containers with branding options
 - **workspaceMembers** - User-workspace relationships with roles (owner/admin/editor/viewer)
-- **guides** - Documentation items with status (draft/published/archived)
+- **guides** (aka flows) - Documentation items with status (draft/published/archived)
 - **steps** - Individual steps within guides, ordered and typed
 - **folders** - Hierarchical organization within workspaces
+
+### Naming Convention: flowId vs guideId
+- **Database/Backend**: Uses `flowId` as the schema property (database column is `guide_id`)
+- **API URLs**: Use `:guideId` in path parameters (e.g., `/api/guides/:guideId/steps`)
+- **API Input**: Step creation/update schemas (`CreateStepInput`, `UpdateStepInput`) omit `flowId` - the server derives it from the URL parameter
+- **Frontend**: Uses `guideId` for UI clarity, passed to hooks which handle the URL routing
+- **Important**: Never send `flowId` in request bodies for step operations - it's always derived from the URL
 
 ### Build System
 - **Development**: `tsx` for TypeScript execution with Vite dev server

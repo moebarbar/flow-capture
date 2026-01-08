@@ -71,7 +71,7 @@ function DashboardContent() {
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto">
               <NotificationBell />
-              {isExtensionInstalled === false && (
+              {isExtensionInstalled !== null && !isExtensionInstalled && (
                 <Button 
                   variant="outline"
                   className="rounded-full px-3 sm:px-5 text-xs sm:text-sm hidden md:inline-flex"

@@ -3,6 +3,14 @@ if (window.__flowcaptureInitialized) {
 } else {
   window.__flowcaptureInitialized = true;
 
+  // Set DOM marker immediately for reliable extension detection
+  try {
+    const manifest = chrome.runtime.getManifest();
+    document.documentElement.dataset.flowcaptureExtension = manifest.version;
+  } catch (e) {
+    document.documentElement.dataset.flowcaptureExtension = 'true';
+  }
+
   let isCapturing = false;
   let isPaused = false;
   let isElementCaptureMode = false;

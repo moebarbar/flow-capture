@@ -553,43 +553,167 @@ export class DatabaseStorage implements IStorage {
     avgCompletionRate: number;
     avgTimeSpent: number;
     viewsTrend: number;
+    guidesThisWeek: number;
+    guidesTrend: number;
+    draftsTrend: number;
     topGuides: Array<{ id: number; title: string; views: number; completionRate: number }>;
     recentActivity: Array<{ guideId: number; guideTitle: string; action: string; timestamp: string }>;
   }> {
     const workspaceGuides = await db.select().from(guides).where(eq(guides.workspaceId, workspaceId));
     const guideIds = workspaceGuides.map(g => g.id);
     
+    // Short-circuit for empty workspaces to avoid SQL errors
+    if (guideIds.length === 0) {
+      return {
+        totalViews: 0,
+        totalGuides: 0,
+        avgCompletionRate: 0,
+        avgTimeSpent: 0,
+        viewsTrend: 0,
+        guidesThisWeek: 0,
+        guidesTrend: 0,
+        draftsTrend: 0,
+        topGuides: [],
+        recentActivity: [],
+      };
+    }
+    
+    // Calculate date ranges for week-over-week comparison
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    
     let totalViews = 0;
     const topGuides: Array<{ id: number; title: string; views: number; completionRate: number }> = [];
     const recentActivity: Array<{ guideId: number; guideTitle: string; action: string; timestamp: string }> = [];
 
+    // Count guides created this week vs last week
+    const guidesThisWeek = workspaceGuides.filter(g => new Date(g.createdAt) >= oneWeekAgo).length;
+    const guidesLastWeek = workspaceGuides.filter(g => 
+      new Date(g.createdAt) >= twoWeeksAgo && new Date(g.createdAt) < oneWeekAgo
+    ).length;
+    
+    // Count drafts this week vs last week
+    const draftsThisWeek = workspaceGuides.filter(g => 
+      g.status === 'draft' && new Date(g.updatedAt) >= oneWeekAgo
+    ).length;
+    const draftsLastWeek = workspaceGuides.filter(g => 
+      g.status === 'draft' && new Date(g.updatedAt) >= twoWeeksAgo && new Date(g.updatedAt) < oneWeekAgo
+    ).length;
+
+    // Get actual view counts from guideAnalytics for this workspace's guides
+    let viewsThisWeek = 0;
+    let viewsLastWeek = 0;
+    
+    // Count views from this week
+    const thisWeekViews = await db.select({ count: sql<number>`count(*)` })
+      .from(guideAnalytics)
+      .where(and(
+        inArray(guideAnalytics.flowId, guideIds),
+        sql`${guideAnalytics.createdAt} >= ${oneWeekAgo}`
+      ));
+    viewsThisWeek = Number(thisWeekViews[0]?.count || 0);
+    
+    // Count views from last week
+    const lastWeekViews = await db.select({ count: sql<number>`count(*)` })
+      .from(guideAnalytics)
+      .where(and(
+        inArray(guideAnalytics.flowId, guideIds),
+        sql`${guideAnalytics.createdAt} >= ${twoWeeksAgo}`,
+        sql`${guideAnalytics.createdAt} < ${oneWeekAgo}`
+      ));
+    viewsLastWeek = Number(lastWeekViews[0]?.count || 0);
+
+    // Batch fetch all analytics data for completion rates (avoid N+1)
+    const allAnalyticsData = await db.select({
+      flowId: guideAnalytics.flowId,
+      completedSteps: guideAnalytics.completedSteps,
+      totalSteps: guideAnalytics.totalSteps
+    })
+      .from(guideAnalytics)
+      .where(inArray(guideAnalytics.flowId, guideIds));
+    
+    // Group analytics by flowId
+    const analyticsMap = new Map<number, { completedSteps: number; totalSteps: number }[]>();
+    for (const row of allAnalyticsData) {
+      if (!analyticsMap.has(row.flowId)) {
+        analyticsMap.set(row.flowId, []);
+      }
+      analyticsMap.get(row.flowId)!.push({
+        completedSteps: row.completedSteps || 0,
+        totalSteps: row.totalSteps || 0
+      });
+    }
+
     for (const guide of workspaceGuides) {
       totalViews += guide.viewCount || 0;
+      
+      // Calculate completion rate from batched analytics data
+      const guideAnalyticsData = analyticsMap.get(guide.id) || [];
+      let completionRate = 0;
+      
+      if (guideAnalyticsData.length > 0) {
+        const totalCompleted = guideAnalyticsData.reduce((sum, a) => sum + a.completedSteps, 0);
+        const totalPossible = guideAnalyticsData.reduce((sum, a) => sum + a.totalSteps, 0);
+        completionRate = totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0;
+      }
+      
       topGuides.push({
         id: guide.id,
         title: guide.title,
         views: guide.viewCount || 0,
-        completionRate: Math.floor(Math.random() * 40) + 60,
+        completionRate,
       });
     }
 
     topGuides.sort((a, b) => b.views - a.views);
 
-    for (const guide of workspaceGuides.slice(0, 5)) {
+    // Get recent activity from actual guide updates
+    const sortedByActivity = [...workspaceGuides].sort((a, b) => 
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+    
+    for (const guide of sortedByActivity.slice(0, 10)) {
+      const action = guide.status === 'published' ? 'Published' : 
+                     new Date(guide.createdAt).getTime() === new Date(guide.updatedAt).getTime() ? 'Created' : 'Edited';
       recentActivity.push({
         guideId: guide.id,
         guideTitle: guide.title,
-        action: "Viewed",
+        action,
         timestamp: guide.updatedAt.toISOString(),
       });
+    }
+
+    // Calculate trends (percentage change week-over-week)
+    const calculateTrend = (current: number, previous: number): number => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 100);
+    };
+    
+    // Use actual view counts from guideAnalytics for viewsTrend
+    const viewsTrend = calculateTrend(viewsThisWeek, viewsLastWeek);
+    const guidesTrend = calculateTrend(guidesThisWeek, guidesLastWeek);
+    const draftsTrend = calculateTrend(draftsThisWeek, draftsLastWeek);
+    
+    // Calculate average time spent from batched analytics data
+    let avgTimeSpent = 0;
+    if (allAnalyticsData.length > 0) {
+      const avgStepsCompleted = allAnalyticsData.reduce((sum, a) => sum + (a.completedSteps || 0), 0) / allAnalyticsData.length;
+      // Estimate 15 seconds per step
+      avgTimeSpent = Math.round(avgStepsCompleted * 15);
     }
 
     return {
       totalViews,
       totalGuides: workspaceGuides.length,
-      avgCompletionRate: topGuides.length > 0 ? Math.round(topGuides.reduce((sum, g) => sum + g.completionRate, 0) / topGuides.length) : 0,
-      avgTimeSpent: 45,
-      viewsTrend: 12,
+      avgCompletionRate: topGuides.length > 0 ? 
+        Math.round(topGuides.filter(g => g.completionRate > 0).reduce((sum, g) => sum + g.completionRate, 0) / 
+          Math.max(topGuides.filter(g => g.completionRate > 0).length, 1)) : 0,
+      avgTimeSpent,
+      viewsTrend,
+      guidesThisWeek,
+      guidesTrend,
+      draftsTrend,
       topGuides: topGuides.slice(0, 5),
       recentActivity: recentActivity.slice(0, 10),
     };

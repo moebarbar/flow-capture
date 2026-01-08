@@ -7,13 +7,22 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { InstallExtensionDialog } from "@/components/InstallExtensionDialog";
 import { PermissionDeniedDialog } from "@/components/PermissionDeniedDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Clock, TrendingUp, BookOpen, MoreVertical } from "lucide-react";
+import { Plus, Clock, TrendingUp, BookOpen, MoreVertical, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { SiGooglechrome } from "react-icons/si";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "wouter";
 import { EmptyState } from "@/components/EmptyState";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+
+interface AnalyticsData {
+  totalViews: number;
+  totalGuides: number;
+  viewsTrend: number;
+  guidesTrend: number;
+  draftsTrend: number;
+}
 
 function DashboardContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
@@ -34,6 +43,12 @@ function DashboardContent() {
   const workspaceId = workspaces?.[0]?.id;
   const { data: guides, isLoading } = useGuides({ workspaceId });
   const { mutate: createGuide, isPending: isCreating } = useCreateGuide();
+  
+  const { data: analytics } = useQuery<AnalyticsData>({
+    queryKey: ['/api/analytics', workspaceId],
+    enabled: !!workspaceId,
+    staleTime: 60000,
+  });
 
   const handleCreateGuide = async () => {
     if (!workspaceId) return;
@@ -124,9 +139,9 @@ function DashboardContent() {
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12">
             {[
-              { label: "Total Flows", value: guides?.total || 0, icon: BookOpen, color: "text-blue-500 bg-blue-50 dark:bg-blue-950" },
-              { label: "Total Views", value: totalViews, icon: TrendingUp, color: "text-green-500 bg-green-50 dark:bg-green-950" },
-              { label: "Drafts", value: guides?.data?.filter(g => g.status === 'draft').length || 0, icon: Clock, color: "text-orange-500 bg-orange-50 dark:bg-orange-950" },
+              { label: "Total Flows", value: guides?.total || 0, icon: BookOpen, color: "text-blue-500 bg-blue-50 dark:bg-blue-950", trend: analytics?.guidesTrend },
+              { label: "Total Views", value: totalViews, icon: TrendingUp, color: "text-green-500 bg-green-50 dark:bg-green-950", trend: analytics?.viewsTrend },
+              { label: "Drafts", value: guides?.data?.filter(g => g.status === 'draft').length || 0, icon: Clock, color: "text-orange-500 bg-orange-50 dark:bg-orange-950", trend: analytics?.draftsTrend },
             ].map((stat, i) => (
               <motion.div 
                 key={i}
@@ -134,12 +149,21 @@ function DashboardContent() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
                 className="bg-card p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-border shadow-sm"
+                data-testid={`card-stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
                   <div className={`p-2 sm:p-3 rounded-lg sm:rounded-xl ${stat.color}`}>
                     <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
-                  <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full hidden sm:block">+12% this week</span>
+                  {stat.trend !== undefined && stat.trend !== 0 && (
+                    <span className={cn(
+                      "text-xs font-medium px-2 py-1 rounded-full hidden sm:flex items-center gap-1",
+                      stat.trend > 0 ? "text-green-600 bg-green-50 dark:bg-green-950" : "text-red-600 bg-red-50 dark:bg-red-950"
+                    )}>
+                      {stat.trend > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                      {stat.trend > 0 ? '+' : ''}{stat.trend}% this week
+                    </span>
+                  )}
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold font-display">{stat.value}</div>
                 <div className="text-xs sm:text-sm text-muted-foreground mt-1">{stat.label}</div>

@@ -13,6 +13,9 @@ interface AnalyticsData {
   avgCompletionRate: number;
   avgTimeSpent: number;
   viewsTrend: number;
+  guidesThisWeek: number;
+  guidesTrend: number;
+  draftsTrend: number;
   topGuides: Array<{
     id: number;
     title: string;

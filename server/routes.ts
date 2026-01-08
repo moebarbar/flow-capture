@@ -2850,16 +2850,21 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     const workspaceId = req.query.workspaceId ? Number(req.query.workspaceId) : undefined;
     
+    const emptyAnalytics = {
+      totalViews: 0,
+      totalGuides: 0,
+      avgCompletionRate: 0,
+      avgTimeSpent: 0,
+      viewsTrend: 0,
+      guidesThisWeek: 0,
+      guidesTrend: 0,
+      draftsTrend: 0,
+      topGuides: [],
+      recentActivity: [],
+    };
+    
     if (!workspaceId) {
-      return res.json({
-        totalViews: 0,
-        totalGuides: 0,
-        avgCompletionRate: 0,
-        avgTimeSpent: 0,
-        viewsTrend: 0,
-        topGuides: [],
-        recentActivity: [],
-      });
+      return res.json(emptyAnalytics);
     }
 
     try {
@@ -2867,15 +2872,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       res.json(analytics);
     } catch (err) {
       console.error("Analytics error:", err);
-      res.json({
-        totalViews: 0,
-        totalGuides: 0,
-        avgCompletionRate: 0,
-        avgTimeSpent: 0,
-        viewsTrend: 0,
-        topGuides: [],
-        recentActivity: [],
-      });
+      res.json(emptyAnalytics);
     }
   });
 

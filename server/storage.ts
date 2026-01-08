@@ -600,6 +600,26 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(guideTemplates).where(eq(guideTemplates.isPublic, true)).orderBy(desc(guideTemplates.usageCount));
   }
 
+  async seedDefaultTemplates(templates: Array<{
+    title: string;
+    description: string;
+    category: "onboarding" | "training" | "sales" | "support" | "hr" | "it" | "marketing" | "custom";
+    stepsData: Array<{ order: number; title: string; description: string; actionType: string }>;
+    isPublic: boolean;
+    usageCount: number;
+  }>): Promise<void> {
+    for (const template of templates) {
+      await db.insert(guideTemplates).values({
+        title: template.title,
+        description: template.description,
+        category: template.category,
+        stepsData: template.stepsData,
+        isPublic: template.isPublic,
+        usageCount: template.usageCount,
+      }).onConflictDoNothing({ target: guideTemplates.title });
+    }
+  }
+
   async createGuideFromTemplate(templateId: number, workspaceId: number, userId: string): Promise<Guide> {
     const [template] = await db.select().from(guideTemplates).where(eq(guideTemplates.id, templateId));
     if (!template) {

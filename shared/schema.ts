@@ -241,7 +241,7 @@ export const templateCategoryEnum = pgEnum("template_category", [
 // Using original database table name "guide_templates" to avoid destructive migrations
 export const flowTemplates = pgTable("guide_templates", {
   id: serial("id").primaryKey(),
-  title: text("title").notNull(),
+  title: text("title").notNull().unique(), // Unique constraint for idempotent seeding
   description: text("description"),
   category: templateCategoryEnum("category").default("custom").notNull(),
   coverImageUrl: text("cover_image_url"),

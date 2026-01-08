@@ -2877,6 +2877,133 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
   });
 
   // === TEMPLATES API ===
+  
+  // Default templates data
+  const defaultTemplates = [
+    {
+      title: "Standard Operating Procedure (SOP)",
+      description: "Create formal step-by-step procedures with compliance tracking and approval workflows. Perfect for regulated industries.",
+      category: "training" as const,
+      stepsData: [
+        { order: 1, title: "Purpose and Scope", description: "Define the objective and who this SOP applies to.", actionType: "navigation" },
+        { order: 2, title: "Prerequisites", description: "List any required permissions, tools, or preparation needed.", actionType: "navigation" },
+        { order: 3, title: "Step 1: Initial Action", description: "Describe the first action in the procedure.", actionType: "click" },
+        { order: 4, title: "Step 2: Configuration", description: "Configure the necessary settings.", actionType: "input" },
+        { order: 5, title: "Step 3: Verification", description: "Verify that the action was completed correctly.", actionType: "click" },
+        { order: 6, title: "Completion Checklist", description: "Final verification checklist before marking complete.", actionType: "navigation" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+    {
+      title: "Employee Onboarding Guide",
+      description: "Welcome new team members with a structured onboarding flow covering tools, access, and first-day essentials.",
+      category: "onboarding" as const,
+      stepsData: [
+        { order: 1, title: "Welcome to the Team!", description: "Introduction to the company and team structure.", actionType: "navigation" },
+        { order: 2, title: "Set Up Your Workstation", description: "Configure your computer, email, and essential software.", actionType: "click" },
+        { order: 3, title: "Access Company Systems", description: "Log into required platforms and verify access.", actionType: "input" },
+        { order: 4, title: "Meet Your Team", description: "Schedule introductory meetings with key colleagues.", actionType: "click" },
+        { order: 5, title: "Complete Required Training", description: "Finish mandatory compliance and security training.", actionType: "navigation" },
+        { order: 6, title: "First Week Goals", description: "Review your objectives for the first week.", actionType: "navigation" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+    {
+      title: "Software Tutorial",
+      description: "Teach users how to use a software feature with clear steps, screenshots, and helpful tips.",
+      category: "training" as const,
+      stepsData: [
+        { order: 1, title: "Getting Started", description: "Open the application and navigate to the feature.", actionType: "navigation" },
+        { order: 2, title: "Access the Feature", description: "Click on the menu or button to access this feature.", actionType: "click" },
+        { order: 3, title: "Configure Settings", description: "Adjust the settings according to your needs.", actionType: "input" },
+        { order: 4, title: "Perform the Action", description: "Complete the main action of this tutorial.", actionType: "click" },
+        { order: 5, title: "Verify Results", description: "Check that the action completed successfully.", actionType: "navigation" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+    {
+      title: "Customer Support Script",
+      description: "Guide support agents through common customer issues with scripted responses and escalation paths.",
+      category: "support" as const,
+      stepsData: [
+        { order: 1, title: "Greet the Customer", description: "Open with a friendly, professional greeting.", actionType: "navigation" },
+        { order: 2, title: "Identify the Issue", description: "Ask clarifying questions to understand the problem.", actionType: "input" },
+        { order: 3, title: "Check Account Status", description: "Verify the customer's account and recent activity.", actionType: "click" },
+        { order: 4, title: "Provide Solution", description: "Walk through the resolution steps with the customer.", actionType: "navigation" },
+        { order: 5, title: "Escalate if Needed", description: "If unresolved, escalate to the appropriate team.", actionType: "click" },
+        { order: 6, title: "Close the Ticket", description: "Document the resolution and close the support ticket.", actionType: "click" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+    {
+      title: "Sales Demo Playbook",
+      description: "Structure your product demos with a repeatable flow that highlights key features and closes deals.",
+      category: "sales" as const,
+      stepsData: [
+        { order: 1, title: "Introduction", description: "Introduce yourself and understand the prospect's needs.", actionType: "navigation" },
+        { order: 2, title: "Show Key Feature 1", description: "Demonstrate the most impactful feature for this prospect.", actionType: "click" },
+        { order: 3, title: "Show Key Feature 2", description: "Highlight another feature that addresses their pain points.", actionType: "click" },
+        { order: 4, title: "Handle Objections", description: "Address common questions and concerns.", actionType: "navigation" },
+        { order: 5, title: "Pricing Discussion", description: "Present pricing options that fit their budget.", actionType: "navigation" },
+        { order: 6, title: "Next Steps", description: "Schedule follow-up and send proposal.", actionType: "click" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+    {
+      title: "Troubleshooting Guide",
+      description: "Help users diagnose and fix common problems with structured decision trees and solutions.",
+      category: "it" as const,
+      stepsData: [
+        { order: 1, title: "Identify the Problem", description: "Describe the error message or unexpected behavior.", actionType: "navigation" },
+        { order: 2, title: "Check Common Causes", description: "Verify the most likely causes of this issue.", actionType: "click" },
+        { order: 3, title: "Try Quick Fix 1", description: "Attempt the first and simplest solution.", actionType: "click" },
+        { order: 4, title: "Try Quick Fix 2", description: "If that didn't work, try this alternative solution.", actionType: "click" },
+        { order: 5, title: "Advanced Troubleshooting", description: "For persistent issues, try these advanced steps.", actionType: "input" },
+        { order: 6, title: "Escalate to Support", description: "If still unresolved, contact technical support.", actionType: "navigation" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+    {
+      title: "HR Policy Walkthrough",
+      description: "Explain company policies with clear steps for compliance, requests, and approvals.",
+      category: "hr" as const,
+      stepsData: [
+        { order: 1, title: "Policy Overview", description: "Understand what this policy covers and who it applies to.", actionType: "navigation" },
+        { order: 2, title: "Eligibility Requirements", description: "Check if you meet the criteria for this policy.", actionType: "navigation" },
+        { order: 3, title: "Submit Request", description: "Fill out the required form to submit your request.", actionType: "input" },
+        { order: 4, title: "Manager Approval", description: "Your request will be routed to your manager for approval.", actionType: "navigation" },
+        { order: 5, title: "HR Review", description: "HR will review and finalize the request.", actionType: "navigation" },
+        { order: 6, title: "Confirmation", description: "You'll receive confirmation once the request is processed.", actionType: "navigation" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+    {
+      title: "Marketing Campaign Setup",
+      description: "Launch marketing campaigns with a structured checklist covering assets, targeting, and tracking.",
+      category: "marketing" as const,
+      stepsData: [
+        { order: 1, title: "Define Campaign Goals", description: "Set clear objectives and KPIs for this campaign.", actionType: "navigation" },
+        { order: 2, title: "Create Assets", description: "Prepare all creative assets: images, copy, and landing pages.", actionType: "click" },
+        { order: 3, title: "Set Up Targeting", description: "Define your audience segments and targeting criteria.", actionType: "input" },
+        { order: 4, title: "Configure Tracking", description: "Set up UTM parameters and conversion tracking.", actionType: "input" },
+        { order: 5, title: "Launch Campaign", description: "Publish the campaign and verify everything is live.", actionType: "click" },
+        { order: 6, title: "Monitor Performance", description: "Check initial metrics and optimize as needed.", actionType: "navigation" },
+      ],
+      isPublic: true,
+      usageCount: 0,
+    },
+  ];
+
+  // Seed templates at startup (called once from registerRoutes)
+  await storage.seedDefaultTemplates(defaultTemplates);
+  
   app.get('/api/templates', async (req, res) => {
     try {
       const templates = await storage.getPublicTemplates();

@@ -176,20 +176,34 @@ export async function registerRoutes(
         const stepOrder = stepData.order !== undefined && stepData.order >= 1 ? stepData.order : (i + 1);
         const stepTitle = stepData.description || `Step ${stepOrder}`;
         
+        // Map extension step types to valid schema types
+        const typeMap: Record<string, "click" | "input" | "navigation" | "wait" | "scroll" | "custom"> = {
+          'click': 'click',
+          'input': 'input',
+          'select': 'input',
+          'scroll': 'scroll',
+          'navigate': 'navigation',
+          'navigation': 'navigation',
+          'hover': 'custom',
+          'wait': 'wait',
+          'custom': 'custom'
+        };
+        const mappedType = typeMap[stepData.type] || 'click';
+        
         await storage.createStep({
           flowId: guide.id,
           order: stepOrder,
           title: stepTitle,
           description: stepData.description || null,
           imageUrl: stepData.imageUrl || null,
-          actionType: stepData.type || 'click',
+          actionType: mappedType,
           selector: stepData.selector || null,
           url: stepData.url || null,
           metadata: stepData.metadata || null
         });
       }
       
-      res.status(201).json({ id: guide.id, ...guide });
+      res.status(201).json(guide);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({

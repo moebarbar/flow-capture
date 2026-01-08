@@ -169,6 +169,46 @@ The extension communicates with these backend endpoints:
 - `scripting`: Inject content scripts dynamically
 - `<all_urls>`: Inject content script on any page (required for workflow capture)
 
+## Testing with Local Development
+
+When testing the extension with your local FlowCapture web app:
+
+1. **Load the extension** in Developer Mode (see Installation above)
+2. **Configure API URL**:
+   - Click the extension icon
+   - Click "Settings" in the footer
+   - Enter your development URL: `http://localhost:5000`
+   - Click "Save"
+3. **Login to the web app** at `http://localhost:5000`
+4. **Start recording** from the extension popup
+5. **Verify capture works**:
+   - Click elements on any web page
+   - Check that steps appear in the side panel
+   - Complete recording and verify guide appears in dashboard
+
+### Capture Session Flow
+
+The extension uses a secure token-based system:
+
+1. Web app initiates capture session via `/api/guides/:id/capture/start`
+2. Extension receives session token via `postMessage`
+3. Extension sends captured steps to `/api/capture/step` with Bearer token
+4. Steps are saved to the guide in real-time
+
+### Testing Checklist
+
+- [ ] Extension loads without errors in chrome://extensions
+- [ ] Settings panel opens and saves API URL
+- [ ] Login to web app is recognized
+- [ ] Recording starts and shows indicator on page
+- [ ] Clicks are captured with screenshots
+- [ ] Input events are captured (non-sensitive)
+- [ ] Navigation events are tracked
+- [ ] Pause/Resume works correctly
+- [ ] Cross-tab recording sync works
+- [ ] Side panel shows captured steps
+- [ ] Complete recording saves guide to dashboard
+
 ## Troubleshooting
 
 **"Please log in to sync" error:**
@@ -187,3 +227,8 @@ The extension communicates with these backend endpoints:
 **Extension not appearing:**
 - Reload the extension from chrome://extensions
 - Check for console errors in the extension's service worker
+
+**Capture not working with localhost:**
+- Ensure you've set the API URL in Settings to `http://localhost:5000`
+- Check that the web app is running (visit the URL in your browser)
+- Try reloading the extension after changing settings

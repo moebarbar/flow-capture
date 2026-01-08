@@ -3,10 +3,19 @@ let currentFlowTitle = 'Untitled Flow';
 let isPaused = false;
 let currentTabId = null;
 let apiToken = null;
+let API_URL = 'https://flowcapture.replit.app/api';
 
-const API_URL = 'https://flowcapture.replit.app/api';
+async function getApiUrl() {
+  try {
+    const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
+    return (apiBaseUrl || 'https://flowcapture.replit.app') + '/api';
+  } catch (e) {
+    return 'https://flowcapture.replit.app/api';
+  }
+}
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  API_URL = await getApiUrl();
   initializeSidePanel();
   setupEventListeners();
   loadStoredData();

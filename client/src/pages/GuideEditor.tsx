@@ -26,7 +26,7 @@ import {
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
   Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play, X,
-  ClipboardList, GraduationCap, Library
+  ClipboardList, GraduationCap, Library, HelpCircle
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -474,6 +474,20 @@ export default function GuideEditor() {
     } catch (error) {
       console.error("KB Article generation error:", error);
       toast({ title: "Failed to generate Knowledge Base Article", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateHowTo = async () => {
+    if (!guide || !steps) return;
+    toast({ title: "Generating How-To Guide..." });
+    try {
+      const { generateHowToGuide } = await import("@/lib/howToGenerator");
+      const workspaceData = workspace ? { name: workspace.name, logoUrl: workspace.logoUrl } : null;
+      await generateHowToGuide(guide as any, steps as any, workspaceData);
+      toast({ title: "How-To Guide downloaded successfully" });
+    } catch (error) {
+      console.error("How-To Guide generation error:", error);
+      toast({ title: "Failed to generate How-To Guide", variant: "destructive" });
     }
   };
 
@@ -1298,7 +1312,7 @@ export default function GuideEditor() {
             <div className="space-y-3 pt-4 border-t">
               <Label className="text-sm font-medium">Export & Embed</Label>
               
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button 
                   variant="default" 
                   size="sm" 
@@ -1327,7 +1341,17 @@ export default function GuideEditor() {
                   data-testid="button-generate-kb"
                 >
                   <Library className="h-4 w-4 mr-1" />
-                  KB
+                  KB Article
+                </Button>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  onClick={handleGenerateHowTo}
+                  className="justify-start"
+                  data-testid="button-generate-howto"
+                >
+                  <HelpCircle className="h-4 w-4 mr-1" />
+                  How-To
                 </Button>
               </div>
               

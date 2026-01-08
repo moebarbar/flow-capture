@@ -57,14 +57,27 @@
 
     <div id="capturing" class="state-panel hidden">
       <div class="capturing-indicator">
-        <span class="pulse"></span>
-        <span>Capturing...</span>
+        <span class="pulse" id="pulse-indicator"></span>
+        <span id="capture-status-text">Capturing...</span>
       </div>
       <div class="step-counter">
         <span id="step-count">0</span>
         <span class="label">steps captured</span>
       </div>
       <div class="capturing-actions">
+        <button id="pause-btn" class="btn btn-pause" data-testid="button-pause-capture">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="6" y="4" width="4" height="16" fill="currentColor"/>
+            <rect x="14" y="4" width="4" height="16" fill="currentColor"/>
+          </svg>
+          Pause
+        </button>
+        <button id="resume-btn" class="btn btn-resume hidden" data-testid="button-resume-capture">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="5,3 19,12 5,21" fill="currentColor"/>
+          </svg>
+          Resume
+        </button>
         <button id="capture-element-during-recording" class="btn btn-element-capture-small" data-testid="button-capture-element-during-capturing">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>

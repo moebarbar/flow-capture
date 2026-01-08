@@ -5,7 +5,20 @@ let activeGuideId = null;
 async function getConfiguredApiUrl() {
   try {
     const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
-    return apiBaseUrl || 'https://flowcapture.replit.app';
+    let url = apiBaseUrl || 'https://flowcapture.replit.app';
+    
+    // Enforce HTTPS for security (except localhost)
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.protocol === 'http:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+        parsedUrl.protocol = 'https:';
+        url = parsedUrl.toString().replace(/\/$/, '');
+      }
+    } catch (e) {
+      return 'https://flowcapture.replit.app';
+    }
+    
+    return url;
   } catch (e) {
     return 'https://flowcapture.replit.app';
   }
@@ -136,6 +149,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     isRecording = false;
     chrome.storage.local.set({ isRecording: false }).then(() => {
       notifyAllTabs('STOP_RECORDING');
+      sendResponse({ success: true });
+    });
+    return true;
+  } else if (message.type === 'PAUSE_CAPTURE') {
+    chrome.storage.local.set({ isPaused: true }).then(() => {
+      notifyAllTabs('PAUSE_CAPTURE');
+      sendResponse({ success: true });
+    });
+    return true;
+  } else if (message.type === 'RESUME_CAPTURE') {
+    chrome.storage.local.set({ isPaused: false }).then(() => {
+      notifyAllTabs('RESUME_CAPTURE');
       sendResponse({ success: true });
     });
     return true;

@@ -4,6 +4,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const finishedPanel = document.getElementById('finished');
   const startBtn = document.getElementById('start-btn');
   const stopBtn = document.getElementById('stop-btn');
+  const pauseBtn = document.getElementById('pause-btn');
+  const resumeBtn = document.getElementById('resume-btn');
+  const pulseIndicator = document.getElementById('pulse-indicator');
+  const captureStatusText = document.getElementById('capture-status-text');
   const viewBtn = document.getElementById('view-btn');
   const newBtn = document.getElementById('new-btn');
   const openDashboard = document.getElementById('open-dashboard');
@@ -29,8 +33,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     panel.classList.remove('hidden');
   }
 
+  function updatePauseResumeUI(isPaused) {
+    if (isPaused) {
+      pauseBtn.classList.add('hidden');
+      resumeBtn.classList.remove('hidden');
+      pulseIndicator.classList.add('paused');
+      captureStatusText.textContent = 'Paused';
+    } else {
+      pauseBtn.classList.remove('hidden');
+      resumeBtn.classList.add('hidden');
+      pulseIndicator.classList.remove('paused');
+      captureStatusText.textContent = 'Capturing...';
+    }
+  }
+
   async function updateState() {
-    const { isCapturing, capturedSteps, flowId, borderColor } = await chrome.storage.local.get(['isCapturing', 'capturedSteps', 'flowId', 'borderColor']);
+    const { isCapturing, capturedSteps, flowId, borderColor, isPaused } = await chrome.storage.local.get(['isCapturing', 'capturedSteps', 'flowId', 'borderColor', 'isPaused']);
     
     if (borderColor) {
       borderColorInput.value = borderColor;
@@ -40,6 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isCapturing) {
       showPanel(capturingPanel);
       stepCount.textContent = (capturedSteps || []).length;
+      updatePauseResumeUI(isPaused || false);
     } else if (flowId) {
       showPanel(finishedPanel);
       finalStepCount.textContent = (capturedSteps || []).length;
@@ -170,6 +189,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.sendMessage({ type: 'START_ELEMENT_CAPTURE' });
   });
 
+  pauseBtn.addEventListener('click', async () => {
+    const { currentTabId } = await chrome.storage.local.get(['currentTabId']);
+    
+    await chrome.storage.local.set({ isPaused: true });
+    
+    if (currentTabId) {
+      try {
+        await chrome.tabs.sendMessage(currentTabId, { action: 'pauseCapture' });
+      } catch (e) {
+        console.log('Could not send pause message');
+      }
+    }
+    
+    chrome.runtime.sendMessage({ type: 'PAUSE_CAPTURE' });
+    updatePauseResumeUI(true);
+  });
+
+  resumeBtn.addEventListener('click', async () => {
+    const { currentTabId } = await chrome.storage.local.get(['currentTabId']);
+    
+    await chrome.storage.local.set({ isPaused: false });
+    
+    if (currentTabId) {
+      try {
+        await chrome.tabs.sendMessage(currentTabId, { action: 'resumeCapture' });
+      } catch (e) {
+        console.log('Could not send resume message');
+      }
+    }
+    
+    chrome.runtime.sendMessage({ type: 'RESUME_CAPTURE' });
+    updatePauseResumeUI(false);
+  });
+
   borderColorInput.addEventListener('input', async (e) => {
     const color = e.target.value;
     updateActivePreset(color);
@@ -218,8 +271,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   saveSettingsBtn.addEventListener('click', async () => {
-    const url = apiUrlInput.value.trim();
+    let url = apiUrlInput.value.trim();
     if (url) {
+      // Enforce HTTPS for security
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.protocol === 'http:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+          parsedUrl.protocol = 'https:';
+          url = parsedUrl.toString().replace(/\/$/, '');
+        }
+      } catch (e) {
+        // Invalid URL, don't save
+        alert('Please enter a valid URL');
+        return;
+      }
       await chrome.storage.local.set({ apiBaseUrl: url });
     }
     settingsModal.classList.add('hidden');

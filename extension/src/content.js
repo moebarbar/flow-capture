@@ -195,6 +195,8 @@ if (window.__flowcaptureInitialized) {
 
   let listenersAttached = false;
 
+  let lastUrl = window.location.href;
+
   function setupEventListeners() {
     if (listenersAttached) return;
     listenersAttached = true;
@@ -203,6 +205,12 @@ if (window.__flowcaptureInitialized) {
     document.addEventListener('input', handleInput, true);
     document.addEventListener('change', handleChange, true);
     document.addEventListener('submit', handleSubmit, true);
+    window.addEventListener('popstate', handleNavigation, true);
+    window.addEventListener('hashchange', handleNavigation, true);
+    
+    // Monitor URL changes for SPAs (pushState/replaceState)
+    startUrlMonitoring();
+    
     console.log('FlowCapture: Event listeners attached');
   }
 
@@ -214,7 +222,88 @@ if (window.__flowcaptureInitialized) {
     document.removeEventListener('input', handleInput, true);
     document.removeEventListener('change', handleChange, true);
     document.removeEventListener('submit', handleSubmit, true);
+    window.removeEventListener('popstate', handleNavigation, true);
+    window.removeEventListener('hashchange', handleNavigation, true);
+    
+    stopUrlMonitoring();
+    
     console.log('FlowCapture: Event listeners removed');
+  }
+
+  let urlMonitorInterval = null;
+
+  function startUrlMonitoring() {
+    if (urlMonitorInterval) return;
+    lastUrl = window.location.href;
+    
+    urlMonitorInterval = setInterval(() => {
+      const currentUrl = window.location.href;
+      if (currentUrl !== lastUrl) {
+        handleUrlChange(lastUrl, currentUrl);
+        lastUrl = currentUrl;
+      }
+    }, 500);
+  }
+
+  function stopUrlMonitoring() {
+    if (urlMonitorInterval) {
+      clearInterval(urlMonitorInterval);
+      urlMonitorInterval = null;
+    }
+  }
+
+  function handleUrlChange(fromUrl, toUrl) {
+    if (!isCapturing || isPaused) return;
+    
+    // Skip non-http URLs
+    try {
+      const parsedUrl = new URL(toUrl);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) return;
+      
+      const step = {
+        type: 'navigation',
+        description: `Navigate to ${parsedUrl.pathname}`,
+        pageUrl: toUrl,
+        pageTitle: document.title,
+        metadata: {
+          fromUrl,
+          toUrl,
+          navigationType: 'spa'
+        }
+      };
+      
+      captureStep(step);
+    } catch (e) {
+      console.log('FlowCapture: Skipping invalid URL', toUrl);
+    }
+  }
+
+  function handleNavigation(event) {
+    if (!isCapturing || isPaused) return;
+    
+    const currentUrl = window.location.href;
+    if (currentUrl === lastUrl) return;
+    
+    // Skip non-http URLs
+    try {
+      const parsedUrl = new URL(currentUrl);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) return;
+      
+      const step = {
+        type: 'navigation',
+        description: `Navigate ${event.type === 'popstate' ? 'back/forward' : ''} to ${parsedUrl.pathname}`,
+        pageUrl: currentUrl,
+        pageTitle: document.title,
+        metadata: {
+          navigationType: event.type
+        }
+      };
+      
+      lastUrl = currentUrl;
+      captureStep(step);
+    } catch (e) {
+      console.log('FlowCapture: Skipping invalid navigation URL');
+    }
   }
 
   function startElementCaptureMode() {

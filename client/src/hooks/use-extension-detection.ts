@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 
+type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'pending';
+
 export function useExtensionDetection() {
   const [isExtensionInstalled, setIsExtensionInstalled] = useState<boolean | null>(null);
   const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
   const checkDomMarker = useCallback(() => {
     const marker = document.documentElement.dataset.flowcaptureExtension;
@@ -14,8 +18,56 @@ export function useExtensionDetection() {
     return false;
   }, []);
 
+  const checkPermissions = useCallback(() => {
+    if (isExtensionInstalled !== true) return;
+    
+    const handlePermissionStatus = (event: MessageEvent) => {
+      if (event.data?.type === 'FLOWCAPTURE_PERMISSIONS_STATUS') {
+        setPermissionStatus(event.data.hasPermission ? 'granted' : 'denied');
+        window.removeEventListener('message', handlePermissionStatus);
+      }
+    };
+    
+    window.addEventListener('message', handlePermissionStatus);
+    window.postMessage({ type: 'FLOWCAPTURE_CHECK_PERMISSIONS' }, '*');
+    
+    setTimeout(() => {
+      window.removeEventListener('message', handlePermissionStatus);
+    }, 3000);
+  }, [isExtensionInstalled]);
+
+  const requestPermissions = useCallback((): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (isExtensionInstalled !== true) {
+        resolve(false);
+        return;
+      }
+
+      setIsRequestingPermission(true);
+      setPermissionStatus('pending');
+      
+      const handlePermissionResult = (event: MessageEvent) => {
+        if (event.data?.type === 'FLOWCAPTURE_PERMISSIONS_RESULT') {
+          const granted = event.data.granted;
+          setPermissionStatus(granted ? 'granted' : 'denied');
+          setIsRequestingPermission(false);
+          window.removeEventListener('message', handlePermissionResult);
+          resolve(granted);
+        }
+      };
+      
+      window.addEventListener('message', handlePermissionResult);
+      window.postMessage({ type: 'FLOWCAPTURE_REQUEST_PERMISSIONS' }, '*');
+      
+      setTimeout(() => {
+        window.removeEventListener('message', handlePermissionResult);
+        setIsRequestingPermission(false);
+        resolve(false);
+      }, 30000);
+    });
+  }, [isExtensionInstalled]);
+
   useEffect(() => {
-    // First check DOM marker (most reliable, set synchronously by extension)
     if (checkDomMarker()) {
       return;
     }
@@ -37,13 +89,11 @@ export function useExtensionDetection() {
     window.addEventListener('message', handleMessage);
 
     const tryDetect = () => {
-      // Check DOM marker again (extension might have loaded)
       if (checkDomMarker()) {
         window.removeEventListener('message', handleMessage);
         return;
       }
 
-      // Send message-based detection
       window.postMessage({ type: 'FLOWCAPTURE_CHECK_EXTENSION' }, '*');
 
       timeoutId = setTimeout(() => {
@@ -52,7 +102,6 @@ export function useExtensionDetection() {
           if (retryCount < maxRetries) {
             tryDetect();
           } else {
-            // Final check of DOM marker before declaring not installed
             if (!checkDomMarker()) {
               setIsExtensionInstalled(false);
             }
@@ -61,7 +110,6 @@ export function useExtensionDetection() {
       }, 300);
     };
 
-    // Small delay to allow extension content script to initialize
     setTimeout(tryDetect, 100);
 
     return () => {
@@ -70,5 +118,19 @@ export function useExtensionDetection() {
     };
   }, [checkDomMarker]);
 
-  return { isExtensionInstalled, extensionVersion, isLoading: isExtensionInstalled === null };
+  useEffect(() => {
+    if (isExtensionInstalled === true && permissionStatus === 'unknown') {
+      checkPermissions();
+    }
+  }, [isExtensionInstalled, permissionStatus, checkPermissions]);
+
+  return { 
+    isExtensionInstalled, 
+    extensionVersion, 
+    isLoading: isExtensionInstalled === null,
+    permissionStatus,
+    isRequestingPermission,
+    requestPermissions,
+    checkPermissions
+  };
 }

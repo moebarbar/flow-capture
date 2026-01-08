@@ -2,6 +2,32 @@ let isRecording = false;
 let activeSessionToken = null;
 let activeGuideId = null;
 
+// Check if we have host permissions for all URLs
+async function checkHostPermissions() {
+  try {
+    const hasPermission = await chrome.permissions.contains({
+      origins: ['<all_urls>']
+    });
+    return hasPermission;
+  } catch (e) {
+    console.error('Failed to check permissions:', e);
+    return false;
+  }
+}
+
+// Request host permissions (must be triggered by user gesture)
+async function requestHostPermissions() {
+  try {
+    const granted = await chrome.permissions.request({
+      origins: ['<all_urls>']
+    });
+    return granted;
+  } catch (e) {
+    console.error('Failed to request permissions:', e);
+    return false;
+  }
+}
+
 async function getConfiguredApiUrl() {
   try {
     const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
@@ -238,6 +264,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
   } else if (message.type === 'ELEMENT_CAPTURE_CANCELLED') {
     sendResponse({ success: true });
+  } else if (message.type === 'CHECK_PERMISSIONS') {
+    checkHostPermissions()
+      .then(hasPermission => sendResponse({ hasPermission }))
+      .catch(err => sendResponse({ hasPermission: false, error: err.message }));
+    return true;
+  } else if (message.type === 'REQUEST_PERMISSIONS') {
+    requestHostPermissions()
+      .then(granted => sendResponse({ granted }))
+      .catch(err => sendResponse({ granted: false, error: err.message }));
+    return true;
   } else if (message.type === 'CAPTURE_PAGE_SCREENSHOT') {
     // Capture screenshot for Screenshot Studio
     capturePageScreenshot(sender.tab)

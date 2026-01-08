@@ -148,6 +148,34 @@ if (window.__flowcaptureInitialized) {
           hasSession: false 
         }, responseOrigin);
       }
+    } else if (event.data?.type === 'FLOWCAPTURE_CHECK_PERMISSIONS') {
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'CHECK_PERMISSIONS' });
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_PERMISSIONS_STATUS', 
+          hasPermission: response?.hasPermission || false
+        }, responseOrigin);
+      } catch (e) {
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_PERMISSIONS_STATUS', 
+          hasPermission: false,
+          error: e.message
+        }, responseOrigin);
+      }
+    } else if (event.data?.type === 'FLOWCAPTURE_REQUEST_PERMISSIONS') {
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'REQUEST_PERMISSIONS' });
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_PERMISSIONS_RESULT', 
+          granted: response?.granted || false
+        }, responseOrigin);
+      } catch (e) {
+        window.postMessage({ 
+          type: 'FLOWCAPTURE_PERMISSIONS_RESULT', 
+          granted: false,
+          error: e.message
+        }, responseOrigin);
+      }
     }
   });
 

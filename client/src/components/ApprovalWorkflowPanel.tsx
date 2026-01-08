@@ -250,7 +250,7 @@ export const ApprovalWorkflowPanel = memo(function ApprovalWorkflowPanel({
         <Alert>
           <Clock className="h-4 w-4" />
           <AlertDescription>
-            This guide is pending approval.
+            This flow is pending approval.
             {reviewerName && <span> Assigned to: {reviewerName}</span>}
           </AlertDescription>
         </Alert>
@@ -334,7 +334,7 @@ export const ApprovalWorkflowPanel = memo(function ApprovalWorkflowPanel({
       <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Review Guide</DialogTitle>
+            <DialogTitle>Review Flow</DialogTitle>
             <DialogDescription>
               Approve, reject, or request revisions for "{guideTitle}".
             </DialogDescription>

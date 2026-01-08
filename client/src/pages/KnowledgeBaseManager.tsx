@@ -220,7 +220,7 @@ export default function KnowledgeBaseManager() {
                   data-testid="button-import-guide"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Import from Guides
+                  Import from Flows
                 </Button>
               </div>
             </div>
@@ -820,7 +820,7 @@ function ImportGuideDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/kb/articles/manage'] });
-      toast({ title: "Guide imported successfully" });
+      toast({ title: "Flow imported successfully" });
       onOpenChange(false);
       setSelectedGuideId("");
       setCategoryId("");
@@ -828,7 +828,7 @@ function ImportGuideDialog({
       setExcerpt("");
     },
     onError: () => {
-      toast({ title: "Failed to import guide", variant: "destructive" });
+      toast({ title: "Failed to import flow", variant: "destructive" });
     }
   });
 
@@ -868,14 +868,14 @@ function ImportGuideDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="guide">Select Guide</Label>
+            <Label htmlFor="guide">Select Flow</Label>
             <Select value={selectedGuideId} onValueChange={handleGuideSelect}>
               <SelectTrigger data-testid="select-import-guide">
-                <SelectValue placeholder="Select a guide to import" />
+                <SelectValue placeholder="Select a flow to import" />
               </SelectTrigger>
               <SelectContent>
                 {publishedGuides.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground">No published guides available</div>
+                  <div className="p-2 text-sm text-muted-foreground">No published flows available</div>
                 ) : (
                   publishedGuides.map((guide) => (
                     <SelectItem key={guide.id} value={guide.id.toString()}>

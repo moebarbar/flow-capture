@@ -194,7 +194,7 @@ export const Sidebar = memo(function Sidebar() {
 
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/guides", label: "My Guides", icon: BookOpen },
+    { href: "/guides", label: "My Flows", icon: BookOpen },
     { href: "/collections", label: "Collections", icon: FolderOpen },
     { href: "/knowledge-base", label: "Knowledge Base", icon: FileText },
     { href: "/studio", label: "Screenshot Studio", icon: Sparkles },

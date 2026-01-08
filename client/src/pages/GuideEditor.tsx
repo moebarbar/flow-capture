@@ -455,7 +455,7 @@ export default function GuideEditor() {
     return <div className="min-h-screen flex items-center justify-center bg-background">Loading editor...</div>;
   }
 
-  if (!guide) return <div>Guide not found</div>;
+  if (!guide) return <div>Flow not found</div>;
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -945,7 +945,7 @@ export default function GuideEditor() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Share2 className="h-5 w-5" />
-              Share Guide
+              Share Flow
             </DialogTitle>
             <DialogDescription>
               Create a shareable link with optional password protection
@@ -958,7 +958,7 @@ export default function GuideEditor() {
               <Label htmlFor="share-enabled" className="flex flex-col gap-1">
                 <span>Enable sharing</span>
                 <span className="font-normal text-muted-foreground text-sm">
-                  Anyone with the link can view this guide
+                  Anyone with the link can view this flow
                 </span>
               </Label>
               <Switch
@@ -1106,10 +1106,10 @@ export default function GuideEditor() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Code className="h-5 w-5" />
-              Embed Guide
+              Embed Flow
             </DialogTitle>
             <DialogDescription>
-              Add this guide to any platform that supports embeds or iframes.
+              Add this flow to any platform that supports embeds or iframes.
             </DialogDescription>
           </DialogHeader>
 
@@ -1128,7 +1128,7 @@ export default function GuideEditor() {
               <div className="flex items-start gap-2 p-3 bg-muted rounded-lg text-sm">
                 <Lock className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div>
-                  <p className="font-medium">Password-protected guides cannot be embedded</p>
+                  <p className="font-medium">Password-protected flows cannot be embedded</p>
                   <p className="text-muted-foreground">Remove the password to enable embedding, or share the link instead.</p>
                 </div>
               </div>
@@ -1174,10 +1174,10 @@ export default function GuideEditor() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Guide Settings
+              Flow Settings
             </DialogTitle>
             <DialogDescription>
-              Configure your guide's thumbnail and display settings.
+              Configure your flow's thumbnail and display settings.
             </DialogDescription>
           </DialogHeader>
           
@@ -1185,14 +1185,14 @@ export default function GuideEditor() {
             <div>
               <label className="text-sm font-semibold mb-3 block">Thumbnail</label>
               <p className="text-xs text-muted-foreground mb-4">
-                Recommended size: 1280 x 720 pixels (16:9 aspect ratio). This image appears in guide lists and when sharing.
+                Recommended size: 1280 x 720 pixels (16:9 aspect ratio). This image appears in flow lists and when sharing.
               </p>
               
               <div className="aspect-video bg-muted rounded-lg overflow-hidden mb-4 relative">
                 {currentThumbnail ? (
                   <img 
                     src={currentThumbnail} 
-                    alt="Guide thumbnail" 
+                    alt="Flow thumbnail" 
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -1362,7 +1362,7 @@ function KbConvertDialog({
     onError: (error: any) => {
       toast({
         title: "Conversion failed",
-        description: error.message || "Failed to publish guide to Knowledge Base.",
+        description: error.message || "Failed to publish flow to Knowledge Base.",
         variant: "destructive",
       });
     },
@@ -1387,7 +1387,7 @@ function KbConvertDialog({
             Publish to Knowledge Base
           </DialogTitle>
           <DialogDescription>
-            Convert this guide into a searchable Knowledge Base article. The article will be created as a draft.
+            Convert this flow into a searchable Knowledge Base article. The article will be created as a draft.
           </DialogDescription>
         </DialogHeader>
 

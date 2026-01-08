@@ -49,7 +49,7 @@ export function TranslationDialog({ guideId, open, onOpenChange }: TranslationDi
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Translation started", description: "Your guide is being translated to the selected languages." });
+      toast({ title: "Translation started", description: "Your flow is being translated to the selected languages." });
       refetchTranslations();
       setSelectedLocales([]);
     },
@@ -87,10 +87,10 @@ export function TranslationDialog({ guideId, open, onOpenChange }: TranslationDi
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Languages className="h-5 w-5 text-brand-600" />
-            Translate Guide
+            Translate Flow
           </DialogTitle>
           <DialogDescription>
-            Select languages to translate your guide. AI will automatically translate titles and descriptions.
+            Select languages to translate your flow. AI will automatically translate titles and descriptions.
           </DialogDescription>
         </DialogHeader>
 

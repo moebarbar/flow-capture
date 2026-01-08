@@ -34,7 +34,7 @@ export default function EmbedGuidePage() {
       const res = await fetch(`/api/embed/${token}`);
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.message || "Failed to load guide");
+        throw new Error(err.message || "Failed to load flow");
       }
       return res.json();
     },
@@ -56,7 +56,7 @@ export default function EmbedGuidePage() {
         <div className="text-center">
           <AlertCircle className="h-10 w-10 mx-auto text-destructive mb-3" />
           <p className="text-sm text-muted-foreground">
-            {(error as Error)?.message || "This guide is not available"}
+            {(error as Error)?.message || "This flow is not available"}
           </p>
         </div>
       </div>

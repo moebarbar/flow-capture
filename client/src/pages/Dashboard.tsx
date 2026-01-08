@@ -34,7 +34,7 @@ function DashboardContent() {
     createGuide(
       { 
         workspaceId,
-        title: "Untitled Guide",
+        title: "Untitled Flow",
         status: "draft",
         createdById: "current-user"
       },
@@ -86,7 +86,7 @@ function DashboardContent() {
                 className="rounded-full px-4 sm:px-6 bg-brand-600 hover:bg-brand-700 shadow-lg shadow-brand-500/20 flex-1 sm:flex-none"
                 data-testid="button-dashboard-new-guide"
               >
-                {isCreating ? "Creating..." : <><Plus className="mr-2 h-4 w-4" /> New Guide</>}
+                {isCreating ? "Creating..." : <><Plus className="mr-2 h-4 w-4" /> New Flow</>}
               </Button>
             </div>
           </div>
@@ -94,7 +94,7 @@ function DashboardContent() {
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12">
             {[
-              { label: "Total Guides", value: guides?.total || 0, icon: BookOpen, color: "text-blue-500 bg-blue-50 dark:bg-blue-950" },
+              { label: "Total Flows", value: guides?.total || 0, icon: BookOpen, color: "text-blue-500 bg-blue-50 dark:bg-blue-950" },
               { label: "Total Views", value: totalViews, icon: TrendingUp, color: "text-green-500 bg-green-50 dark:bg-green-950" },
               { label: "Drafts", value: guides?.data?.filter(g => g.status === 'draft').length || 0, icon: Clock, color: "text-orange-500 bg-orange-50 dark:bg-orange-950" },
             ].map((stat, i) => (
@@ -119,7 +119,7 @@ function DashboardContent() {
 
           {/* Recent Guides Section */}
           <div className="mb-6">
-            <h2 className="text-lg sm:text-xl font-bold font-display mb-4">Recent Guides</h2>
+            <h2 className="text-lg sm:text-xl font-bold font-display mb-4">Recent Flows</h2>
             
             {isLoading ? (
               <div className="space-y-4">
@@ -130,9 +130,9 @@ function DashboardContent() {
             ) : !recentGuides || recentGuides.length === 0 ? (
               <EmptyState 
                 icon={BookOpen}
-                title="No guides yet"
-                description="Create your first guide to start documenting your workflows."
-                actionLabel="Create Guide"
+                title="No flows yet"
+                description="Create your first flow to start documenting your workflows."
+                actionLabel="Create Flow"
                 onAction={handleCreateGuide}
               />
             ) : (

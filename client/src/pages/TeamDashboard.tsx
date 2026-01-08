@@ -68,8 +68,8 @@ const getInitials = (firstName: string | null, lastName: string | null, email: s
 const formatActionType = (actionType: string): string => {
   const mapping: Record<string, string> = {
     'step_assigned': 'Step assigned to team member',
-    'approval_requested': 'Guide submitted for approval',
-    'guide_created': 'New guide created',
+    'approval_requested': 'Flow submitted for approval',
+    'guide_created': 'New flow created',
     'step_completed': 'Step marked as complete',
     'comment_added': 'New comment added',
   };
@@ -256,7 +256,7 @@ const ApprovalCard = memo(function ApprovalCard({
       <div className="flex items-center gap-3">
         <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500 shrink-0" />
         <div className="min-w-0">
-          <p className="font-medium text-sm sm:text-base">Guide #{approval.guideId}</p>
+          <p className="font-medium text-sm sm:text-base">Flow #{approval.guideId}</p>
           {approval.requestNotes && (
             <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-xs">
               {approval.requestNotes}
@@ -415,8 +415,8 @@ function TeamDashboardContent() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="viewer">Viewer - Can view guides only</SelectItem>
-                            <SelectItem value="editor">Editor - Can create and edit guides</SelectItem>
+                            <SelectItem value="viewer">Viewer - Can view flows only</SelectItem>
+                            <SelectItem value="editor">Editor - Can create and edit flows</SelectItem>
                             <SelectItem value="admin">Admin - Full workspace access</SelectItem>
                           </SelectContent>
                         </Select>
@@ -447,7 +447,7 @@ function TeamDashboardContent() {
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <StatCard 
-                title="Total Guides" 
+                title="Total Flows" 
                 value={stats?.totalGuides || 0} 
                 subtext={`${stats?.publishedGuides || 0} published`}
                 icon={FileText}
@@ -487,7 +487,7 @@ function TeamDashboardContent() {
                 <CardContent className="space-y-3 sm:space-y-4">
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-xs sm:text-sm font-medium">Guide Completion</span>
+                      <span className="text-xs sm:text-sm font-medium">Flow Completion</span>
                       <span className="text-xs sm:text-sm text-muted-foreground">{completionRate}%</span>
                     </div>
                     <Progress value={completionRate} className="h-2" />
@@ -641,7 +641,7 @@ function TeamDashboardContent() {
               <TabsContent value="approvals">
                 <Card>
                   <CardHeader className="pb-2 sm:pb-4">
-                    <CardTitle className="text-base sm:text-lg">Guides Awaiting Approval</CardTitle>
+                    <CardTitle className="text-base sm:text-lg">Flows Awaiting Approval</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2 sm:space-y-3">

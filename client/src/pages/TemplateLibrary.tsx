@@ -68,15 +68,15 @@ function TemplateLibraryContent() {
     onSuccess: (guide) => {
       queryClient.invalidateQueries({ queryKey: ['/api/guides'] });
       toast({
-        title: "Guide created",
-        description: "Your new guide has been created from the template",
+        title: "Flow created",
+        description: "Your new flow has been created from the template",
       });
       navigate(`/guides/${guide.id}/edit`);
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to create guide from template",
+        description: "Failed to create flow from template",
         variant: "destructive",
       });
     },
@@ -107,7 +107,7 @@ function TemplateLibraryContent() {
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold" data-testid="text-templates-title">Template Library</h1>
               <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-                Start with a pre-built template to create guides faster
+                Start with a pre-built template to create flows faster
               </p>
             </div>
           </div>
@@ -201,11 +201,11 @@ function TemplateLibraryContent() {
                 <LayoutTemplate className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <h3 className="text-lg sm:text-xl font-semibold mb-2">No templates available yet</h3>
                 <p className="text-muted-foreground max-w-md mx-auto mb-6 text-sm sm:text-base">
-                  Templates will appear here once they're created. Start by creating a guide and saving it as a template.
+                  Templates will appear here once they're created. Start by creating a flow and saving it as a template.
                 </p>
                 <Button onClick={() => navigate("/guides")} data-testid="button-go-to-guides">
                   <BookOpen className="h-4 w-4 mr-2" />
-                  Go to My Guides
+                  Go to My Flows
                 </Button>
               </div>
             </Card>

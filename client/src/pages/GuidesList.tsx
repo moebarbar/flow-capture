@@ -38,7 +38,7 @@ function GuidesListContent() {
     createGuide(
       { 
         workspaceId,
-        title: "Untitled Guide",
+        title: "Untitled Flow",
         status: "draft",
         createdById: "current-user"
       },
@@ -73,7 +73,7 @@ function GuidesListContent() {
               <div className="flex items-center gap-3">
                 <MobileMenuTrigger />
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">My Guides</h1>
+                  <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">My Flows</h1>
                   <p className="text-muted-foreground mt-1 text-sm sm:text-base">Manage and organize your workflows.</p>
                 </div>
               </div>
@@ -82,7 +82,7 @@ function GuidesListContent() {
                 disabled={isCreating}
                 className="rounded-full px-4 sm:px-6 bg-brand-600 hover:bg-brand-700 shadow-lg shadow-brand-500/20"
               >
-                <Plus className="mr-2 h-4 w-4" /> New Guide
+                <Plus className="mr-2 h-4 w-4" /> New Flow
               </Button>
             </div>
           </div>
@@ -154,9 +154,9 @@ function GuidesListContent() {
           ) : filteredGuides?.length === 0 ? (
             <EmptyState 
               icon={LayoutGrid}
-              title="No guides found"
-              description={search ? "Try a different search term." : "Create your first guide to get started."}
-              actionLabel={search ? undefined : "Create Guide"}
+              title="No flows found"
+              description={search ? "Try a different search term." : "Create your first flow to get started."}
+              actionLabel={search ? undefined : "Create Flow"}
               onAction={search ? undefined : handleCreateGuide}
             />
           ) : (

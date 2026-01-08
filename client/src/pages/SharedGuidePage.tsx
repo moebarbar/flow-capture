@@ -79,7 +79,7 @@ export default function SharedGuidePage() {
     queryKey: ['/api/share', token],
     queryFn: async () => {
       const res = await fetch(`/api/share/${token}`);
-      if (!res.ok) throw new Error("Guide not found");
+      if (!res.ok) throw new Error("Flow not found");
       return res.json();
     },
     enabled: !!token,
@@ -142,9 +142,9 @@ export default function SharedGuidePage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
-            <CardTitle>Guide Not Found</CardTitle>
+            <CardTitle>Flow Not Found</CardTitle>
             <CardDescription>
-              This guide may have been removed or the link is invalid.
+              This flow may have been removed or the link is invalid.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -166,8 +166,8 @@ export default function SharedGuidePage() {
               <CardTitle>{shareInfo.title}</CardTitle>
               <CardDescription>
                 {shareInfo.requiresPassword 
-                  ? "This guide is password protected. Enter the password to view." 
-                  : "Click below to view this guide."}
+                  ? "This flow is password protected. Enter the password to view." 
+                  : "Click below to view this flow."}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -214,7 +214,7 @@ export default function SharedGuidePage() {
                         Verifying...
                       </>
                     ) : (
-                      "View Guide"
+                      "View Flow"
                     )}
                   </Button>
                 </form>
@@ -231,7 +231,7 @@ export default function SharedGuidePage() {
                       Loading...
                     </>
                   ) : (
-                    "View Guide"
+                    "View Flow"
                   )}
                 </Button>
               )}

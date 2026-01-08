@@ -165,7 +165,7 @@ export default function LandingPage() {
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed">
-              Capture any workflow, get AI-generated guides with screenshots, translations, and analytics.
+              Capture any workflow, get AI-generated flows with screenshots, translations, and analytics.
               The complete documentation platform for modern teams.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 w-full px-4 sm:px-0">
@@ -439,7 +439,7 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-xl font-bold mb-2 font-display">AI Summarization</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Generate executive summaries for stakeholders. Perfect for long guides.
+                  Generate executive summaries for stakeholders. Perfect for long flows.
                 </p>
                 <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground">
                   <div className="font-medium text-foreground mb-1">TL;DR</div>
@@ -517,7 +517,7 @@ export default function LandingPage() {
                   </div>
                   <h4 className="text-lg font-bold mb-2 font-display">Interactive Demos</h4>
                   <p className="text-muted-foreground text-sm">
-                    Clickable walkthrough guides that let users interact with each step. Perfect for onboarding.
+                    Clickable walkthrough flows that let users interact with each step. Perfect for onboarding.
                   </p>
                 </Card>
               </motion.div>
@@ -561,7 +561,7 @@ export default function LandingPage() {
                     <div>
                       <h4 className="text-lg font-bold mb-2 font-display">Template Marketplace</h4>
                       <p className="text-muted-foreground text-sm mb-3">
-                        Pre-built guide templates for common workflows. Get started instantly with proven structures.
+                        Pre-built flow templates for common workflows. Get started instantly with proven structures.
                       </p>
                       <div className="flex gap-2">
                         <Badge variant="secondary" className="text-xs">Onboarding</Badge>
@@ -768,7 +768,7 @@ export default function LandingPage() {
                 </div>
                 <h4 className="text-lg font-bold mb-2 font-display">Password-Protected Sharing</h4>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Share guides securely with password protection and expiring links. Control who sees your content.
+                  Share flows securely with password protection and expiring links. Control who sees your content.
                 </p>
                 <div className="flex items-center gap-2 text-xs">
                   <Lock className="h-4 w-4 text-brand-600" />
@@ -784,7 +784,7 @@ export default function LandingPage() {
                 </div>
                 <h4 className="text-lg font-bold mb-2 font-display">Multi-Workspace Support</h4>
                 <p className="text-muted-foreground text-sm mb-4">
-                  Organize guides by team, project, or client. Role-based access ensures the right people see the right content.
+                  Organize flows by team, project, or client. Role-based access ensures the right people see the right content.
                 </p>
                 <div className="flex gap-2">
                   <Badge variant="secondary" className="text-xs">Owner</Badge>
@@ -814,7 +814,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               Integrate with 10+ services, create custom webhooks, and build powerful automations
-              that trigger actions when things happen in your guides.
+              that trigger actions when things happen in your flows.
             </p>
           </motion.div>
 
@@ -850,7 +850,7 @@ export default function LandingPage() {
                 </div>
                 <h4 className="text-lg font-bold mb-2 font-display">Automations</h4>
                 <p className="text-muted-foreground text-sm">
-                  Trigger actions when guides are created, published, or completed.
+                  Trigger actions when flows are created, published, or completed.
                 </p>
               </Card>
             </motion.div>
@@ -971,7 +971,7 @@ export default function LandingPage() {
             {[
               { num: 1, icon: Download, title: 'Install Extension', desc: 'Add our free Chrome extension in one click. Takes less than 10 seconds to get started.', cta: true, id: 'install' },
               { num: 2, icon: Camera, title: 'Record Your Workflow', desc: 'Click record and use your app normally. We capture every click, form fill, and navigation with screenshots.', id: 'record' },
-              { num: 3, icon: Send, title: 'Share Instantly', desc: 'Click stop and your guide is ready. Share a link, export to PDF, or embed in your docs. No editing required.', id: 'share' },
+              { num: 3, icon: Send, title: 'Share Instantly', desc: 'Click stop and your flow is ready. Share a link, export to PDF, or embed in your docs. No editing required.', id: 'share' },
             ].map((step, i) => (
               <motion.div 
                 key={step.id}
@@ -1054,7 +1054,7 @@ export default function LandingPage() {
                 rating: 5
               },
               {
-                quote: "The auto-translation feature alone saved us $20K in localization costs. Now all our guides are available in 12 languages.",
+                quote: "The auto-translation feature alone saved us $20K in localization costs. Now all our flows are available in 12 languages.",
                 author: "Michael Torres",
                 role: "VP of Operations",
                 company: "GlobalCorp",
@@ -1133,7 +1133,7 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
-                    <span>Unlimited guides</span>
+                    <span>Unlimited flows</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <Check className="h-5 w-5 text-brand-600 mt-0.5 flex-shrink-0" />
@@ -1276,7 +1276,7 @@ export default function LandingPage() {
                 <span className="font-display font-bold text-xl tracking-tight">{siteName}</span>
               </div>
               <p className="text-sm text-muted-foreground max-w-xs mb-4">
-                The AI-powered documentation platform for modern teams. Create, translate, and share guides in seconds.
+                The AI-powered documentation platform for modern teams. Create, translate, and share flows in seconds.
               </p>
               <div className="flex gap-4">
                 <Button size="icon" variant="ghost" asChild>

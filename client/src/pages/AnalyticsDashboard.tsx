@@ -44,13 +44,13 @@ function AnalyticsDashboardContent() {
       value: analytics?.totalViews ?? 0,
       icon: Eye,
       trend: analytics?.viewsTrend ?? 0,
-      description: "All time guide views",
+      description: "All time flow views",
     },
     {
-      title: "Active Guides",
+      title: "Active Flows",
       value: analytics?.totalGuides ?? 0,
       icon: BarChart3,
-      description: "Published guides",
+      description: "Published flows",
     },
     {
       title: "Avg. Completion",
@@ -62,7 +62,7 @@ function AnalyticsDashboardContent() {
       title: "Avg. Time Spent",
       value: `${analytics?.avgTimeSpent ?? 0}s`,
       icon: Clock,
-      description: "Per guide session",
+      description: "Per flow session",
     },
   ];
 
@@ -80,7 +80,7 @@ function AnalyticsDashboardContent() {
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold" data-testid="text-analytics-title">Analytics</h1>
               <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-                Track how your guides are performing
+                Track how your flows are performing
               </p>
             </div>
           </div>
@@ -121,9 +121,9 @@ function AnalyticsDashboardContent() {
               <CardHeader className="pb-2 sm:pb-4">
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                   <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Top Performing Guides
+                  Top Performing Flows
                 </CardTitle>
-                <CardDescription className="text-xs sm:text-sm">Your most viewed guides this month</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">Your most viewed flows this month</CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -151,7 +151,7 @@ function AnalyticsDashboardContent() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-6 sm:py-8">No guide data yet</p>
+                  <p className="text-sm text-muted-foreground text-center py-6 sm:py-8">No flow data yet</p>
                 )}
               </CardContent>
             </Card>

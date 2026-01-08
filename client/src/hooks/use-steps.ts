@@ -17,12 +17,12 @@ export function useSteps(guideId: number) {
 export function useCreateStep() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ guideId, ...data }: { guideId: number } & Omit<CreateStepRequest, "guideId">) => {
+    mutationFn: async ({ guideId, ...data }: { guideId: number } & Omit<CreateStepRequest, "flowId">) => {
       const url = buildUrl(api.steps.create.path, { guideId });
       const res = await fetch(url, {
         method: api.steps.create.method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, guideId }),
+        body: JSON.stringify({ ...data, flowId: guideId }),
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to create step");
@@ -30,7 +30,6 @@ export function useCreateStep() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.steps.list.path, variables.guideId] });
-      // Also invalidate the guide itself to update step count or preview
       queryClient.invalidateQueries({ queryKey: [api.guides.get.path, variables.guideId] });
     },
   });

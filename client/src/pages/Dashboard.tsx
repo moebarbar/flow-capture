@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
 import { useExtensionDetection } from "@/hooks/use-extension-detection";
 import { Sidebar, useSidebarState, MobileMenuTrigger, SidebarProvider } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
+import { InstallExtensionDialog } from "@/components/InstallExtensionDialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, TrendingUp, BookOpen, MoreVertical } from "lucide-react";
 import { SiGooglechrome } from "react-icons/si";
@@ -17,6 +18,7 @@ function DashboardContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const { isExtensionInstalled } = useExtensionDetection();
+  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const ensuredRef = useRef(false);
   const { isCollapsed } = useSidebarState();
   
@@ -33,6 +35,13 @@ function DashboardContent() {
 
   const handleCreateGuide = () => {
     if (!workspaceId) return;
+    
+    // Check if extension is installed before creating flow (only block if explicitly false)
+    if (isExtensionInstalled === false) {
+      setShowExtensionDialog(true);
+      return;
+    }
+    
     createGuide(
       { 
         workspaceId,
@@ -178,6 +187,11 @@ function DashboardContent() {
           </div>
         </div>
       </main>
+      
+      <InstallExtensionDialog 
+        open={showExtensionDialog} 
+        onOpenChange={setShowExtensionDialog} 
+      />
     </div>
   );
 }

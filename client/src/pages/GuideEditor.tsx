@@ -4,12 +4,14 @@ import { useGuide, useUpdateGuide } from "@/hooks/use-guides";
 import { useSteps, useCreateStep, useUpdateStep, useReorderSteps, useDeleteStep } from "@/hooks/use-steps";
 import { useCollections, useMoveFlowToCollection } from "@/hooks/use-collections";
 import { useGenerateDescription } from "@/hooks/use-ai";
+import { useExtensionDetection } from "@/hooks/use-extension-detection";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { InstallExtensionDialog } from "@/components/InstallExtensionDialog";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
 import { ElementZoomAnimation } from "@/components/ElementHighlightOverlay";
@@ -66,9 +68,11 @@ export default function GuideEditor() {
   const [kbConvertDialogOpen, setKbConvertDialogOpen] = useState(false);
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [captureToken, setCaptureToken] = useState<string | null>(null);
+  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { isExtensionInstalled } = useExtensionDetection();
 
   // Capture session status
   const { data: captureStatus, refetch: refetchCaptureStatus } = useQuery({
@@ -550,7 +554,13 @@ export default function GuideEditor() {
             <Button 
               size="sm" 
               className="bg-red-600 hover:bg-red-700"
-              onClick={() => startCaptureMutation.mutate()}
+              onClick={() => {
+                if (isExtensionInstalled === false) {
+                  setShowExtensionDialog(true);
+                  return;
+                }
+                startCaptureMutation.mutate();
+              }}
               disabled={startCaptureMutation.isPending}
               data-testid="button-start-capture"
             >
@@ -1301,6 +1311,12 @@ export default function GuideEditor() {
         }))}
         open={redactionDialogOpen} 
         onOpenChange={setRedactionDialogOpen} 
+      />
+
+      {/* Install Extension Dialog */}
+      <InstallExtensionDialog 
+        open={showExtensionDialog} 
+        onOpenChange={setShowExtensionDialog} 
       />
     </div>
   );

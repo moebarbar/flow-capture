@@ -25,7 +25,7 @@ import {
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
   Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play, X,
-  ClipboardList, GraduationCap
+  ClipboardList, GraduationCap, Library
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -458,6 +458,19 @@ export default function GuideEditor() {
     } catch (error) {
       console.error("Training Guide generation error:", error);
       toast({ title: "Failed to generate Training Guide", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateKBArticle = async () => {
+    if (!guide || !steps) return;
+    toast({ title: "Generating Knowledge Base Article..." });
+    try {
+      const { generateKnowledgeBaseArticle } = await import("@/lib/knowledgeBaseGenerator");
+      await generateKnowledgeBaseArticle(guide as any, steps as any, null);
+      toast({ title: "Knowledge Base Article downloaded successfully" });
+    } catch (error) {
+      console.error("KB Article generation error:", error);
+      toast({ title: "Failed to generate Knowledge Base Article", variant: "destructive" });
     }
   };
 
@@ -1282,7 +1295,7 @@ export default function GuideEditor() {
             <div className="space-y-3 pt-4 border-t">
               <Label className="text-sm font-medium">Export & Embed</Label>
               
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Button 
                   variant="default" 
                   size="sm" 
@@ -1290,7 +1303,7 @@ export default function GuideEditor() {
                   className="justify-start"
                   data-testid="button-generate-sop"
                 >
-                  <ClipboardList className="h-4 w-4 mr-2" />
+                  <ClipboardList className="h-4 w-4 mr-1" />
                   SOP
                 </Button>
                 <Button 
@@ -1300,8 +1313,18 @@ export default function GuideEditor() {
                   className="justify-start"
                   data-testid="button-generate-training"
                 >
-                  <GraduationCap className="h-4 w-4 mr-2" />
+                  <GraduationCap className="h-4 w-4 mr-1" />
                   Training
+                </Button>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  onClick={handleGenerateKBArticle}
+                  className="justify-start"
+                  data-testid="button-generate-kb"
+                >
+                  <Library className="h-4 w-4 mr-1" />
+                  KB
                 </Button>
               </div>
               

@@ -105,10 +105,18 @@ if (window.__flowcaptureInitialized) {
           type: 'SET_CAPTURE_SESSION', 
           session 
         });
-        window.postMessage({ 
-          type: 'FLOWCAPTURE_SESSION_SET', 
-          success: response?.success || false 
-        }, responseOrigin);
+        if (response?.error === 'permissions_required') {
+          window.postMessage({ 
+            type: 'FLOWCAPTURE_SESSION_SET', 
+            success: false,
+            error: 'permissions_required'
+          }, responseOrigin);
+        } else {
+          window.postMessage({ 
+            type: 'FLOWCAPTURE_SESSION_SET', 
+            success: response?.success || false 
+          }, responseOrigin);
+        }
       } catch (e) {
         console.error('FlowCapture: Failed to set capture session:', e);
         window.postMessage({ 

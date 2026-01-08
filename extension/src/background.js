@@ -165,10 +165,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   if (message.type === 'START_RECORDING') {
     isRecording = true;
-    chrome.storage.local.set({ isRecording: true }).then(() => {
-      startRecordingOnAllTabs()
-        .then(() => sendResponse({ success: true }))
-        .catch(err => sendResponse({ error: err.message }));
+    chrome.storage.local.set({ isRecording: true }).then(async () => {
+      const result = await startRecordingOnAllTabs();
+      if (result?.error === 'permissions_required') {
+        sendResponse({ error: 'permissions_required' });
+      } else {
+        sendResponse({ success: true });
+      }
     });
     return true;
   } else if (message.type === 'STOP_RECORDING') {
@@ -240,15 +243,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.storage.local.set({ captureSession: session });
       // Auto-start recording when session is set
       isRecording = true;
-      chrome.storage.local.set({ isRecording: true, steps: [] }).then(() => {
-        startRecordingOnAllTabs();
+      chrome.storage.local.set({ isRecording: true, steps: [] }).then(async () => {
+        const result = await startRecordingOnAllTabs();
+        if (result?.error === 'permissions_required') {
+          // Reset recording state since we can't actually record
+          isRecording = false;
+          await chrome.storage.local.set({ isRecording: false });
+          sendResponse({ success: false, error: 'permissions_required' });
+        } else {
+          sendResponse({ success: true });
+        }
       });
     } else {
       activeSessionToken = null;
       activeGuideId = null;
       chrome.storage.local.set({ captureSession: null });
+      sendResponse({ success: true });
     }
-    sendResponse({ success: true });
+    return true;
   } else if (message.type === 'CLEAR_CAPTURE_SESSION') {
     // Clear capture session (stop recording triggered from web app)
     activeSessionToken = null;
@@ -322,6 +334,13 @@ async function notifyAllTabsWithColor(color) {
 }
 
 async function startRecordingOnAllTabs() {
+  // First check if we have host permissions
+  const hasPermissions = await checkHostPermissions();
+  if (!hasPermissions) {
+    console.log('No host permissions - cannot start recording on all tabs');
+    return { error: 'permissions_required' };
+  }
+
   const tabs = await chrome.tabs.query({});
   
   for (const tab of tabs) {
@@ -332,9 +351,15 @@ async function startRecordingOnAllTabs() {
       await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' });
     } catch (e) {
       try {
+        // Dynamically inject content script (requires host permission)
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['src/content.js']
+        });
+        // Also inject CSS
+        await chrome.scripting.insertCSS({
+          target: { tabId: tab.id },
+          files: ['src/content.css']
         });
         await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' });
       } catch (injectError) {
@@ -342,6 +367,8 @@ async function startRecordingOnAllTabs() {
       }
     }
   }
+  
+  return { success: true };
 }
 
 async function notifyAllTabs(type) {
@@ -541,6 +568,13 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && isRecording && tab.url && !tab.url.startsWith('chrome://')) {
+    // Check permissions before injecting
+    const hasPermissions = await checkHostPermissions();
+    if (!hasPermissions) {
+      console.log('No host permissions - cannot inject into new tab');
+      return;
+    }
+    
     try {
       await chrome.tabs.sendMessage(tabId, { type: 'START_RECORDING' });
     } catch (e) {
@@ -548,6 +582,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         await chrome.scripting.executeScript({
           target: { tabId },
           files: ['src/content.js']
+        });
+        await chrome.scripting.insertCSS({
+          target: { tabId },
+          files: ['src/content.css']
         });
         await chrome.tabs.sendMessage(tabId, { type: 'START_RECORDING' });
       } catch (injectError) {

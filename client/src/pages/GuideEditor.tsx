@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { InstallExtensionDialog } from "@/components/InstallExtensionDialog";
+import { PermissionDeniedDialog } from "@/components/PermissionDeniedDialog";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
 import { ElementZoomAnimation } from "@/components/ElementHighlightOverlay";
@@ -69,10 +70,11 @@ export default function GuideEditor() {
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [captureToken, setCaptureToken] = useState<string | null>(null);
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { isExtensionInstalled } = useExtensionDetection();
+  const { isExtensionInstalled, permissionStatus, requestPermissions } = useExtensionDetection();
 
   // Capture session status
   const { data: captureStatus, refetch: refetchCaptureStatus } = useQuery({
@@ -203,6 +205,9 @@ export default function GuideEditor() {
       if (event.data?.type === 'FLOWCAPTURE_SESSION_SET') {
         if (event.data.success) {
           console.log('Extension accepted capture session');
+        } else if (event.data.error === 'permissions_required') {
+          console.log('Extension needs permissions to capture');
+          setShowPermissionDialog(true);
         } else {
           console.error('Extension rejected capture session:', event.data.error);
           toast({ 
@@ -554,10 +559,23 @@ export default function GuideEditor() {
             <Button 
               size="sm" 
               className="bg-red-600 hover:bg-red-700"
-              onClick={() => {
+              onClick={async () => {
                 if (isExtensionInstalled === false) {
                   setShowExtensionDialog(true);
                   return;
+                }
+                // Check permissions before starting capture
+                if (permissionStatus === 'denied') {
+                  setShowPermissionDialog(true);
+                  return;
+                }
+                // If permissions unknown, request them first
+                if (permissionStatus !== 'granted') {
+                  const granted = await requestPermissions();
+                  if (!granted) {
+                    setShowPermissionDialog(true);
+                    return;
+                  }
                 }
                 startCaptureMutation.mutate();
               }}
@@ -1317,6 +1335,12 @@ export default function GuideEditor() {
       <InstallExtensionDialog 
         open={showExtensionDialog} 
         onOpenChange={setShowExtensionDialog} 
+      />
+
+      {/* Permission Denied Dialog */}
+      <PermissionDeniedDialog 
+        open={showPermissionDialog} 
+        onOpenChange={setShowPermissionDialog} 
       />
     </div>
   );

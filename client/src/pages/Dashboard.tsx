@@ -5,6 +5,7 @@ import { useExtensionDetection } from "@/hooks/use-extension-detection";
 import { Sidebar, useSidebarState, MobileMenuTrigger, SidebarProvider } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { InstallExtensionDialog } from "@/components/InstallExtensionDialog";
+import { PermissionDeniedDialog } from "@/components/PermissionDeniedDialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, TrendingUp, BookOpen, MoreVertical } from "lucide-react";
 import { SiGooglechrome } from "react-icons/si";
@@ -17,8 +18,9 @@ import { cn } from "@/lib/utils";
 function DashboardContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
-  const { isExtensionInstalled } = useExtensionDetection();
+  const { isExtensionInstalled, permissionStatus, requestPermissions } = useExtensionDetection();
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const ensuredRef = useRef(false);
   const { isCollapsed } = useSidebarState();
   
@@ -33,13 +35,28 @@ function DashboardContent() {
   const { data: guides, isLoading } = useGuides({ workspaceId });
   const { mutate: createGuide, isPending: isCreating } = useCreateGuide();
 
-  const handleCreateGuide = () => {
+  const handleCreateGuide = async () => {
     if (!workspaceId) return;
     
     // Check if extension is installed before creating flow (only block if explicitly false)
     if (isExtensionInstalled === false) {
       setShowExtensionDialog(true);
       return;
+    }
+    
+    // Check if permissions are denied
+    if (permissionStatus === 'denied') {
+      setShowPermissionDialog(true);
+      return;
+    }
+    
+    // If permissions unknown, request them first
+    if (permissionStatus !== 'granted') {
+      const granted = await requestPermissions();
+      if (!granted) {
+        setShowPermissionDialog(true);
+        return;
+      }
     }
     
     createGuide(
@@ -191,6 +208,11 @@ function DashboardContent() {
       <InstallExtensionDialog 
         open={showExtensionDialog} 
         onOpenChange={setShowExtensionDialog} 
+      />
+      
+      <PermissionDeniedDialog 
+        open={showPermissionDialog} 
+        onOpenChange={setShowPermissionDialog} 
       />
     </div>
   );

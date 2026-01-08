@@ -32,7 +32,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://*.replit.app/*",
+        "https://*.replit.dev/*",
+        "https://*.repl.co/*",
+        "http://localhost:5000/*",
+        "http://127.0.0.1:5000/*"
+      ],
       "js": ["src/content.js"],
       "css": ["src/content.css"],
       "run_at": "document_end"
@@ -45,7 +51,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/highlight.css"],
+      "resources": ["src/highlight.css", "src/content.js", "src/content.css"],
       "matches": ["<all_urls>"]
     }
   ]

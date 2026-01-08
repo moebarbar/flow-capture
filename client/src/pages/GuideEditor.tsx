@@ -24,7 +24,8 @@ import {
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
-  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play, X
+  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play, X,
+  ClipboardList
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -431,6 +432,19 @@ export default function GuideEditor() {
     } catch (error) {
       console.error("PDF export error:", error);
       toast({ title: "Failed to generate PDF", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateSOP = async () => {
+    if (!guide || !steps) return;
+    toast({ title: "Generating SOP document..." });
+    try {
+      const { generateSOP } = await import("@/lib/sopGenerator");
+      await generateSOP(guide, steps, null);
+      toast({ title: "SOP downloaded successfully" });
+    } catch (error) {
+      console.error("SOP generation error:", error);
+      toast({ title: "Failed to generate SOP", variant: "destructive" });
     }
   };
 
@@ -1254,6 +1268,17 @@ export default function GuideEditor() {
             {/* Export & Embed Section */}
             <div className="space-y-3 pt-4 border-t">
               <Label className="text-sm font-medium">Export & Embed</Label>
+              
+              <Button 
+                variant="default" 
+                size="sm" 
+                onClick={handleGenerateSOP}
+                className="w-full justify-start"
+                data-testid="button-generate-sop"
+              >
+                <ClipboardList className="h-4 w-4 mr-2" />
+                Generate SOP
+              </Button>
               
               <div className="grid grid-cols-2 gap-2">
                 <Button 

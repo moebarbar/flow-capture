@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { InstallExtensionDialog } from "@/components/InstallExtensionDialog";
 import { PermissionDeniedDialog } from "@/components/PermissionDeniedDialog";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
@@ -23,7 +24,7 @@ import {
   Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
-  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play
+  Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play, X
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -205,6 +206,36 @@ export default function GuideEditor() {
     },
     onError: () => {
       toast({ title: "Failed to stop capture", variant: "destructive" });
+    },
+  });
+
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const cancelCaptureMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/guides/${guideId}/capture/cancel`, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setCaptureToken(null);
+      setIsPaused(false);
+      setShowCancelConfirm(false);
+      
+      // Clear session from extension
+      clearSessionFromExtension();
+      localStorage.removeItem('flowcapture_session');
+      
+      refetchCaptureStatus();
+      queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+      toast({ 
+        title: "Capture Cancelled", 
+        description: data.stepsDeleted > 0 
+          ? `Deleted ${data.stepsDeleted} captured steps` 
+          : "No steps were captured"
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to cancel capture", variant: "destructive" });
     },
   });
 
@@ -678,6 +709,15 @@ export default function GuideEditor() {
                   <Square className="h-4 w-4 sm:mr-2" />
                 )}
                 <span className="hidden sm:inline">Stop</span>
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => setShowCancelConfirm(true)}
+                data-testid="button-cancel-capture"
+              >
+                <X className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Cancel</span>
               </Button>
             </>
           ) : (
@@ -1467,6 +1507,33 @@ export default function GuideEditor() {
         open={showPermissionDialog} 
         onOpenChange={setShowPermissionDialog} 
       />
+
+      {/* Cancel Capture Confirmation Dialog */}
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Capture?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will stop capturing and delete all steps captured during this session. 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-confirm-no">Keep Capturing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelCaptureMutation.mutate()}
+              disabled={cancelCaptureMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-cancel-confirm-yes"
+            >
+              {cancelCaptureMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
+              Cancel Capture
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

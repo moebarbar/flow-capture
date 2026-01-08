@@ -1602,6 +1602,26 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       const guideId = Number(req.params.id);
       const userId = (req.user as any).claims.sub;
       
+      // Verify user has access to the guide
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const member = members.find(m => m.userId === userId);
+      const isOwner = workspace.ownerId === userId;
+      const canEdit = isOwner || (member && ["admin", "editor", "owner"].includes(member.role));
+      
+      if (!canEdit) {
+        return res.status(403).json({ message: "You don't have permission to stop capture for this guide" });
+      }
+      
       const { captureService } = await import("./services/captureService");
       const session = await captureService.stopSession(guideId, userId);
       
@@ -1617,6 +1637,51 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
     } catch (error) {
       console.error("Stop capture error:", error);
       res.status(500).json({ message: "Failed to stop capture session" });
+    }
+  });
+
+  // Cancel a capture session and delete captured steps
+  app.post("/api/guides/:id/capture/cancel", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    
+    try {
+      const guideId = Number(req.params.id);
+      const userId = (req.user as any).claims.sub;
+      
+      // Verify user has access to the guide
+      const guide = await storage.getGuide(guideId);
+      if (!guide) {
+        return res.status(404).json({ message: "Guide not found" });
+      }
+      
+      const workspace = await storage.getWorkspace(guide.workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      
+      const members = await storage.getWorkspaceMembers(guide.workspaceId);
+      const member = members.find(m => m.userId === userId);
+      const isOwner = workspace.ownerId === userId;
+      const canEdit = isOwner || (member && ["admin", "editor", "owner"].includes(member.role));
+      
+      if (!canEdit) {
+        return res.status(403).json({ message: "You don't have permission to cancel capture for this guide" });
+      }
+      
+      const { captureService } = await import("./services/captureService");
+      const result = await captureService.cancelSession(guideId, userId);
+      
+      if (!result) {
+        return res.status(404).json({ message: "No active capture session found" });
+      }
+      
+      res.json({
+        cancelled: true,
+        stepsDeleted: result.deletedSteps,
+      });
+    } catch (error) {
+      console.error("Cancel capture error:", error);
+      res.status(500).json({ message: "Failed to cancel capture session" });
     }
   });
 

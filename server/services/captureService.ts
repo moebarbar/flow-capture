@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { captureSessions, steps, guides } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import crypto from "crypto";
 import { objectStorageClient } from "../replit_integrations/object_storage/objectStorage";
 
@@ -94,6 +94,71 @@ export const captureService = {
       .returning();
 
     return session || null;
+  },
+
+  async cancelSession(guideId: number, userId: string): Promise<{ deletedSteps: number } | null> {
+    // Find the active session
+    const [session] = await db.select()
+      .from(captureSessions)
+      .where(and(
+        eq(captureSessions.flowId, guideId),
+        eq(captureSessions.userId, userId),
+        eq(captureSessions.status, "active")
+      ));
+
+    if (!session) return null;
+
+    // Delete all steps created after the session started for this guide
+    const stepsToDelete = await db.select()
+      .from(steps)
+      .where(and(
+        eq(steps.flowId, guideId),
+        gte(steps.createdAt, session.startedAt)
+      ));
+
+    // Delete screenshots from object storage
+    const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+    if (bucketId) {
+      for (const step of stepsToDelete) {
+        if (step.imageUrl && step.imageUrl.startsWith('/objects/')) {
+          try {
+            const objectPath = step.imageUrl.replace('/objects/', '');
+            const bucket = objectStorageClient.bucket(bucketId);
+            await bucket.file(objectPath).delete().catch(() => {});
+          } catch (e) {
+            console.warn('Failed to delete screenshot:', step.imageUrl);
+          }
+        }
+      }
+    }
+
+    // Delete the steps
+    await db.delete(steps)
+      .where(and(
+        eq(steps.flowId, guideId),
+        gte(steps.createdAt, session.startedAt)
+      ));
+
+    // Mark session as cancelled
+    await db.update(captureSessions)
+      .set({ status: "stopped", stoppedAt: new Date() })
+      .where(eq(captureSessions.id, session.id));
+
+    // Reorder remaining steps to ensure sequential order
+    const remainingSteps = await db.select()
+      .from(steps)
+      .where(eq(steps.flowId, guideId))
+      .orderBy(steps.order);
+    
+    for (let i = 0; i < remainingSteps.length; i++) {
+      if (remainingSteps[i].order !== i) {
+        await db.update(steps)
+          .set({ order: i })
+          .where(eq(steps.id, remainingSteps[i].id));
+      }
+    }
+
+    return { deletedSteps: stepsToDelete.length };
   },
 
   async getActiveSession(guideId: number): Promise<typeof captureSessions.$inferSelect | null> {

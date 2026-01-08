@@ -8,11 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Settings, CreditCard, User, ExternalLink } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const { isCollapsed } = useSidebarState();
@@ -166,5 +166,13 @@ export default function SettingsPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <SidebarProvider>
+      <SettingsPageContent />
+    </SidebarProvider>
   );
 }

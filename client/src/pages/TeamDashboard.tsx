@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -271,7 +271,7 @@ const ApprovalCard = memo(function ApprovalCard({
   );
 });
 
-export default function TeamDashboard() {
+function TeamDashboardContent() {
   const params = useParams();
   const workspaceId = useMemo(() => parseInt(params.workspaceId || "0"), [params.workspaceId]);
   const { isCollapsed } = useSidebarState();
@@ -663,5 +663,13 @@ export default function TeamDashboard() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function TeamDashboard() {
+  return (
+    <SidebarProvider>
+      <TeamDashboardContent />
+    </SidebarProvider>
   );
 }

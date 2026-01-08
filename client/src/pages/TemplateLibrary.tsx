@@ -1,4 +1,4 @@
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,7 @@ const categoryColors: Record<string, string> = {
   custom: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
 };
 
-export default function TemplateLibrary() {
+function TemplateLibraryContent() {
   const { data: workspaces } = useWorkspaces();
   const activeWorkspace = workspaces?.[0];
   const [, navigate] = useLocation();
@@ -213,5 +213,13 @@ export default function TemplateLibrary() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function TemplateLibrary() {
+  return (
+    <SidebarProvider>
+      <TemplateLibraryContent />
+    </SidebarProvider>
   );
 }

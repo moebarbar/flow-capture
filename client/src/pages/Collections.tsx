@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useCollections, useCreateCollection, useDeleteCollection } from "@/hooks/use-collections";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -51,7 +51,7 @@ const COLLECTION_ICONS = [
   { name: "Settings", value: "settings" },
 ];
 
-export default function Collections() {
+function CollectionsContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
@@ -364,5 +364,13 @@ export default function Collections() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function Collections() {
+  return (
+    <SidebarProvider>
+      <CollectionsContent />
+    </SidebarProvider>
   );
 }

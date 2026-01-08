@@ -4,12 +4,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, Image as ImageIcon, Sparkles, Chrome, Camera } from "lucide-react";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-export default function ScreenshotStudio() {
+function ScreenshotStudioContent() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isWaitingForCapture, setIsWaitingForCapture] = useState(false);
@@ -254,5 +254,13 @@ export default function ScreenshotStudio() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function ScreenshotStudio() {
+  return (
+    <SidebarProvider>
+      <ScreenshotStudioContent />
+    </SidebarProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaces } from "@/hooks/use-workspaces";
@@ -27,7 +27,7 @@ interface AnalyticsData {
   }>;
 }
 
-export default function AnalyticsDashboard() {
+function AnalyticsDashboardContent() {
   const { data: workspaces } = useWorkspaces();
   const activeWorkspace = workspaces?.[0];
   const { isCollapsed } = useSidebarState();
@@ -195,5 +195,13 @@ export default function AnalyticsDashboard() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function AnalyticsDashboard() {
+  return (
+    <SidebarProvider>
+      <AnalyticsDashboardContent />
+    </SidebarProvider>
   );
 }

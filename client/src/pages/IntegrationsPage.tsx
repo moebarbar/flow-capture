@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { useWorkspaces } from "@/hooks/use-workspaces";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,7 +55,7 @@ const AUTOMATION_ACTIONS = [
   { id: "notify_user", label: "Send Notification", icon: MessageSquare },
 ];
 
-export default function IntegrationsPage() {
+function IntegrationsPageContent() {
   const { data: workspaces } = useWorkspaces();
   const workspaceId = workspaces?.[0]?.id;
   const { isCollapsed } = useSidebarState();
@@ -1018,5 +1018,13 @@ function IntegrationConfigDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export default function IntegrationsPage() {
+  return (
+    <SidebarProvider>
+      <IntegrationsPageContent />
+    </SidebarProvider>
   );
 }

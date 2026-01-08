@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
 import { useCollections } from "@/hooks/use-collections";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
-export default function GuidesList() {
+function GuidesListContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
@@ -215,5 +215,13 @@ export default function GuidesList() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function GuidesList() {
+  return (
+    <SidebarProvider>
+      <GuidesListContent />
+    </SidebarProvider>
   );
 }

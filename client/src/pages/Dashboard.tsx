@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, useSidebarState, MobileMenuTrigger, SidebarProvider } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, TrendingUp, BookOpen, MoreVertical } from "lucide-react";
@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-export default function Dashboard() {
+function DashboardContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
@@ -175,5 +175,13 @@ export default function Dashboard() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <SidebarProvider>
+      <DashboardContent />
+    </SidebarProvider>
   );
 }

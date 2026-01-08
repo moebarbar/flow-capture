@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Sidebar, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
+import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +38,7 @@ const WEBHOOK_EVENTS = [
   { id: 'comment_added', label: 'Comment Added', description: 'When a comment is added' },
 ];
 
-export default function WebhooksSettings() {
+function WebhooksSettingsContent() {
   const { data: workspaces } = useWorkspaces();
   const activeWorkspace = workspaces?.[0];
   const { isCollapsed } = useSidebarState();
@@ -329,5 +329,13 @@ export default function WebhooksSettings() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function WebhooksSettings() {
+  return (
+    <SidebarProvider>
+      <WebhooksSettingsContent />
+    </SidebarProvider>
   );
 }

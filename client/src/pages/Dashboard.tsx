@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
+import { useExtensionDetection } from "@/hooks/use-extension-detection";
 import { Sidebar, useSidebarState, MobileMenuTrigger, SidebarProvider } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 function DashboardContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
+  const { isExtensionInstalled } = useExtensionDetection();
   const ensuredRef = useRef(false);
   const { isCollapsed } = useSidebarState();
   
@@ -69,17 +71,19 @@ function DashboardContent() {
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto">
               <NotificationBell />
-              <Button 
-                variant="outline"
-                className="rounded-full px-3 sm:px-5 text-xs sm:text-sm hidden md:inline-flex"
-                asChild
-              >
-                <a href="https://chrome.google.com/webstore" target="_blank" rel="noopener noreferrer" data-testid="button-dashboard-get-extension">
-                  <SiGooglechrome className="mr-2 h-4 w-4" />
-                  <span className="hidden lg:inline">Get the Extension, it's free</span>
-                  <span className="lg:hidden">Extension</span>
-                </a>
-              </Button>
+              {isExtensionInstalled === false && (
+                <Button 
+                  variant="outline"
+                  className="rounded-full px-3 sm:px-5 text-xs sm:text-sm hidden md:inline-flex"
+                  asChild
+                >
+                  <a href="https://chrome.google.com/webstore" target="_blank" rel="noopener noreferrer" data-testid="button-dashboard-get-extension">
+                    <SiGooglechrome className="mr-2 h-4 w-4" />
+                    <span className="hidden lg:inline">Get the Extension, it's free</span>
+                    <span className="lg:hidden">Extension</span>
+                  </a>
+                </Button>
+              )}
               <Button 
                 onClick={handleCreateGuide} 
                 disabled={isCreating}

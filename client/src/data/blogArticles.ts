@@ -21,10 +21,10 @@ export const blogArticles: BlogArticle[] = [
   {
     id: "1",
     slug: "complete-guide-to-sop-documentation",
-    title: "The Complete Guide to SOP Documentation in 2024",
+    title: "The Complete Guide to SOP Documentation in 2026",
     excerpt: "Learn how to create standard operating procedures that your team will actually follow. Discover best practices for documentation that reduces training time and improves consistency.",
     content: `
-# The Complete Guide to SOP Documentation in 2024
+# The Complete Guide to SOP Documentation in 2026
 
 Standard Operating Procedures (SOPs) are the backbone of any efficient organization. Yet, most companies struggle with creating documentation that people actually read and follow.
 
@@ -73,7 +73,7 @@ Start creating SOPs that work. Try FlowCapture free today.
       name: "Sarah Chen",
       role: "Head of Customer Success"
     },
-    publishedAt: "2024-01-15",
+    publishedAt: "2025-12-15",
     readTime: "8 min read",
     imageUrl: "/blog-images/sop-documentation.png",
     featured: true,
@@ -142,7 +142,7 @@ Your new employees deserve better than watching someone share their screen for h
       name: "Marcus Williams",
       role: "Product Manager"
     },
-    publishedAt: "2024-01-22",
+    publishedAt: "2025-12-22",
     readTime: "6 min read",
     imageUrl: "",
     featured: true,
@@ -220,7 +220,7 @@ The future of knowledge management is visual, AI-assisted, and always up-to-date
       name: "Dr. Emily Rodriguez",
       role: "AI Research Lead"
     },
-    publishedAt: "2024-02-05",
+    publishedAt: "2025-12-28",
     readTime: "7 min read",
     imageUrl: "",
     featured: true,
@@ -303,7 +303,7 @@ Your support team will thank you. Your customers will thank you. Your CFO will d
       name: "James Park",
       role: "VP of Customer Experience"
     },
-    publishedAt: "2024-02-12",
+    publishedAt: "2026-01-02",
     readTime: "9 min read",
     imageUrl: "",
     featured: false,
@@ -389,7 +389,7 @@ Your product is powerful. Make sure users discover that power.
       name: "Rachel Kim",
       role: "Director of Product Marketing"
     },
-    publishedAt: "2024-02-20",
+    publishedAt: "2026-01-05",
     readTime: "8 min read",
     imageUrl: "",
     featured: false,
@@ -481,7 +481,7 @@ Remote work works when knowledge flows freely. Documentation is the pipeline.
       name: "Alex Thompson",
       role: "Head of Remote Operations"
     },
-    publishedAt: "2024-02-28",
+    publishedAt: "2026-01-08",
     readTime: "7 min read",
     imageUrl: "",
     featured: false,

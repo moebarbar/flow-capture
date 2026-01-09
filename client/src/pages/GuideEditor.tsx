@@ -296,7 +296,27 @@ export default function GuideEditor() {
   // Listen for extension messages
   useEffect(() => {
     const handleExtensionMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'FLOWCAPTURE_SESSION_SET') {
+      // Security: Only accept messages from same origin
+      if (event.origin !== window.origin) return;
+      
+      if (event.data?.type === 'FLOWCAPTURE_SESSION_ENDED') {
+        // Capture session ended (from extension stop button or web app stop)
+        console.log('Capture session ended:', event.data);
+        setCaptureToken(null);
+        setIsPaused(false);
+        localStorage.removeItem('flowcapture_session');
+        refetchCaptureStatus();
+        queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+        if (event.data.success) {
+          toast({ 
+            title: "Capture Complete", 
+            description: event.data.stepCount 
+              ? `Captured ${event.data.stepCount} steps` 
+              : "Your captured steps have been saved.",
+            variant: "default" 
+          });
+        }
+      } else if (event.data?.type === 'FLOWCAPTURE_SESSION_SET') {
         if (event.data.success) {
           console.log('Extension accepted capture session');
         } else if (event.data.error === 'permissions_required') {

@@ -5,7 +5,9 @@ const State = {
   guideId: null,
   workspaceId: null,
   apiBaseUrl: '',
-  activeTabId: null
+  activeTabId: null,
+  captureToken: null,
+  expiresAt: null
 };
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -75,6 +77,40 @@ async function handleMessage(message, sender) {
     
     case 'PING':
       return { pong: true };
+    
+    case 'REQUEST_PERMISSIONS':
+      try {
+        const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
+        return { granted };
+      } catch (e) {
+        return { granted: false, error: e.message };
+      }
+    
+    case 'CHECK_PERMISSIONS':
+      try {
+        const hasPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+        return { hasPermission };
+      } catch (e) {
+        return { hasPermission: false };
+      }
+    
+    case 'SET_SESSION':
+      if (message.session) {
+        State.captureToken = message.session.token;
+        State.guideId = message.session.guideId;
+        State.expiresAt = message.session.expiresAt;
+        State.apiBaseUrl = message.session.apiBaseUrl || State.apiBaseUrl;
+        console.log('[FlowCapture] Session set:', { guideId: State.guideId });
+        return { success: true };
+      }
+      return { success: false, error: 'No session provided' };
+    
+    case 'CLEAR_SESSION':
+      State.captureToken = null;
+      State.guideId = null;
+      State.expiresAt = null;
+      console.log('[FlowCapture] Session cleared');
+      return { success: true };
     
     default:
       return { error: 'Unknown message type' };

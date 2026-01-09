@@ -2,11 +2,151 @@
   if (window.__flowCaptureContentLoaded) return;
   window.__flowCaptureContentLoaded = true;
 
+  document.documentElement.dataset.flowcaptureExtension = chrome.runtime.getManifest().version || 'true';
+
   let isCapturing = false;
   let isPaused = false;
   let lastElement = null;
   let lastCaptureTime = 0;
   const DEBOUNCE_MS = 300;
+
+  // Trusted origin patterns for FlowCapture web app
+  // NOTE: For production deployment, update this list to include your production domain
+  // or use externally_connectable in manifest.json for more secure validation
+  const TRUSTED_ORIGIN_SUFFIXES = [
+    '.repl.co',
+    '.replit.dev',
+    '.replit.app',
+    '.flowcapture.com',  // Production domain (update as needed)
+    '.flowcapture.app'   // Alternative production domain
+  ];
+  const TRUSTED_EXACT_ORIGINS = [
+    'http://localhost:5000',
+    'http://0.0.0.0:5000',
+    'https://repl.co',
+    'https://replit.dev',
+    'https://replit.app',
+    'https://flowcapture.com',
+    'https://flowcapture.app'
+  ];
+  
+  function isOriginTrusted(origin) {
+    if (!origin || typeof origin !== 'string') return false;
+    
+    // Check exact matches first
+    if (TRUSTED_EXACT_ORIGINS.includes(origin)) return true;
+    
+    // Check suffix matches for subdomains
+    try {
+      const url = new URL(origin);
+      // Only trust https for production domains
+      if (url.protocol === 'https:') {
+        return TRUSTED_ORIGIN_SUFFIXES.some(suffix => url.hostname.endsWith(suffix));
+      }
+      // Also trust http for local development
+      if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '0.0.0.0')) {
+        return true;
+      }
+    } catch {
+      return false;
+    }
+    
+    return false;
+  }
+
+  function setupWebAppListener() {
+    window.addEventListener('message', (event) => {
+      // Security: Only accept messages from same window and trusted origins
+      if (event.source !== window) return;
+      if (!isOriginTrusted(event.origin)) {
+        console.warn('[FlowCapture] Rejected message from untrusted origin:', event.origin);
+        return;
+      }
+      
+      switch (event.data?.type) {
+        case 'FLOWCAPTURE_CHECK_EXTENSION':
+          window.postMessage({
+            type: 'FLOWCAPTURE_EXTENSION_PRESENT',
+            version: chrome.runtime.getManifest().version
+          }, event.origin);
+          break;
+          
+        case 'FLOWCAPTURE_CHECK_PERMISSIONS':
+          chrome.runtime.sendMessage({ type: 'CHECK_PERMISSIONS' }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_PERMISSIONS_STATUS',
+              hasPermission: response?.hasPermission || false
+            }, event.origin);
+          });
+          break;
+          
+        case 'FLOWCAPTURE_REQUEST_PERMISSIONS':
+          chrome.runtime.sendMessage({ type: 'REQUEST_PERMISSIONS' }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_PERMISSIONS_RESULT',
+              granted: response?.granted || false
+            }, event.origin);
+          });
+          break;
+          
+        case 'FLOWCAPTURE_START_CAPTURE':
+          chrome.runtime.sendMessage({
+            type: 'START_CAPTURE',
+            data: event.data.data || {}
+          }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_CAPTURE_STARTED',
+              success: response?.success || false
+            }, event.origin);
+          });
+          break;
+          
+        case 'FLOWCAPTURE_STOP_CAPTURE':
+          chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_SESSION_ENDED',
+              success: response?.success || false,
+              stepCount: response?.stepCount || 0
+            }, event.origin);
+          });
+          break;
+          
+        case 'FLOWCAPTURE_GET_STATUS':
+          chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_STATUS',
+              isCapturing: response?.isCapturing || false,
+              isPaused: response?.isPaused || false,
+              stepCount: response?.stepCount || 0,
+              guideId: response?.guideId || null
+            }, event.origin);
+          });
+          break;
+          
+        case 'FLOWCAPTURE_SET_SESSION':
+          chrome.runtime.sendMessage({ 
+            type: 'SET_SESSION', 
+            session: event.data.session 
+          }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_SESSION_SET',
+              success: response?.success || false,
+              error: response?.error
+            }, event.origin);
+          });
+          break;
+          
+        case 'FLOWCAPTURE_CLEAR_SESSION':
+          chrome.runtime.sendMessage({ type: 'CLEAR_SESSION' }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_SESSION_CLEARED',
+              success: response?.success || false
+            }, event.origin);
+          });
+          break;
+      }
+    });
+  }
 
   function loadScript(src) {
     return new Promise((resolve) => {
@@ -25,6 +165,8 @@
   }
 
   async function init() {
+    setupWebAppListener();
+    
     await loadScript('messaging.js');
     await loadScript('selector.js');
     await loadScript('screenshot.js');
@@ -116,6 +258,12 @@
     if (window.FlowCaptureOverlay) {
       window.FlowCaptureOverlay.stopRecording(false);
     }
+    
+    // Only notify trusted origins (same origin as current page)
+    window.postMessage({
+      type: 'FLOWCAPTURE_SESSION_ENDED',
+      success: true
+    }, window.location.origin);
   }
 
   function handleMouseOver(event) {

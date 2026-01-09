@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FlowCapture",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Capture browser workflows and create step-by-step guides automatically",
   "icons": {
     "16": "icons/icon16.png",
@@ -16,7 +16,7 @@
     }
   },
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "background/service-worker.js",
     "type": "module"
   },
   "permissions": [
@@ -33,14 +33,33 @@
       "*://*.replit.dev/*",
       "*://*.replit.app/*",
       "*://*.repl.co/*",
+      "*://*.flowcapture.com/*",
+      "*://*.flowcapture.app/*",
       "*://localhost:*/*",
       "*://127.0.0.1:*/*"
     ]
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/capture-agent.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
   "web_accessible_resources": [
     {
-      "resources": ["messaging.js", "selector.js", "screenshot.js", "overlay.js", "styles.css"],
+      "resources": [
+        "overlay/overlay.js",
+        "content/screenshot-agent.js",
+        "content/tab-bridge.js",
+        "shared/messages.js",
+        "shared/types.js"
+      ],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  }
 }

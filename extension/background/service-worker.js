@@ -20,7 +20,9 @@ class CaptureStateMachine {
       captureToken: null,
       expiresAt: null,
       panelOpen: true,
-      capturedTabs: new Set()
+      capturedTabs: new Set(),
+      captureStartedAt: null,
+      pausedElapsedMs: 0
     };
     
     this.ports = new Map();
@@ -72,7 +74,9 @@ class CaptureStateMachine {
       activeTabId: this.state.activeTabId,
       capturedTabs: Array.from(this.state.capturedTabs),
       tabContexts: Object.fromEntries(this.tabContexts),
-      authExpired: syncManager.authExpired || false
+      authExpired: syncManager.authExpired || false,
+      captureStartedAt: this.state.captureStartedAt,
+      pausedElapsedMs: this.state.pausedElapsedMs
     };
   }
 
@@ -82,6 +86,8 @@ class CaptureStateMachine {
     this.state.activeTabId = null;
     this.state.capturedTabs.clear();
     this.tabContexts.clear();
+    this.state.captureStartedAt = null;
+    this.state.pausedElapsedMs = 0;
     
     if (!preserveSession) {
       this.state.guideId = null;
@@ -283,6 +289,9 @@ async function handleMessage(message, sender) {
     
     case MessageTypes.PAUSE_CAPTURE:
       if (machine.canTransition(machine.state.status, CaptureStates.PAUSED)) {
+        if (machine.state.captureStartedAt) {
+          machine.state.pausedElapsedMs = Date.now() - machine.state.captureStartedAt;
+        }
         machine.transition(CaptureStates.PAUSED);
         await broadcastToAllTabs(MessageTypes.PAUSE_CAPTURE);
       }
@@ -290,6 +299,8 @@ async function handleMessage(message, sender) {
     
     case MessageTypes.RESUME_CAPTURE:
       if (machine.canTransition(machine.state.status, CaptureStates.CAPTURING)) {
+        machine.state.captureStartedAt = Date.now() - machine.state.pausedElapsedMs;
+        machine.state.pausedElapsedMs = 0;
         machine.transition(CaptureStates.CAPTURING);
         await broadcastToAllTabs(MessageTypes.RESUME_CAPTURE);
       }
@@ -459,6 +470,7 @@ async function startCapture(config = {}) {
   }
 
   machine.reset(true);
+  machine.state.captureStartedAt = Date.now();
   machine.transition(CaptureStates.CAPTURING);
 
   syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);

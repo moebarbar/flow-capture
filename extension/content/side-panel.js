@@ -32,6 +32,9 @@
   let port = null;
   let listenersAttached = false;
   let authExpired = false;
+  let captureStartTime = null;
+  let pausedElapsedTime = 0;
+  let timerInterval = null;
   
   const STORAGE_KEY = 'flowcapture_panel_open';
   
@@ -51,6 +54,56 @@
         }
       }
     } catch (e) {}
+  }
+
+  function formatElapsedTime(totalSeconds) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  function startTimer() {
+    if (timerInterval) return;
+    if (!captureStartTime) {
+      captureStartTime = Date.now() - (pausedElapsedTime * 1000);
+    }
+    timerInterval = setInterval(updateTimerDisplay, 1000);
+    updateTimerDisplay();
+  }
+
+  function pauseTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  function stopTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    captureStartTime = null;
+    pausedElapsedTime = 0;
+    updateTimerDisplay();
+  }
+
+  function updateTimerDisplay() {
+    if (!shadowRoot) return;
+    const timerEl = shadowRoot.getElementById('elapsedTimer');
+    if (!timerEl) return;
+    
+    if (captureStartTime && isCapturing) {
+      const elapsed = Math.floor((Date.now() - captureStartTime) / 1000);
+      timerEl.textContent = formatElapsedTime(elapsed);
+      timerEl.classList.remove('hidden');
+    } else if (pausedElapsedTime > 0) {
+      timerEl.textContent = formatElapsedTime(pausedElapsedTime);
+      timerEl.classList.remove('hidden');
+    } else {
+      timerEl.textContent = '00:00';
+      timerEl.classList.add('hidden');
+    }
   }
 
   const PANEL_STYLES = `
@@ -231,6 +284,21 @@
       font-size: 14px;
       font-weight: 500;
       color: #374151;
+    }
+
+    .elapsed-timer {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6366f1;
+      background: #eef2ff;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: auto;
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    }
+
+    .elapsed-timer.hidden {
+      display: none;
     }
 
     .step-counter {
@@ -598,6 +666,7 @@
             <div class="status-indicator">
               <div class="status-dot" id="statusDot"></div>
               <span class="status-text" id="statusText">Ready to capture</span>
+              <span class="elapsed-timer hidden" id="elapsedTimer">00:00</span>
             </div>
             <div class="step-counter" id="stepCounter">0</div>
             <div class="step-label">Steps captured</div>
@@ -780,6 +849,22 @@
 
     if (stepCounter) {
       stepCounter.textContent = stepCount.toString();
+    }
+
+    if (state.captureStartedAt !== undefined && state.captureStartedAt !== null) {
+      captureStartTime = state.captureStartedAt;
+    }
+    if (state.pausedElapsedMs !== undefined) {
+      pausedElapsedTime = Math.floor(state.pausedElapsedMs / 1000);
+    }
+
+    if (isCapturing && !isPaused) {
+      startTimer();
+    } else if (isPaused) {
+      pauseTimer();
+      updateTimerDisplay();
+    } else {
+      stopTimer();
     }
 
     if (btnStartStop) {

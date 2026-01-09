@@ -62,7 +62,8 @@
       "js": [
         "content/capture-agent.js",
         "content/screenshot-agent.js",
-        "content/tab-bridge.js"
+        "content/tab-bridge.js",
+        "content/side-panel.js"
       ],
       "run_at": "document_idle",
       "all_frames": false

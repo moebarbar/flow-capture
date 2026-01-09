@@ -318,8 +318,18 @@
   function isOverlayElement(element) {
     let current = element;
     while (current) {
-      if (current.id === OVERLAY_ID || current.classList?.contains('flowcapture-overlay')) {
+      if (current.id === OVERLAY_ID || 
+          current.id === 'flowcapture-side-panel-host' ||
+          current.classList?.contains('flowcapture-overlay') ||
+          current.hasAttribute?.('data-flowcapture-panel')) {
         return true;
+      }
+      if (current.getRootNode?.() instanceof ShadowRoot) {
+        const host = current.getRootNode().host;
+        if (host?.id === 'flowcapture-side-panel-host' || 
+            host?.hasAttribute?.('data-flowcapture-panel')) {
+          return true;
+        }
       }
       current = current.parentElement;
     }

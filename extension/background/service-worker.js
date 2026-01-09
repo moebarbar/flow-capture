@@ -17,7 +17,8 @@ class CaptureStateMachine {
       steps: [],
       stepCounter: 0,
       captureToken: null,
-      expiresAt: null
+      expiresAt: null,
+      panelOpen: true
     };
     
     this.ports = new Map();
@@ -49,7 +50,8 @@ class CaptureStateMachine {
       isPaused: this.state.status === CaptureStates.PAUSED,
       stepCount: this.state.steps.length,
       guideId: this.state.guideId,
-      workspaceId: this.state.workspaceId
+      workspaceId: this.state.workspaceId,
+      panelOpen: this.state.panelOpen
     };
   }
 
@@ -203,6 +205,15 @@ async function handleMessage(message, sender) {
     
     case MessageTypes.PING:
       return { pong: true };
+    
+    case 'PANEL_STATE_CHANGED':
+      machine.state.panelOpen = data?.isOpen ?? true;
+      return { success: true };
+    
+    case 'TOGGLE_PANEL':
+      machine.state.panelOpen = !machine.state.panelOpen;
+      await broadcastToAllTabs('TOGGLE_PANEL');
+      return { success: true, isOpen: machine.state.panelOpen };
     
     case MessageTypes.REQUEST_PERMISSIONS:
       try {

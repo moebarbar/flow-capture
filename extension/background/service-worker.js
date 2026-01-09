@@ -18,7 +18,8 @@ class CaptureStateMachine {
       stepCounter: 0,
       captureToken: null,
       expiresAt: null,
-      panelOpen: true
+      panelOpen: true,
+      capturedTabs: new Set()
     };
     
     this.ports = new Map();
@@ -51,17 +52,54 @@ class CaptureStateMachine {
       stepCount: this.state.steps.length,
       guideId: this.state.guideId,
       workspaceId: this.state.workspaceId,
-      panelOpen: this.state.panelOpen
+      panelOpen: this.state.panelOpen,
+      activeTabId: this.state.activeTabId,
+      capturedTabs: Array.from(this.state.capturedTabs),
+      tabContexts: Object.fromEntries(this.tabContexts)
     };
   }
 
-  reset() {
+  reset(preserveSession = false) {
     this.state.steps = [];
     this.state.stepCounter = 0;
-    this.state.guideId = null;
-    this.state.workspaceId = null;
     this.state.activeTabId = null;
+    this.state.capturedTabs.clear();
     this.tabContexts.clear();
+    
+    if (!preserveSession) {
+      this.state.guideId = null;
+      this.state.workspaceId = null;
+      this.state.captureToken = null;
+      this.state.expiresAt = null;
+    }
+  }
+  
+  addCapturedTab(tabId, tabInfo = {}) {
+    this.state.capturedTabs.add(tabId);
+    this.tabContexts.set(tabId, {
+      url: tabInfo.url || '',
+      title: tabInfo.title || '',
+      stepCount: 0,
+      firstCapturedAt: Date.now(),
+      ...tabInfo
+    });
+  }
+  
+  removeCapturedTab(tabId) {
+    this.state.capturedTabs.delete(tabId);
+    this.tabContexts.delete(tabId);
+  }
+  
+  updateTabContext(tabId, updates) {
+    const existing = this.tabContexts.get(tabId) || {};
+    this.tabContexts.set(tabId, { ...existing, ...updates });
+  }
+  
+  incrementTabStepCount(tabId) {
+    const ctx = this.tabContexts.get(tabId);
+    if (ctx) {
+      ctx.stepCount = (ctx.stepCount || 0) + 1;
+    }
   }
 
   broadcastStateUpdate() {
@@ -103,6 +141,59 @@ chrome.commands.onCommand.addListener(async (command) => {
         await handleStartCapture({ tabId: activeTab.id });
       }
     }
+  }
+});
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  if (machine.state.status !== CaptureStates.CAPTURING && machine.state.status !== CaptureStates.PAUSED) return;
+  
+  const tabId = activeInfo.tabId;
+  const previousActiveTabId = machine.state.activeTabId;
+  
+  machine.state.activeTabId = tabId;
+  
+  if (!machine.state.capturedTabs.has(tabId)) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+        await injectContentScripts(tabId);
+        machine.addCapturedTab(tabId, { url: tab.url, title: tab.title });
+        if (machine.state.status === CaptureStates.CAPTURING) {
+          await sendToTab(tabId, MessageTypes.START_CAPTURE);
+        }
+        console.log('[FlowCapture] Injected into new tab:', tabId, tab.url);
+      }
+    } catch (e) {
+      console.log('[FlowCapture] Tab injection skipped:', e.message);
+    }
+  } else if (previousActiveTabId !== tabId) {
+    console.log('[FlowCapture] Switched to captured tab:', tabId);
+    machine.broadcastStateUpdate();
+  }
+});
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (machine.state.status !== CaptureStates.CAPTURING) return;
+  if (changeInfo.status !== 'complete') return;
+  if (!machine.state.capturedTabs.has(tabId)) return;
+  
+  if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+    machine.updateTabContext(tabId, { url: tab.url, title: tab.title });
+    
+    try {
+      await injectContentScripts(tabId);
+      await sendToTab(tabId, MessageTypes.START_CAPTURE);
+      console.log('[FlowCapture] Reinjected after navigation:', tabId, tab.url);
+    } catch (e) {
+      console.log('[FlowCapture] Reinjection failed:', e.message);
+    }
+  }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (machine.state.capturedTabs.has(tabId)) {
+    machine.removeCapturedTab(tabId);
+    console.log('[FlowCapture] Tab removed from capture:', tabId);
   }
 });
 
@@ -215,6 +306,45 @@ async function handleMessage(message, sender) {
       await broadcastToAllTabs('TOGGLE_PANEL');
       return { success: true, isOpen: machine.state.panelOpen };
     
+    case 'GET_AVAILABLE_TABS':
+      try {
+        const tabs = await chrome.tabs.query({ currentWindow: true });
+        return {
+          tabs: tabs
+            .filter(t => t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://'))
+            .map(t => ({
+              id: t.id,
+              title: t.title,
+              url: t.url,
+              favIconUrl: t.favIconUrl,
+              active: t.active,
+              isCapturing: machine.state.capturedTabs.has(t.id)
+            }))
+        };
+      } catch (e) {
+        return { tabs: [], error: e.message };
+      }
+    
+    case 'SELECT_TAB_FOR_CAPTURE':
+      if (!data?.tabId) {
+        return { success: false, error: 'No tabId provided' };
+      }
+      if (machine.state.status === CaptureStates.CAPTURING) {
+        if (!machine.state.capturedTabs.has(data.tabId)) {
+          try {
+            const tab = await chrome.tabs.get(data.tabId);
+            await injectContentScripts(tab.id);
+            machine.addCapturedTab(tab.id, { url: tab.url, title: tab.title });
+            await sendToTab(tab.id, MessageTypes.START_CAPTURE);
+            return { success: true, tabId: tab.id };
+          } catch (e) {
+            return { success: false, error: e.message };
+          }
+        }
+        return { success: true, tabId: data.tabId, alreadyCapturing: true };
+      }
+      return await startCapture({ tabId: data.tabId });
+    
     case MessageTypes.REQUEST_PERMISSIONS:
       try {
         const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
@@ -305,18 +435,39 @@ async function startCapture(config = {}) {
     return { success: false, error: 'Invalid state transition' };
   }
 
-  machine.state.steps = [];
-  machine.state.stepCounter = 0;
+  machine.reset(true);
   machine.transition(CaptureStates.CAPTURING);
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) {
+  const targetTabId = config.tabId;
+  let tab;
+  
+  if (targetTabId) {
+    try {
+      tab = await chrome.tabs.get(targetTabId);
+    } catch (e) {
+      console.log('[FlowCapture] Specified tab not found, using active tab');
+    }
+  }
+  
+  if (!tab) {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    tab = activeTab;
+  }
+  
+  if (tab && tab.id) {
     machine.state.activeTabId = tab.id;
+    machine.addCapturedTab(tab.id, { url: tab.url, title: tab.title });
     await injectContentScripts(tab.id);
     await sendToTab(tab.id, MessageTypes.START_CAPTURE);
+    console.log('[FlowCapture] Started capture on tab:', tab.id, tab.url);
   }
 
-  return { success: true, guideId: machine.state.guideId };
+  return { 
+    success: true, 
+    guideId: machine.state.guideId,
+    activeTabId: machine.state.activeTabId,
+    capturedTabs: Array.from(machine.state.capturedTabs)
+  };
 }
 
 async function stopCapture() {
@@ -362,6 +513,19 @@ async function handleStepCaptured(stepData, tabId) {
   let screenshotUrl = null;
   const targetTabId = tabId || machine.state.activeTabId;
   
+  let tabContext = machine.tabContexts.get(targetTabId);
+  if (!tabContext && targetTabId) {
+    try {
+      const tab = await chrome.tabs.get(targetTabId);
+      tabContext = { url: tab.url, title: tab.title };
+      if (!machine.state.capturedTabs.has(targetTabId)) {
+        machine.addCapturedTab(targetTabId, tabContext);
+      }
+    } catch (e) {
+      tabContext = { url: stepData.url || '', title: '' };
+    }
+  }
+  
   if (stepData.screenshotDataUrl) {
     try {
       screenshotUrl = await uploadScreenshot(stepData.screenshotDataUrl);
@@ -381,9 +545,14 @@ async function handleStepCaptured(stepData, tabId) {
     }
   }
 
+  machine.incrementTabStepCount(targetTabId);
+
   const step = machine.addStep({
     actionType: stepData.action || stepData.actionType || 'click',
     selector: stepData.selector,
+    tabId: targetTabId,
+    tabUrl: tabContext?.url || stepData.url,
+    tabTitle: tabContext?.title || '',
     url: stepData.url,
     screenshotUrl,
     screenshotDataUrl: null,
@@ -613,27 +782,5 @@ async function broadcastToAllTabs(type, data = {}) {
     sendToTab(tab.id, type, data);
   }
 }
-
-chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  if (machine.state.status === CaptureStates.CAPTURING || machine.state.status === CaptureStates.PAUSED) {
-    machine.state.activeTabId = activeInfo.tabId;
-    await injectContentScripts(activeInfo.tabId);
-    if (machine.state.status === CaptureStates.CAPTURING) {
-      await sendToTab(activeInfo.tabId, MessageTypes.START_CAPTURE);
-    }
-  }
-});
-
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if ((machine.state.status === CaptureStates.CAPTURING || machine.state.status === CaptureStates.PAUSED) && 
-      changeInfo.status === 'complete') {
-    if (!tab.url?.startsWith('chrome://')) {
-      await injectContentScripts(tabId);
-      if (machine.state.status === CaptureStates.CAPTURING) {
-        await sendToTab(tabId, MessageTypes.START_CAPTURE);
-      }
-    }
-  }
-});
 
 console.log('[FlowCapture] Background service worker ready (v2)');

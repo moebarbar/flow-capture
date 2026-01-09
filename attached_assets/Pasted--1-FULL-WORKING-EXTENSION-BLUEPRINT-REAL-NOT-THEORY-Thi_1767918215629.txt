@@ -1,0 +1,312 @@
+✅ 1. FULL WORKING EXTENSION BLUEPRINT (REAL, NOT THEORY)
+
+This is the minimum architecture that actually works.
+
+📁 Folder Structure (NON-NEGOTIABLE)
+/extension
+ ├─ manifest.json
+ ├─ background.js        // service worker
+ ├─ content.js           // injected into pages
+ ├─ overlay.js           // floating UI
+ ├─ selector.js          // element detection logic
+ ├─ screenshot.js        // capture logic
+ ├─ messaging.js         // message bridge
+ └─ styles.css
+
+
+If any of these are missing → capture will fail.
+
+🧠 Responsibilities (Very Important)
+background.js
+
+Listens for start / stop capture
+
+Calls chrome.tabs.captureVisibleTab
+
+Owns screenshots
+
+Handles communication with platform API
+
+content.js
+
+Injects overlay UI
+
+Tracks clicks, inputs, navigation
+
+Sends events to background
+
+overlay.js
+
+Floating capture UI
+
+Start / Pause / Stop
+
+Step counter
+
+Status indicator
+
+selector.js
+
+Determines what element user clicked
+
+Generates selector data
+
+Prevents wrong element capture
+
+screenshot.js
+
+Requests screenshots from background
+
+Associates them with steps
+
+messaging.js
+
+Handles ALL chrome.runtime.sendMessage
+
+Prevents spaghetti logic
+
+✅ 2. DEBUG CHECKLIST (LINE-BY-LINE, USE THIS EVERY TIME)
+
+When something “doesn’t work”, do not guess. Follow this order.
+
+🔴 Extension Not Opening Automatically
+
+Check in order:
+
+manifest.json
+
+externally_connectable exists
+
+Correct domain allowed
+
+background.js
+
+chrome.runtime.onMessage listener exists
+
+Web app
+
+chrome.runtime.sendMessage is actually called
+
+Console
+
+No “Receiving end does not exist”
+
+If step 1 fails → NOTHING ELSE MATTERS.
+
+🔴 Overlay Not Sticking
+
+Check:
+
+Is overlay injected from content script, not popup?
+
+Is Shadow DOM used?
+
+Is reinjection happening on:
+
+history.pushState
+
+popstate
+
+SPA route changes
+
+Is overlay DOM removed accidentally?
+
+If overlay disappears → capture UX is dead.
+
+🔴 Wrong Element Selected
+
+Check:
+
+Are you ignoring overlay UI clicks?
+
+Are you using elementFromPoint?
+
+Are you stopping event propagation?
+
+Are bounding boxes correct?
+
+Are dynamic elements handled?
+
+If selector logic is wrong → screenshots are useless.
+
+🔴 Screenshots Not Captured
+
+Check:
+
+tabs permission in manifest
+
+Using chrome.tabs.captureVisibleTab
+
+Call originates from background
+
+Tab has focus
+
+Screenshot stored in memory
+
+If screenshots fail → product fails.
+
+🔴 Screenshots Not Sent
+
+Check:
+
+Payload size (Chrome limits)
+
+API endpoint correct
+
+CORS headers
+
+Retry logic exists
+
+Backend logs show receipt
+
+✅ 3. “GOLDEN PATH” MVP CAPTURE (THIS IS YOUR SAFE PATH)
+
+This is the ONLY workflow you support in v1.
+
+🎯 MVP CAPTURE FLOW
+
+User clicks New Flow Capture
+
+Extension auto-starts
+
+Overlay appears
+
+User clicks element
+
+Screenshot taken
+
+Step saved
+
+User clicks Stop
+
+Flow appears in dashboard
+
+❌ NO automation
+❌ NO AI
+❌ NO branching
+❌ NO magic
+
+This wins because it works.
+
+✅ 4. STRIPPED-DOWN CAPTURE V1 (THAT ACTUALLY WORKS)
+🔹 What V1 Captures
+
+Click events only
+
+Visible screenshots
+
+Step order
+
+Page URL
+
+Timestamp
+
+🔹 What V1 Ignores (IMPORTANT)
+
+Hover capture
+
+Keyboard recording
+
+Voice
+
+Multi-tab
+
+Replay
+
+AI rewriting
+
+This reduces bugs by 80%.
+
+🧩 Step Data Structure (KEEP SIMPLE)
+{
+  "stepNumber": 3,
+  "action": "click",
+  "selector": ".submit-button",
+  "url": "https://example.com",
+  "screenshot": "base64string",
+  "timestamp": 1720000000
+}
+
+
+If your backend expects more → simplify backend.
+
+✅ 5. HOW TO TEST THE EXTENSION CORRECTLY (MOST PEOPLE FAIL HERE)
+🧪 Local Testing Rules
+
+Always test on:
+
+Google
+
+A simple form site
+
+A SPA (React app)
+
+Use Chrome DevTools → Sources → Content Scripts
+
+Watch:
+
+background console
+
+content script console
+
+Test one feature at a time:
+
+overlay
+
+click capture
+
+screenshot
+
+upload
+
+🧪 Golden Test Checklist
+
+✔ Extension auto-starts
+✔ Overlay visible always
+✔ Clicking button highlights correct element
+✔ Screenshot matches action
+✔ Step count increments
+✔ Data reaches backend
+✔ Dashboard renders step
+
+If one fails → stop and fix.
+
+✅ 6. HOW TO PREVENT THIS AGAIN (THIS IS HUGE)
+
+This is the most important part.
+
+🚫 Never Trust AI Without This Rule
+
+If the AI can’t show you a working event chain, it’s lying.
+
+Always ask:
+
+“Where does this event originate and where does it end?”
+
+🧠 New Development Rules for You
+
+Extension first, platform second
+
+No UI until core works
+
+No feature unless test exists
+
+Never merge “it should work”
+
+Every capture = visible screenshot
+
+If screenshots fail → stop release
+
+🏗 How Big Companies Avoid This
+
+They build:
+
+Capture engine
+
+Test harness
+
+Replay tool
+
+Then build UI.
+
+You skipped that step initially — now you won’t again.

@@ -19,12 +19,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saveSettingsBtn = document.getElementById('save-settings');
   const cancelSettingsBtn = document.getElementById('cancel-settings');
   const elementCaptureBtn = document.getElementById('element-capture-btn');
-  const captureElementDuringRecording = document.getElementById('capture-element-during-recording');
   const borderColorInput = document.getElementById('border-color');
   const colorPresets = document.querySelectorAll('.color-preset');
   const tabSelectorModal = document.getElementById('tab-selector-modal');
   const tabList = document.getElementById('tab-list');
   const cancelTabSelectBtn = document.getElementById('cancel-tab-select');
+
+  let lastCaptureResult = null;
 
   function showPanel(panel) {
     notRecordingPanel.classList.add('hidden');
@@ -48,21 +49,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function updateState() {
-    const { isCapturing, capturedSteps, flowId, borderColor, isPaused } = await chrome.storage.local.get(['isCapturing', 'capturedSteps', 'flowId', 'borderColor', 'isPaused']);
-    
-    if (borderColor) {
-      borderColorInput.value = borderColor;
-      updateActivePreset(borderColor);
-    }
-    
-    if (isCapturing) {
-      showPanel(capturingPanel);
-      stepCount.textContent = (capturedSteps || []).length;
-      updatePauseResumeUI(isPaused || false);
-    } else if (flowId) {
-      showPanel(finishedPanel);
-      finalStepCount.textContent = (capturedSteps || []).length;
-    } else {
+    try {
+      const state = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATE' });
+      const settings = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+      
+      if (settings.highlightColor) {
+        borderColorInput.value = settings.highlightColor;
+        updateActivePreset(settings.highlightColor);
+      }
+      
+      if (settings.apiBaseUrl) {
+        apiUrlInput.value = settings.apiBaseUrl;
+      }
+
+      if (state.isCapturing) {
+        showPanel(capturingPanel);
+        stepCount.textContent = state.stepCount || 0;
+        updatePauseResumeUI(state.isPaused);
+      } else if (lastCaptureResult && lastCaptureResult.stepCount > 0) {
+        showPanel(finishedPanel);
+        finalStepCount.textContent = lastCaptureResult.stepCount;
+      } else {
+        showPanel(notRecordingPanel);
+      }
+    } catch (e) {
+      console.error('Failed to get state:', e);
       showPanel(notRecordingPanel);
     }
   }
@@ -77,229 +88,202 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  async function showTabSelector() {
-    const tabs = await chrome.tabs.query({});
-    tabList.innerHTML = '';
+  async function checkAndRequestPermissions() {
+    const result = await chrome.runtime.sendMessage({ type: 'CHECK_PERMISSIONS' });
     
-    tabs.forEach(tab => {
-      if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-        return;
+    if (!result) {
+      const confirmed = confirm(
+        'FlowCapture needs permission to capture on all websites.\n\n' +
+        'Click OK to grant permission, or Cancel to configure specific sites in settings.'
+      );
+      
+      if (confirmed) {
+        const granted = await chrome.runtime.sendMessage({ type: 'REQUEST_PERMISSIONS' });
+        return granted.granted;
       }
-      
-      const tabCard = document.createElement('div');
-      tabCard.className = 'tab-card';
-      tabCard.dataset.testid = `tab-card-${tab.id}`;
-      
-      let hostname = '';
-      try {
-        hostname = new URL(tab.url).hostname;
-      } catch (e) {
-        hostname = tab.url;
-      }
-      
-      tabCard.innerHTML = `
-        <img src="${tab.favIconUrl || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23999%22><rect width=%2224%22 height=%2224%22 rx=%224%22/></svg>'}" class="tab-favicon" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23999%22><rect width=%2224%22 height=%2224%22 rx=%224%22/></svg>'">
-        <div class="tab-info">
-          <div class="tab-title">${escapeHtml(tab.title || 'Untitled')}</div>
-          <div class="tab-url">${escapeHtml(hostname)}</div>
-        </div>
-      `;
-      tabCard.onclick = () => selectTab(tab.id);
-      tabList.appendChild(tabCard);
+      return false;
+    }
+    return true;
+  }
+
+  async function startCapture() {
+    const hasPermission = await checkAndRequestPermissions();
+    if (!hasPermission) {
+      alert('Permission required to capture. Please grant access in the extension settings.');
+      return;
+    }
+
+    const highlightColor = borderColorInput.value;
+    await chrome.runtime.sendMessage({ 
+      type: 'SAVE_SETTINGS', 
+      data: { highlightColor } 
     });
-    
-    tabSelectorModal.classList.remove('hidden');
-  }
 
-  async function selectTab(tabId) {
-    tabSelectorModal.classList.add('hidden');
-    
-    await chrome.tabs.update(tabId, { active: true });
-    
-    await chrome.storage.local.set({
-      isCapturing: true,
-      capturedSteps: [],
-      flowId: null,
-      currentTabId: tabId
+    const result = await chrome.runtime.sendMessage({ 
+      type: 'START_CAPTURE',
+      data: { highlightColor }
     });
-    
-    try {
-      await chrome.sidePanel.open({ tabId: tabId });
-    } catch (e) {
-      console.log('Side panel open error:', e);
+
+    if (result.success) {
+      showPanel(capturingPanel);
+      stepCount.textContent = '0';
+      updatePauseResumeUI(false);
+      window.close();
+    } else if (result.error === 'permissions_required') {
+      alert('Permission required. Please grant access to capture on websites.');
     }
-    
-    try {
-      await chrome.tabs.sendMessage(tabId, { action: 'startCapture' });
-    } catch (e) {
-      console.log('Could not send start message, injecting content script');
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        files: ['src/content.js']
-      });
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await chrome.tabs.sendMessage(tabId, { action: 'startCapture' });
-    }
-    
-    chrome.runtime.sendMessage({ type: 'START_CAPTURE', tabId });
-    
-    window.close();
   }
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  async function stopCapture() {
+    const result = await chrome.runtime.sendMessage({ 
+      type: 'STOP_CAPTURE',
+      data: { cancelled: false }
+    });
+
+    if (result.success) {
+      lastCaptureResult = result;
+      showPanel(finishedPanel);
+      finalStepCount.textContent = result.stepCount || 0;
+    }
   }
 
-  startBtn.addEventListener('click', async () => {
-    await showTabSelector();
-  });
-
-  cancelTabSelectBtn.addEventListener('click', () => {
-    tabSelectorModal.classList.add('hidden');
-  });
-
-  stopBtn.addEventListener('click', async () => {
-    const { currentTabId } = await chrome.storage.local.get(['currentTabId']);
-    
-    if (currentTabId) {
-      try {
-        await chrome.tabs.sendMessage(currentTabId, { action: 'stopCapture' });
-      } catch (e) {
-        console.log('Could not send stop message');
-      }
-    }
-    
-    await chrome.storage.local.set({ isCapturing: false });
-    chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' });
-    
-    const { capturedSteps } = await chrome.storage.local.get(['capturedSteps']);
-    finalStepCount.textContent = (capturedSteps || []).length;
-    showPanel(finishedPanel);
-  });
-
-  elementCaptureBtn.addEventListener('click', async () => {
-    window.close();
-    chrome.runtime.sendMessage({ type: 'START_ELEMENT_CAPTURE' });
-  });
-
-  captureElementDuringRecording.addEventListener('click', async () => {
-    window.close();
-    chrome.runtime.sendMessage({ type: 'START_ELEMENT_CAPTURE' });
-  });
+  startBtn.addEventListener('click', startCapture);
+  
+  stopBtn.addEventListener('click', stopCapture);
 
   pauseBtn.addEventListener('click', async () => {
-    const { currentTabId } = await chrome.storage.local.get(['currentTabId']);
-    
-    await chrome.storage.local.set({ isPaused: true });
-    
-    if (currentTabId) {
-      try {
-        await chrome.tabs.sendMessage(currentTabId, { action: 'pauseCapture' });
-      } catch (e) {
-        console.log('Could not send pause message');
-      }
-    }
-    
-    chrome.runtime.sendMessage({ type: 'PAUSE_CAPTURE' });
+    await chrome.runtime.sendMessage({ type: 'PAUSE_CAPTURE' });
     updatePauseResumeUI(true);
   });
 
   resumeBtn.addEventListener('click', async () => {
-    const { currentTabId } = await chrome.storage.local.get(['currentTabId']);
-    
-    await chrome.storage.local.set({ isPaused: false });
-    
-    if (currentTabId) {
-      try {
-        await chrome.tabs.sendMessage(currentTabId, { action: 'resumeCapture' });
-      } catch (e) {
-        console.log('Could not send resume message');
-      }
-    }
-    
-    chrome.runtime.sendMessage({ type: 'RESUME_CAPTURE' });
+    await chrome.runtime.sendMessage({ type: 'RESUME_CAPTURE' });
     updatePauseResumeUI(false);
   });
 
-  borderColorInput.addEventListener('input', async (e) => {
-    const color = e.target.value;
-    updateActivePreset(color);
-    chrome.runtime.sendMessage({ type: 'SET_BORDER_COLOR', color });
-  });
-
-  colorPresets.forEach(preset => {
-    preset.addEventListener('click', async () => {
-      const color = preset.dataset.color;
-      borderColorInput.value = color;
-      updateActivePreset(color);
-      chrome.runtime.sendMessage({ type: 'SET_BORDER_COLOR', color });
-    });
-  });
-
   viewBtn.addEventListener('click', async () => {
-    const { flowId } = await chrome.storage.local.get(['flowId']);
-    const baseUrl = await getDashboardUrl();
-    if (flowId) {
-      chrome.tabs.create({ url: `${baseUrl}/flows/${flowId}/edit` });
+    const settings = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+    const apiBaseUrl = settings.apiBaseUrl || '';
+    
+    if (apiBaseUrl && lastCaptureResult?.guideId) {
+      chrome.tabs.create({ url: `${apiBaseUrl}/guides/${lastCaptureResult.guideId}` });
+    } else if (apiBaseUrl) {
+      chrome.tabs.create({ url: apiBaseUrl });
     } else {
-      chrome.tabs.create({ url: `${baseUrl}/dashboard` });
+      alert('Please configure your Dashboard URL in Settings first.');
     }
   });
 
-  newBtn.addEventListener('click', async () => {
-    await chrome.storage.local.set({ capturedSteps: [], flowId: null, isCapturing: false });
+  newBtn.addEventListener('click', () => {
+    lastCaptureResult = null;
     showPanel(notRecordingPanel);
   });
 
   openDashboard.addEventListener('click', async (e) => {
     e.preventDefault();
-    const url = await getDashboardUrl();
-    chrome.tabs.create({ url: `${url}/dashboard` });
+    const settings = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+    const apiBaseUrl = settings.apiBaseUrl || '';
+    
+    if (apiBaseUrl) {
+      chrome.tabs.create({ url: apiBaseUrl });
+    } else {
+      alert('Please configure your Dashboard URL in Settings first.');
+      settingsModal.classList.remove('hidden');
+    }
   });
 
-  settingsLink.addEventListener('click', async (e) => {
+  settingsLink.addEventListener('click', (e) => {
     e.preventDefault();
-    const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
-    apiUrlInput.value = apiBaseUrl || 'https://flowcapture.replit.app';
     settingsModal.classList.remove('hidden');
+  });
+
+  saveSettingsBtn.addEventListener('click', async () => {
+    let apiUrl = apiUrlInput.value.trim();
+    
+    if (apiUrl && !apiUrl.startsWith('http')) {
+      apiUrl = 'https://' + apiUrl;
+    }
+    apiUrl = apiUrl.replace(/\/$/, '');
+    
+    await chrome.runtime.sendMessage({ 
+      type: 'SAVE_SETTINGS', 
+      data: { 
+        apiBaseUrl: apiUrl,
+        highlightColor: borderColorInput.value
+      } 
+    });
+    
+    settingsModal.classList.add('hidden');
   });
 
   cancelSettingsBtn.addEventListener('click', () => {
     settingsModal.classList.add('hidden');
   });
 
-  saveSettingsBtn.addEventListener('click', async () => {
-    let url = apiUrlInput.value.trim();
-    if (url) {
-      // Enforce HTTPS for security
-      try {
-        const parsedUrl = new URL(url);
-        if (parsedUrl.protocol === 'http:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
-          parsedUrl.protocol = 'https:';
-          url = parsedUrl.toString().replace(/\/$/, '');
-        }
-      } catch (e) {
-        // Invalid URL, don't save
-        alert('Please enter a valid URL');
-        return;
-      }
-      await chrome.storage.local.set({ apiBaseUrl: url });
-    }
-    settingsModal.classList.add('hidden');
+  borderColorInput.addEventListener('change', (e) => {
+    updateActivePreset(e.target.value);
+    chrome.runtime.sendMessage({ 
+      type: 'SAVE_SETTINGS', 
+      data: { highlightColor: e.target.value } 
+    });
   });
 
-  async function getDashboardUrl() {
-    const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
-    return apiBaseUrl || 'https://flowcapture.replit.app';
-  }
+  colorPresets.forEach(preset => {
+    preset.addEventListener('click', () => {
+      const color = preset.dataset.color;
+      borderColorInput.value = color;
+      updateActivePreset(color);
+      chrome.runtime.sendMessage({ 
+        type: 'SAVE_SETTINGS', 
+        data: { highlightColor: color } 
+      });
+    });
+  });
 
-  chrome.storage.onChanged.addListener((changes) => {
-    if (changes.capturedSteps) {
-      stepCount.textContent = (changes.capturedSteps.newValue || []).length;
+  elementCaptureBtn.addEventListener('click', async () => {
+    const hasPermission = await checkAndRequestPermissions();
+    if (!hasPermission) {
+      alert('Permission required to capture elements.');
+      return;
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && !tab.url.startsWith('chrome://')) {
+      const highlightColor = borderColorInput.value;
+      
+      await chrome.runtime.sendMessage({ 
+        type: 'START_CAPTURE',
+        data: { 
+          highlightColor,
+          singleElement: true
+        }
+      });
+      
+      window.close();
+    }
+  });
+
+  cancelTabSelectBtn.addEventListener('click', () => {
+    tabSelectorModal.classList.add('hidden');
+  });
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'CAPTURE_STATE_CHANGED') {
+      const { isCapturing, isPaused, stepCount: count } = message.data;
+      
+      if (isCapturing) {
+        showPanel(capturingPanel);
+        stepCount.textContent = count || 0;
+        updatePauseResumeUI(isPaused);
+      }
     }
   });
 
   await updateState();
 });
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}

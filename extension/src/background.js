@@ -1,657 +1,495 @@
-let isRecording = false;
-let activeSessionToken = null;
-let activeGuideId = null;
+const CaptureState = {
+  isCapturing: false,
+  isPaused: false,
+  guideId: null,
+  workspaceId: null,
+  steps: [],
+  config: {
+    highlightColor: '#ef4444',
+    apiBaseUrl: ''
+  },
+  sessionToken: null,
+  activeTabId: null
+};
 
-// Check if we have host permissions for all URLs
+const API_ENDPOINTS = {
+  presignedUrl: '/api/uploads/request-url',
+  createGuide: (workspaceId) => `/api/workspaces/${workspaceId}/guides`,
+  addStep: (guideId) => `/api/guides/${guideId}/steps`,
+  workspaces: '/api/workspaces'
+};
+
+chrome.runtime.onInstalled.addListener(async (details) => {
+  console.log(`[FlowCapture] Extension ${details.reason}: v${chrome.runtime.getManifest().version}`);
+  
+  if (details.reason === 'install') {
+    await chrome.storage.local.set({
+      apiBaseUrl: '',
+      highlightColor: '#ef4444',
+      captureState: null
+    });
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  handleMessage(message, sender).then(sendResponse).catch(err => {
+    console.error('[FlowCapture] Message handler error:', err);
+    sendResponse({ error: err.message });
+  });
+  return true;
+});
+
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  handleExternalMessage(message, sender).then(sendResponse).catch(err => {
+    console.error('[FlowCapture] External message error:', err);
+    sendResponse({ error: err.message });
+  });
+  return true;
+});
+
+async function handleMessage(message, sender) {
+  const { type, data } = message;
+
+  switch (type) {
+    case 'GET_CAPTURE_STATE':
+      return {
+        isCapturing: CaptureState.isCapturing,
+        isPaused: CaptureState.isPaused,
+        config: CaptureState.config,
+        stepCount: CaptureState.steps.length
+      };
+
+    case 'START_CAPTURE':
+      return await startCapture(data);
+
+    case 'STOP_CAPTURE':
+      return await stopCapture(data?.cancelled);
+
+    case 'PAUSE_CAPTURE':
+      CaptureState.isPaused = true;
+      await broadcastState();
+      return { success: true };
+
+    case 'RESUME_CAPTURE':
+      CaptureState.isPaused = false;
+      await broadcastState();
+      return { success: true };
+
+    case 'STEP_CAPTURED':
+      return await handleStepCaptured(data);
+
+    case 'DELETE_STEP':
+      CaptureState.steps.splice(data.index, 1);
+      return { success: true };
+
+    case 'SCREENSHOT_REQUEST':
+      return await captureScreenshot(sender.tab?.id);
+
+    case 'GET_SETTINGS':
+      const settings = await chrome.storage.local.get(['apiBaseUrl', 'highlightColor']);
+      return settings;
+
+    case 'SAVE_SETTINGS':
+      await chrome.storage.local.set(data);
+      CaptureState.config = { ...CaptureState.config, ...data };
+      return { success: true };
+
+    case 'CHECK_PERMISSIONS':
+      return await checkHostPermissions();
+
+    case 'REQUEST_PERMISSIONS':
+      return await requestHostPermissions();
+
+    case 'SYNC_TO_SERVER':
+      return await syncToServer(data);
+
+    case 'GET_WORKSPACES':
+      return await fetchWorkspaces();
+
+    case 'PING':
+      return { pong: true };
+
+    default:
+      console.warn('[FlowCapture] Unknown message type:', type);
+      return { error: 'Unknown message type' };
+  }
+}
+
+async function handleExternalMessage(message, sender) {
+  const { type, data } = message;
+  
+  const origin = sender.origin || sender.url;
+  console.log('[FlowCapture] External message from:', origin, type);
+
+  switch (type) {
+    case 'START_CAPTURE_SESSION':
+      CaptureState.config.apiBaseUrl = data.apiBaseUrl || origin;
+      CaptureState.guideId = data.guideId;
+      CaptureState.workspaceId = data.workspaceId;
+      CaptureState.sessionToken = data.sessionToken;
+      
+      return await startCapture({
+        guideId: data.guideId,
+        workspaceId: data.workspaceId,
+        highlightColor: data.highlightColor
+      });
+
+    case 'STOP_CAPTURE_SESSION':
+      return await stopCapture(false);
+
+    case 'GET_CAPTURE_STATUS':
+      return {
+        isCapturing: CaptureState.isCapturing,
+        isPaused: CaptureState.isPaused,
+        stepCount: CaptureState.steps.length,
+        guideId: CaptureState.guideId
+      };
+
+    case 'PING':
+      return { 
+        pong: true, 
+        version: chrome.runtime.getManifest().version,
+        isCapturing: CaptureState.isCapturing
+      };
+
+    default:
+      return { error: 'Unknown external message type' };
+  }
+}
+
+async function startCapture(data = {}) {
+  const hasPermission = await checkHostPermissions();
+  if (!hasPermission) {
+    return { 
+      success: false, 
+      error: 'permissions_required',
+      message: 'Host permissions required. Please grant access to capture on all sites.'
+    };
+  }
+
+  CaptureState.isCapturing = true;
+  CaptureState.isPaused = false;
+  CaptureState.steps = [];
+  
+  if (data.guideId) CaptureState.guideId = data.guideId;
+  if (data.workspaceId) CaptureState.workspaceId = data.workspaceId;
+  if (data.highlightColor) CaptureState.config.highlightColor = data.highlightColor;
+
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (activeTab) {
+    CaptureState.activeTabId = activeTab.id;
+    await injectContentScript(activeTab.id);
+    await chrome.tabs.sendMessage(activeTab.id, { 
+      type: 'START_CAPTURE', 
+      data: CaptureState.config 
+    }).catch(() => {});
+  }
+
+  await broadcastState();
+  
+  return { success: true, guideId: CaptureState.guideId };
+}
+
+async function stopCapture(cancelled = false) {
+  const steps = [...CaptureState.steps];
+  const guideId = CaptureState.guideId;
+
+  CaptureState.isCapturing = false;
+  CaptureState.isPaused = false;
+
+  await broadcastToAllTabs({ type: 'STOP_CAPTURE' });
+
+  if (!cancelled && steps.length > 0 && CaptureState.config.apiBaseUrl) {
+    try {
+      await syncStepsToServer(steps, guideId);
+    } catch (e) {
+      console.error('[FlowCapture] Failed to sync steps:', e);
+    }
+  }
+
+  const result = {
+    success: true,
+    cancelled,
+    stepCount: steps.length,
+    guideId,
+    steps: cancelled ? [] : steps
+  };
+
+  CaptureState.steps = [];
+  CaptureState.guideId = null;
+
+  return result;
+}
+
+async function handleStepCaptured(stepData) {
+  let screenshotUrl = null;
+
+  if (stepData.screenshot && CaptureState.config.apiBaseUrl) {
+    try {
+      screenshotUrl = await uploadScreenshot(stepData.screenshot);
+    } catch (e) {
+      console.error('[FlowCapture] Screenshot upload failed:', e);
+    }
+  }
+
+  const step = {
+    ...stepData,
+    screenshot: screenshotUrl || stepData.screenshot,
+    order: CaptureState.steps.length + 1
+  };
+
+  CaptureState.steps.push(step);
+
+  if (CaptureState.guideId && CaptureState.config.apiBaseUrl) {
+    try {
+      await sendStepToServer(step);
+    } catch (e) {
+      console.error('[FlowCapture] Failed to send step to server:', e);
+    }
+  }
+
+  return { success: true, stepCount: CaptureState.steps.length };
+}
+
+async function captureScreenshot(tabId) {
+  try {
+    const targetTabId = tabId || CaptureState.activeTabId;
+    if (!targetTabId) {
+      throw new Error('No active tab');
+    }
+
+    const dataUrl = await chrome.tabs.captureVisibleTab(null, { 
+      format: 'png',
+      quality: 90
+    });
+
+    return { dataUrl };
+  } catch (e) {
+    console.error('[FlowCapture] Screenshot capture failed:', e);
+    return { error: e.message };
+  }
+}
+
+async function uploadScreenshot(dataUrl) {
+  const apiBaseUrl = CaptureState.config.apiBaseUrl;
+  if (!apiBaseUrl) return null;
+
+  try {
+    const presignedResponse = await fetch(`${apiBaseUrl}/api/uploads/request-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ 
+        name: `step_${Date.now()}.png`,
+        contentType: 'image/png'
+      })
+    });
+
+    if (!presignedResponse.ok) {
+      throw new Error('Failed to get upload URL');
+    }
+
+    const { uploadURL, objectPath } = await presignedResponse.json();
+
+    const blob = dataUrlToBlob(dataUrl);
+    const uploadResponse = await fetch(uploadURL, {
+      method: 'PUT',
+      body: blob,
+      headers: { 'Content-Type': 'image/png' }
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error('Failed to upload screenshot');
+    }
+
+    return `/objects/${objectPath}`;
+  } catch (e) {
+    console.error('[FlowCapture] Upload failed:', e);
+    return null;
+  }
+}
+
+async function sendStepToServer(step) {
+  const apiBaseUrl = CaptureState.config.apiBaseUrl;
+  const guideId = CaptureState.guideId;
+  
+  if (!apiBaseUrl || !guideId) return;
+
+  const response = await fetch(`${apiBaseUrl}/api/guides/${guideId}/steps`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      title: step.title,
+      description: step.description,
+      actionType: step.actionType,
+      selector: step.selector,
+      url: step.url,
+      imageUrl: step.screenshot,
+      order: step.order,
+      metadata: {
+        xpath: step.xpath,
+        pageTitle: step.pageTitle,
+        bounds: step.bounds
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to save step: ${response.status}`);
+  }
+
+  return await response.json();
+}
+
+async function syncStepsToServer(steps, guideId) {
+  for (const step of steps) {
+    if (!step.synced) {
+      await sendStepToServer(step);
+      step.synced = true;
+    }
+  }
+}
+
+async function syncToServer(data) {
+  const { guideId, workspaceId } = data;
+  CaptureState.guideId = guideId;
+  CaptureState.workspaceId = workspaceId;
+
+  try {
+    await syncStepsToServer(CaptureState.steps, guideId);
+    return { success: true, stepCount: CaptureState.steps.length };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function fetchWorkspaces() {
+  const apiBaseUrl = CaptureState.config.apiBaseUrl;
+  if (!apiBaseUrl) {
+    return { error: 'API URL not configured' };
+  }
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/workspaces`, {
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch workspaces');
+    }
+
+    const workspaces = await response.json();
+    return { workspaces };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 async function checkHostPermissions() {
   try {
-    const hasPermission = await chrome.permissions.contains({
+    const result = await chrome.permissions.contains({
       origins: ['<all_urls>']
     });
-    return hasPermission;
+    return result;
   } catch (e) {
-    console.error('Failed to check permissions:', e);
+    console.error('[FlowCapture] Permission check failed:', e);
     return false;
   }
 }
 
-// Request host permissions (must be triggered by user gesture)
 async function requestHostPermissions() {
   try {
     const granted = await chrome.permissions.request({
       origins: ['<all_urls>']
     });
-    return granted;
+    return { granted };
   } catch (e) {
-    console.error('Failed to request permissions:', e);
-    return false;
+    console.error('[FlowCapture] Permission request failed:', e);
+    return { granted: false, error: e.message };
   }
 }
 
-async function getConfiguredApiUrl() {
+async function injectContentScript(tabId) {
   try {
-    const { apiBaseUrl } = await chrome.storage.local.get(['apiBaseUrl']);
-    let url = apiBaseUrl || 'https://flowcapture.replit.app';
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['src/contentScript.js']
+    });
     
-    // Enforce HTTPS for security (except localhost)
-    try {
-      const parsedUrl = new URL(url);
-      if (parsedUrl.protocol === 'http:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
-        parsedUrl.protocol = 'https:';
-        url = parsedUrl.toString().replace(/\/$/, '');
-      }
-    } catch (e) {
-      return 'https://flowcapture.replit.app';
-    }
-    
-    return url;
+    await chrome.scripting.insertCSS({
+      target: { tabId },
+      files: ['src/styles.css']
+    });
   } catch (e) {
-    return 'https://flowcapture.replit.app';
+    console.log('[FlowCapture] Script injection skipped:', e.message);
   }
 }
 
-chrome.runtime.onInstalled.addListener(async (details) => {
-  const manifest = chrome.runtime.getManifest();
-  console.log(`FlowCapture extension ${details.reason}: v${manifest.version}`);
-  
-  if (details.reason === 'install') {
-    // Fresh install - reset everything
-    await chrome.storage.local.set({ 
-      isRecording: false, 
-      steps: [],
-      guideId: null,
-      selectedWorkspaceId: null,
-      apiBaseUrl: 'https://flowcapture.replit.app',
-      borderColor: '#ef4444',
-      captureSession: null,
-      extensionVersion: manifest.version
-    });
-  } else if (details.reason === 'update') {
-    // Update - preserve capture session and update version
-    // Read all relevant state first
-    const stored = await chrome.storage.local.get(['captureSession', 'isRecording', 'apiBaseUrl', 'borderColor']);
-    const captureSession = stored.captureSession;
-    const wasRecording = stored.isRecording;
-    
-    console.log('Extension update - preserved state:', {
-      hasSession: !!captureSession,
-      wasRecording,
-      version: manifest.version
-    });
-    
-    // Store new version (chrome.storage.local.set is additive, won't overwrite other keys)
-    await chrome.storage.local.set({ extensionVersion: manifest.version });
-    
-    // If there was an active session, restore it immediately
-    if (captureSession && captureSession.token) {
-      const now = Date.now();
-      const expiresAt = new Date(captureSession.expiresAt).getTime();
-      if (now < expiresAt) {
-        console.log('Restoring capture session after update');
-        activeSessionToken = captureSession.token;
-        activeGuideId = captureSession.guideId;
-        
-        if (wasRecording) {
-          isRecording = true;
-          // Delay to ensure tabs are ready after update
-          setTimeout(() => startRecordingOnAllTabs(), 1500);
-        }
-      }
-    }
-    
-    // Notify FlowCapture tabs about the update after a short delay (tabs may be reloading)
-    setTimeout(async () => {
-      try {
-        const tabs = await chrome.tabs.query({});
-        for (const tab of tabs) {
-          if (tab.url && (tab.url.includes('flowcapture') || tab.url.includes('replit'))) {
-            try {
-              await chrome.tabs.sendMessage(tab.id, { 
-                type: 'EXTENSION_UPDATED',
-                version: manifest.version,
-                hadActiveSession: !!captureSession
-              });
-            } catch (e) {
-              // Tab might not have content script yet - this is expected
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to notify tabs of update:', e);
-      }
-    }, 2000);
-  }
-});
-
-// Restore session on startup (browser launch)
-chrome.runtime.onStartup.addListener(async () => {
-  console.log('Extension started, checking for active session');
-  await restoreSessionState();
-});
-
-// Also restore when service worker wakes up
-async function restoreSessionState() {
-  try {
-    const hasSession = await checkForWebAppSession();
-    if (hasSession) {
-      console.log('Restored capture session from storage');
-      const { isRecording: wasRecording } = await chrome.storage.local.get(['isRecording']);
-      if (wasRecording) {
-        isRecording = true;
-        // Delay to ensure tabs are ready
-        setTimeout(() => startRecordingOnAllTabs(), 1000);
-      }
-    }
-  } catch (e) {
-    console.error('Failed to restore session:', e);
-  }
-}
-
-// Run restore on every service worker wake-up
-restoreSessionState();
-
-// Check if there's an active session from the web app
-async function checkForWebAppSession() {
-  try {
-    const { captureSession } = await chrome.storage.local.get(['captureSession']);
-    if (captureSession && captureSession.token) {
-      const now = Date.now();
-      const expiresAt = new Date(captureSession.expiresAt).getTime();
-      if (now < expiresAt) {
-        activeSessionToken = captureSession.token;
-        activeGuideId = captureSession.guideId;
-        return true;
-      }
-    }
-    return false;
-  } catch (e) {
-    return false;
-  }
-}
-
-// Send a captured step to the backend in real-time
-async function sendStepToBackend(stepData) {
-  if (!activeSessionToken) return null;
-  
-  try {
-    const apiUrl = await getConfiguredApiUrl();
-    const response = await fetch(`${apiUrl}/api/capture/step`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${activeSessionToken}`
-      },
-      body: JSON.stringify({
-        title: stepData.description || stepData.type,
-        description: stepData.description,
-        actionType: stepData.type,
-        selector: stepData.selector,
-        url: stepData.url || stepData.tabUrl,
-        imageData: stepData.screenshot, // Include the screenshot
-        metadata: {
-          element: stepData.element,
-          elementBounds: stepData.elementBounds,
-          borderColor: stepData.borderColor,
-          isElementCapture: stepData.isElementCapture,
-          pageTitle: stepData.pageTitle || stepData.tabTitle
-        }
-      })
-    });
-    
-    if (!response.ok) {
-      console.error('Failed to send step to backend:', response.status);
-      // Session might be expired
-      if (response.status === 401) {
-        console.log('Session expired, stopping recording');
-        activeSessionToken = null;
-        activeGuideId = null;
-        isRecording = false;
-        await chrome.storage.local.set({ captureSession: null, isRecording: false });
-        notifyAllTabs('STOP_RECORDING');
-        // Notify all tabs about session expiry so webapp can update UI
-        notifyAllTabsSessionExpired();
-      }
-      return null;
-    }
-    
-    return response.json();
-  } catch (e) {
-    console.error('Error sending step to backend:', e);
-    return null;
-  }
-}
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Background received message:', message.type);
-  
-  if (message.type === 'START_RECORDING') {
-    isRecording = true;
-    chrome.storage.local.set({ isRecording: true }).then(async () => {
-      const result = await startRecordingOnAllTabs();
-      if (result?.error === 'permissions_required') {
-        sendResponse({ error: 'permissions_required' });
-      } else {
-        sendResponse({ success: true });
-      }
-    });
-    return true;
-  } else if (message.type === 'STOP_RECORDING') {
-    isRecording = false;
-    chrome.storage.local.set({ isRecording: false }).then(() => {
-      notifyAllTabs('STOP_RECORDING');
-      sendResponse({ success: true });
-    });
-    return true;
-  } else if (message.type === 'PAUSE_CAPTURE') {
-    chrome.storage.local.set({ isPaused: true }).then(() => {
-      notifyAllTabs('PAUSE_CAPTURE');
-      sendResponse({ success: true });
-    });
-    return true;
-  } else if (message.type === 'RESUME_CAPTURE') {
-    chrome.storage.local.set({ isPaused: false }).then(() => {
-      notifyAllTabs('RESUME_CAPTURE');
-      sendResponse({ success: true });
-    });
-    return true;
-  } else if (message.type === 'CAPTURE_STEP') {
-    handleCaptureStep(message.step, sender.tab)
-      .then(() => sendResponse({ success: true }))
-      .catch(err => sendResponse({ error: err.message }));
-    return true;
-  } else if (message.type === 'CAPTURE_ELEMENT') {
-    handleCaptureElement(message.captureData, sender.tab)
-      .then(() => sendResponse({ success: true }))
-      .catch(err => sendResponse({ error: err.message }));
-    return true;
-  } else if (message.type === 'START_ELEMENT_CAPTURE') {
-    startElementCaptureOnActiveTab()
-      .then(() => sendResponse({ success: true }))
-      .catch(err => sendResponse({ error: err.message }));
-    return true;
-  } else if (message.type === 'SET_BORDER_COLOR') {
-    chrome.storage.local.set({ borderColor: message.color }).then(() => {
-      notifyAllTabsWithColor(message.color);
-      sendResponse({ success: true });
-    });
-    return true;
-  } else if (message.type === 'GET_RECORDING_STATE') {
-    sendResponse({ isRecording });
-  } else if (message.type === 'SYNC_TO_BACKEND') {
-    syncStepsToBackend(message.workspaceId, message.title)
-      .then(result => sendResponse(result))
-      .catch(err => sendResponse({ error: err.message }));
-    return true;
-  } else if (message.type === 'GET_WORKSPACES') {
-    fetchWorkspaces()
-      .then(workspaces => sendResponse({ workspaces }))
-      .catch(err => sendResponse({ error: err.message }));
-    return true;
-  } else if (message.type === 'GET_USER') {
-    fetchUser()
-      .then(user => sendResponse({ user }))
-      .catch(err => sendResponse({ error: err.message }));
-    return true;
-  } else if (message.type === 'SET_API_URL') {
-    chrome.storage.local.set({ apiBaseUrl: message.url });
-    sendResponse({ success: true });
-  } else if (message.type === 'SET_CAPTURE_SESSION') {
-    // Set capture session from web app
-    const session = message.session;
-    if (session && session.token) {
-      activeSessionToken = session.token;
-      activeGuideId = session.guideId;
-      chrome.storage.local.set({ captureSession: session });
-      // Auto-start recording when session is set
-      isRecording = true;
-      chrome.storage.local.set({ isRecording: true, steps: [] }).then(async () => {
-        const result = await startRecordingOnAllTabs();
-        if (result?.error === 'permissions_required') {
-          // Reset recording state since we can't actually record
-          isRecording = false;
-          await chrome.storage.local.set({ isRecording: false });
-          sendResponse({ success: false, error: 'permissions_required' });
-        } else {
-          sendResponse({ success: true });
-        }
-      });
-    } else {
-      activeSessionToken = null;
-      activeGuideId = null;
-      chrome.storage.local.set({ captureSession: null });
-      sendResponse({ success: true });
-    }
-    return true;
-  } else if (message.type === 'CLEAR_CAPTURE_SESSION') {
-    // Clear capture session (stop recording triggered from web app)
-    activeSessionToken = null;
-    activeGuideId = null;
-    isRecording = false;
-    chrome.storage.local.set({ captureSession: null, isRecording: false });
-    notifyAllTabs('STOP_RECORDING');
-    sendResponse({ success: true });
-  } else if (message.type === 'GET_CAPTURE_SESSION') {
-    sendResponse({
-      hasSession: !!activeSessionToken,
-      guideId: activeGuideId
-    });
-  } else if (message.type === 'ELEMENT_CAPTURE_CANCELLED') {
-    sendResponse({ success: true });
-  } else if (message.type === 'CHECK_PERMISSIONS') {
-    checkHostPermissions()
-      .then(hasPermission => sendResponse({ hasPermission }))
-      .catch(err => sendResponse({ hasPermission: false, error: err.message }));
-    return true;
-  } else if (message.type === 'REQUEST_PERMISSIONS') {
-    requestHostPermissions()
-      .then(granted => sendResponse({ granted }))
-      .catch(err => sendResponse({ granted: false, error: err.message }));
-    return true;
-  } else if (message.type === 'CAPTURE_PAGE_SCREENSHOT') {
-    // Capture screenshot for Screenshot Studio
-    capturePageScreenshot(sender.tab)
-      .then(screenshot => sendResponse({ screenshot }))
-      .catch(err => sendResponse({ error: err.message }));
-    return true;
-  }
-  return true;
-});
-
-async function capturePageScreenshot(tab) {
-  try {
-    const screenshot = await chrome.tabs.captureVisibleTab(null, { format: 'png' });
-    return screenshot;
-  } catch (e) {
-    console.error('Failed to capture screenshot:', e);
-    throw e;
-  }
-}
-
-async function startElementCaptureOnActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id) {
-    try {
-      await chrome.tabs.sendMessage(tab.id, { type: 'START_ELEMENT_CAPTURE' });
-    } catch (e) {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['src/content.js']
-      });
-      await chrome.tabs.sendMessage(tab.id, { type: 'START_ELEMENT_CAPTURE' });
-    }
-  }
-}
-
-async function notifyAllTabsWithColor(color) {
-  const tabs = await chrome.tabs.query({});
-  for (const tab of tabs) {
-    try {
-      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
-        await chrome.tabs.sendMessage(tab.id, { type: 'SET_BORDER_COLOR', color });
-      }
-    } catch (e) {
-    }
-  }
-}
-
-async function startRecordingOnAllTabs() {
-  // First check if we have host permissions
-  const hasPermissions = await checkHostPermissions();
-  if (!hasPermissions) {
-    console.log('No host permissions - cannot start recording on all tabs');
-    return { error: 'permissions_required' };
-  }
-
-  const tabs = await chrome.tabs.query({});
-  
-  for (const tab of tabs) {
-    if (!tab.id || !tab.url) continue;
-    if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) continue;
-    
-    try {
-      await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' });
-    } catch (e) {
-      try {
-        // Dynamically inject content script (requires host permission)
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['src/content.js']
-        });
-        // Also inject CSS
-        await chrome.scripting.insertCSS({
-          target: { tabId: tab.id },
-          files: ['src/content.css']
-        });
-        await chrome.tabs.sendMessage(tab.id, { type: 'START_RECORDING' });
-      } catch (injectError) {
-        console.log('Could not inject into tab:', tab.url, injectError.message);
-      }
-    }
-  }
-  
-  return { success: true };
-}
-
-async function notifyAllTabs(type) {
-  const tabs = await chrome.tabs.query({});
-  for (const tab of tabs) {
-    try {
-      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
-        await chrome.tabs.sendMessage(tab.id, { type });
-      }
-    } catch (e) {
-    }
-  }
-}
-
-// Notify webapp tabs about session expiry via postMessage relay
-async function notifyAllTabsSessionExpired() {
-  const tabs = await chrome.tabs.query({});
-  for (const tab of tabs) {
-    try {
-      if (tab.id && tab.url && !tab.url.startsWith('chrome://')) {
-        await chrome.tabs.sendMessage(tab.id, { type: 'SESSION_EXPIRED' });
-      }
-    } catch (e) {
-    }
-  }
-}
-
-async function handleCaptureStep(step, tab) {
-  console.log('Capturing step:', step.type, step.description);
-  
-  let screenshot = null;
-  
-  if (tab && tab.windowId) {
-    try {
-      screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-    } catch (e) {
-      console.error('Screenshot capture failed:', e);
-    }
-  }
-
-  const stepWithScreenshot = {
-    ...step,
-    screenshot,
-    timestamp: Date.now(),
-    tabId: tab?.id,
-    tabUrl: tab?.url,
-    tabTitle: tab?.title
+async function broadcastState() {
+  const state = {
+    isCapturing: CaptureState.isCapturing,
+    isPaused: CaptureState.isPaused,
+    stepCount: CaptureState.steps.length,
+    config: CaptureState.config
   };
 
-  // Store locally
-  const { steps = [] } = await chrome.storage.local.get(['steps']);
-  steps.push(stepWithScreenshot);
-  await chrome.storage.local.set({ steps });
+  await broadcastToAllTabs({ type: 'CAPTURE_STATE_CHANGED', data: state });
+}
+
+async function broadcastToAllTabs(message) {
+  const tabs = await chrome.tabs.query({});
   
-  console.log('Step captured. Total steps:', steps.length);
-  
-  // Ensure session is hydrated before sending
-  if (!activeSessionToken) {
-    await checkForWebAppSession();
-  }
-  
-  // Send to backend if session is active
-  if (activeSessionToken) {
+  for (const tab of tabs) {
+    if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
+      continue;
+    }
+    
     try {
-      await sendStepToBackend(stepWithScreenshot);
-      console.log('Step sent to backend');
+      await chrome.tabs.sendMessage(tab.id, message);
     } catch (e) {
-      console.error('Failed to send step to backend:', e);
     }
   }
 }
 
-async function handleCaptureElement(captureData, tab) {
-  console.log('Capturing element:', captureData.description);
+function dataUrlToBlob(dataUrl) {
+  const parts = dataUrl.split(',');
+  const mime = parts[0].match(/:(.*?);/)[1];
+  const binary = atob(parts[1]);
+  const array = new Uint8Array(binary.length);
   
-  let screenshot = null;
+  for (let i = 0; i < binary.length; i++) {
+    array[i] = binary.charCodeAt(i);
+  }
   
-  if (tab && tab.windowId) {
-    try {
-      screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-    } catch (e) {
-      console.error('Screenshot capture failed:', e);
+  return new Blob([array], { type: mime });
+}
+
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  if (CaptureState.isCapturing) {
+    CaptureState.activeTabId = activeInfo.tabId;
+    
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    if (tab.url && !tab.url.startsWith('chrome://')) {
+      await injectContentScript(activeInfo.tabId);
+      await chrome.tabs.sendMessage(activeInfo.tabId, {
+        type: 'START_CAPTURE',
+        data: CaptureState.config
+      }).catch(() => {});
     }
   }
-
-  const stepWithScreenshot = {
-    ...captureData,
-    screenshot,
-    timestamp: Date.now(),
-    tabId: tab?.id,
-    tabUrl: tab?.url,
-    tabTitle: tab?.title,
-    isElementCapture: true
-  };
-
-  // Store locally
-  const { steps = [] } = await chrome.storage.local.get(['steps']);
-  steps.push(stepWithScreenshot);
-  await chrome.storage.local.set({ steps });
-  
-  console.log('Element captured. Total steps:', steps.length);
-  
-  // Ensure session is hydrated before sending
-  if (!activeSessionToken) {
-    await checkForWebAppSession();
-  }
-  
-  // Send to backend if session is active
-  if (activeSessionToken) {
-    try {
-      await sendStepToBackend(stepWithScreenshot);
-      console.log('Element sent to backend');
-    } catch (e) {
-      console.error('Failed to send element to backend:', e);
-    }
-  }
-}
-
-async function fetchUser() {
-  const apiUrl = await getConfiguredApiUrl();
-  const response = await fetch(`${apiUrl}/api/extension/user`, {
-    credentials: 'include'
-  });
-  
-  if (!response.ok) {
-    throw new Error('Not authenticated');
-  }
-  
-  return response.json();
-}
-
-async function fetchWorkspaces() {
-  const apiUrl = await getConfiguredApiUrl();
-  const response = await fetch(`${apiUrl}/api/extension/workspaces`, {
-    credentials: 'include'
-  });
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch workspaces');
-  }
-  
-  return response.json();
-}
-
-async function syncStepsToBackend(workspaceId, title) {
-  const { steps = [] } = await chrome.storage.local.get(['steps']);
-  
-  if (steps.length === 0) {
-    return { error: 'No steps to sync' };
-  }
-
-  const formattedSteps = steps.map(step => ({
-    type: step.type,
-    description: step.description,
-    selector: step.selector,
-    url: step.url || step.tabUrl,
-    pageTitle: step.pageTitle || step.tabTitle,
-    screenshot: step.screenshot,
-    timestamp: step.timestamp,
-    element: step.element,
-    elementBounds: step.elementBounds || null,
-    borderColor: step.borderColor || null,
-    isElementCapture: step.isElementCapture || false
-  }));
-
-  const apiUrl = await getConfiguredApiUrl();
-  const response = await fetch(`${apiUrl}/api/extension/sync`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-    body: JSON.stringify({
-      workspaceId,
-      title,
-      steps: formattedSteps
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to sync');
-  }
-
-  const result = await response.json();
-  
-  await chrome.storage.local.set({ 
-    guideId: result.guideId,
-    steps: []
-  });
-
-  return result;
-}
-
-chrome.action.onClicked.addListener(async (tab) => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && isRecording && tab.url && !tab.url.startsWith('chrome://')) {
-    // Check permissions before injecting
-    const hasPermissions = await checkHostPermissions();
-    if (!hasPermissions) {
-      console.log('No host permissions - cannot inject into new tab');
-      return;
-    }
-    
-    try {
-      await chrome.tabs.sendMessage(tabId, { type: 'START_RECORDING' });
-    } catch (e) {
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ['src/content.js']
-        });
-        await chrome.scripting.insertCSS({
-          target: { tabId },
-          files: ['src/content.css']
-        });
-        await chrome.tabs.sendMessage(tabId, { type: 'START_RECORDING' });
-      } catch (injectError) {
-        console.log('Could not inject into new tab:', tab.url);
-      }
+  if (CaptureState.isCapturing && changeInfo.status === 'complete') {
+    if (tab.url && !tab.url.startsWith('chrome://')) {
+      await injectContentScript(tabId);
+      await chrome.tabs.sendMessage(tabId, {
+        type: 'START_CAPTURE',
+        data: CaptureState.config
+      }).catch(() => {});
     }
   }
 });
+
+console.log('[FlowCapture] Background service worker initialized');

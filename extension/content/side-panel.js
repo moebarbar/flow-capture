@@ -431,6 +431,56 @@
       fill: currentColor;
     }
 
+    .sync-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+
+    .sync-status.pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .sync-status.queued {
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+
+    .sync-status.uploading {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .sync-status.saved {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .sync-status.failed {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .sync-status svg {
+      width: 8px;
+      height: 8px;
+      fill: currentColor;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .sync-status.uploading svg {
+      animation: spin 1s linear infinite;
+    }
+
     .step-actions {
       display: flex;
       flex-direction: column;
@@ -806,6 +856,7 @@
             ${formatTime(step.timestamp)}
           </span>
           <span class="step-meta-item action-badge">${actionType}</span>
+          ${getSyncStatusBadge(step.syncStatus)}
         </div>
       </div>
       <div class="step-actions">
@@ -912,6 +963,31 @@
     if (!timestamp) return '';
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function getSyncStatusBadge(status) {
+    if (!status) return '';
+
+    const icons = {
+      pending: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+      queued: '<svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>',
+      uploading: '<svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>',
+      saved: '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>',
+      failed: '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
+    };
+
+    const labels = {
+      pending: 'Pending',
+      queued: 'Queued',
+      uploading: 'Syncing',
+      saved: 'Saved',
+      failed: 'Failed'
+    };
+
+    const icon = icons[status] || '';
+    const label = labels[status] || status;
+
+    return `<span class="sync-status ${status}">${icon}${label}</span>`;
   }
 
   function renderAllSteps(steps) {

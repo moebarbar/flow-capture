@@ -5,6 +5,7 @@
 
 import { MessageTypes, PortNames, CaptureStates, WebAppMessageTypes } from '../shared/messages.js';
 import { saveSession, clearSession, savePendingSteps, getPendingSteps } from '../shared/storage.js';
+import { syncManager, SyncStatus } from './sync-manager.js';
 
 class CaptureStateMachine {
   constructor() {
@@ -309,6 +310,9 @@ async function handleMessage(message, sender) {
     case 'STEP_UPDATED':
       return handleStepUpdated(data);
     
+    case 'GET_SYNC_STATS':
+      return syncManager.getStats();
+    
     case MessageTypes.SYNC_STEPS:
       return await syncStepsToServer();
     
@@ -456,6 +460,17 @@ async function startCapture(config = {}) {
   machine.reset(true);
   machine.transition(CaptureStates.CAPTURING);
 
+  syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
+  syncManager.setStatusCallback((stepOrder, status) => {
+    const step = machine.state.steps.find(s => s.order === stepOrder);
+    if (step) {
+      step.syncStatus = status;
+      machine.broadcastStateUpdate();
+    }
+  });
+  await syncManager.loadOfflineQueue();
+  syncManager.startPeriodicSync();
+
   const targetTabId = config.tabId;
   let tab;
   
@@ -500,12 +515,14 @@ async function stopCapture() {
 
   if (steps.length > 0 && machine.state.apiBaseUrl && guideId) {
     try {
-      await syncStepsToServer();
+      const flushResult = await syncManager.flush();
+      console.log('[FlowCapture] Sync flush complete:', flushResult);
     } catch (e) {
-      console.error('[FlowCapture] Sync failed:', e);
+      console.error('[FlowCapture] Sync flush failed:', e);
     }
   }
 
+  syncManager.stopPeriodicSync();
   machine.transition(CaptureStates.IDLE);
 
   return { 
@@ -584,13 +601,8 @@ async function handleStepCaptured(stepData, tabId) {
   console.log('[FlowCapture] Step captured:', step.order, step.selector);
 
   if (machine.state.apiBaseUrl && machine.state.guideId) {
-    try {
-      await saveStepToServer(step);
-      step.syncStatus = 'saved';
-    } catch (e) {
-      step.syncStatus = 'failed';
-      console.error('[FlowCapture] Step save failed:', e);
-    }
+    step.screenshotDataUrl = screenshotUrl ? null : stepData.screenshotDataUrl;
+    syncManager.enqueueStep(step);
   }
 
   machine.broadcastStateUpdate();

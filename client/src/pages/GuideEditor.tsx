@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Guide, KbCategory } from "@shared/schema";
+import { normalizeScreenshot } from "@/lib/normalizeScreenshot";
 
 export default function GuideEditor() {
   const [, params] = useRoute("/guides/:id/edit");
@@ -548,15 +549,21 @@ export default function GuideEditor() {
     
     setImageUploading(true);
     try {
+      // Normalize the screenshot to 16:9 aspect ratio with professional styling
+      const normalizedBlob = await normalizeScreenshot(file);
+      const normalizedFile = new File([normalizedBlob], file.name.replace(/\.[^.]+$/, '.png'), {
+        type: 'image/png',
+      });
+      
       // Request presigned URL for upload
       const res = await fetch('/api/uploads/request-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type,
+          name: normalizedFile.name,
+          size: normalizedFile.size,
+          contentType: normalizedFile.type,
         }),
       });
       
@@ -566,11 +573,11 @@ export default function GuideEditor() {
       
       const { uploadURL, objectPath } = await res.json();
       
-      // Upload directly to object storage
+      // Upload normalized image to object storage
       const uploadRes = await fetch(uploadURL, {
         method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
+        body: normalizedBlob,
+        headers: { 'Content-Type': 'image/png' },
       });
       
       if (!uploadRes.ok) {

@@ -223,38 +223,92 @@
       return null;
     }
 
-    if (element.id && /^[a-zA-Z][\w-]*$/.test(element.id)) {
-      return `#${element.id}`;
+    if (element.id && isValidCssIdentifier(element.id)) {
+      return `#${CSS.escape(element.id)}`;
     }
 
     const dataTestId = element.getAttribute('data-testid');
     if (dataTestId) {
-      return `[data-testid="${dataTestId}"]`;
+      return `[data-testid="${escapeAttrValue(dataTestId)}"]`;
+    }
+
+    const dataId = element.getAttribute('data-id');
+    if (dataId) {
+      return `[data-id="${escapeAttrValue(dataId)}"]`;
     }
 
     const ariaLabel = element.getAttribute('aria-label');
-    if (ariaLabel) {
-      const escaped = ariaLabel.replace(/"/g, '\\"');
-      return `[aria-label="${escaped}"]`;
+    if (ariaLabel && ariaLabel.length <= 50) {
+      return `[aria-label="${escapeAttrValue(ariaLabel)}"]`;
     }
 
+    const name = element.getAttribute('name');
+    if (name && element.tagName.match(/^(INPUT|SELECT|TEXTAREA|BUTTON)$/)) {
+      return `${element.tagName.toLowerCase()}[name="${escapeAttrValue(name)}"]`;
+    }
+
+    const title = element.getAttribute('title');
+    if (title && title.length <= 50) {
+      return `[title="${escapeAttrValue(title)}"]`;
+    }
+
+    const role = element.getAttribute('role');
+    if (role) {
+      const allWithRole = document.querySelectorAll(`[role="${role}"]`);
+      if (allWithRole.length === 1) {
+        return `[role="${role}"]`;
+      }
+      
+      const parent = element.parentElement;
+      if (parent) {
+        const siblingsWithRole = Array.from(parent.children).filter(
+          el => el.getAttribute('role') === role
+        );
+        if (siblingsWithRole.length === 1) {
+          const parentSelector = generateParentSelector(parent);
+          if (parentSelector) {
+            return `${parentSelector} > [role="${role}"]`;
+          }
+        }
+      }
+    }
+
+    return generatePathSelector(element);
+  }
+
+  function generateParentSelector(parent) {
+    if (!parent || parent === document.body) return null;
+    
+    if (parent.id && isValidCssIdentifier(parent.id)) {
+      return `#${CSS.escape(parent.id)}`;
+    }
+    
+    const dataTestId = parent.getAttribute('data-testid');
+    if (dataTestId) {
+      return `[data-testid="${escapeAttrValue(dataTestId)}"]`;
+    }
+    
+    return null;
+  }
+
+  function generatePathSelector(element) {
     const path = [];
     let current = element;
     
     while (current && current !== document.body && path.length < 5) {
       let selector = current.tagName.toLowerCase();
       
-      if (current.id && /^[a-zA-Z][\w-]*$/.test(current.id)) {
-        path.unshift(`#${current.id}`);
+      if (current.id && isValidCssIdentifier(current.id)) {
+        path.unshift(`#${CSS.escape(current.id)}`);
         break;
       }
       
       if (current.className && typeof current.className === 'string') {
         const classes = current.className.trim().split(/\s+/)
-          .filter(c => c && !c.startsWith('flowcapture') && /^[a-zA-Z][\w-]*$/.test(c))
+          .filter(c => c && !c.startsWith('flowcapture') && !c.startsWith('_') && isValidCssIdentifier(c))
           .slice(0, 2);
         if (classes.length) {
-          selector += '.' + classes.join('.');
+          selector += '.' + classes.map(c => CSS.escape(c)).join('.');
         }
       }
       
@@ -274,25 +328,252 @@
     return path.join(' > ');
   }
 
+  function isValidCssIdentifier(str) {
+    if (!str || typeof str !== 'string') return false;
+    return /^[a-zA-Z][\w-]*$/.test(str) && !str.match(/^\d/);
+  }
+
+  function escapeAttrValue(str) {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
   function getElementMetadata(element) {
     const rect = element.getBoundingClientRect();
+    
+    const innerText = getVisibleText(element);
+    const fullText = (element.textContent || '').trim().slice(0, 200);
+    
     return {
       tagName: element.tagName.toLowerCase(),
       id: element.id || null,
       classList: Array.from(element.classList || []),
-      textContent: (element.textContent || '').trim().slice(0, 100),
+      innerText: innerText,
+      textContent: fullText,
       placeholder: element.getAttribute('placeholder'),
       name: element.getAttribute('name'),
       type: element.getAttribute('type'),
       href: element.getAttribute('href'),
       ariaLabel: element.getAttribute('aria-label'),
+      role: element.getAttribute('role'),
+      title: element.getAttribute('title'),
+      alt: element.getAttribute('alt'),
+      value: element.value || null,
+      dataTestId: element.getAttribute('data-testid'),
+      isButton: element.tagName === 'BUTTON' || element.getAttribute('role') === 'button',
+      isLink: element.tagName === 'A' || element.getAttribute('role') === 'link',
+      isInput: ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName),
       rect: {
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height
+        top: Math.round(rect.top),
+        left: Math.round(rect.left),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        centerX: Math.round(rect.left + rect.width / 2),
+        centerY: Math.round(rect.top + rect.height / 2)
       }
     };
+  }
+
+  function getVisibleText(element) {
+    if (element.tagName === 'INPUT') {
+      return element.placeholder || element.value || '';
+    }
+    if (element.tagName === 'IMG') {
+      return element.alt || '';
+    }
+    
+    const childNodes = element.childNodes;
+    let text = '';
+    
+    for (let i = 0; i < childNodes.length; i++) {
+      const node = childNodes[i];
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.textContent;
+      }
+    }
+    
+    text = text.trim();
+    if (text) return text.slice(0, 100);
+    
+    return (element.innerText || element.textContent || '').trim().slice(0, 100);
+  }
+
+  function generateStepTitle(element, actionType) {
+    const metadata = getElementMetadata(element);
+    const tag = element.tagName;
+    const role = metadata.role;
+    
+    let elementLabel = getElementLabel(element, metadata);
+    elementLabel = truncateText(elementLabel, 40);
+    
+    const actionVerbs = {
+      click: 'Click',
+      input: 'Enter text in',
+      select: 'Select',
+      check: 'Check',
+      uncheck: 'Uncheck',
+      hover: 'Hover over'
+    };
+    
+    const verb = actionVerbs[actionType] || 'Interact with';
+    
+    const elementTypes = {
+      BUTTON: 'Button',
+      A: 'Link',
+      INPUT: getInputTypeName(metadata.type),
+      TEXTAREA: 'Text Area',
+      SELECT: 'Dropdown',
+      IMG: 'Image',
+      LABEL: 'Label',
+      CHECKBOX: 'Checkbox',
+      RADIO: 'Radio Button'
+    };
+    
+    let elementTypeName = elementTypes[tag] || '';
+    
+    if (role === 'button') elementTypeName = 'Button';
+    else if (role === 'link') elementTypeName = 'Link';
+    else if (role === 'tab') elementTypeName = 'Tab';
+    else if (role === 'menuitem') elementTypeName = 'Menu Item';
+    else if (role === 'checkbox') elementTypeName = 'Checkbox';
+    else if (role === 'radio') elementTypeName = 'Radio Button';
+    
+    if (elementLabel && elementTypeName) {
+      return `${verb} "${elementLabel}" ${elementTypeName}`;
+    } else if (elementLabel) {
+      return `${verb} "${elementLabel}"`;
+    } else if (elementTypeName) {
+      return `${verb} ${elementTypeName}`;
+    } else {
+      return `${verb} Element`;
+    }
+  }
+
+  function generateStepDescription(element, actionType) {
+    const metadata = getElementMetadata(element);
+    const label = getElementLabel(element, metadata);
+    const tag = element.tagName;
+    const role = metadata.role;
+    
+    const truncatedLabel = truncateText(label, 50);
+    
+    const elementDescription = getElementDescription(tag, role, metadata);
+    
+    switch (actionType) {
+      case 'click':
+        if (metadata.isButton || role === 'button') {
+          return `User clicks the "${truncatedLabel || 'Submit'}" button${getButtonContext(metadata)}.`;
+        }
+        if (metadata.isLink || tag === 'A') {
+          const href = metadata.href;
+          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+            return `User clicks the "${truncatedLabel || 'link'}" link to navigate to another page.`;
+          }
+          return `User clicks the "${truncatedLabel || 'link'}" link.`;
+        }
+        if (tag === 'INPUT' && metadata.type === 'checkbox') {
+          return `User ${element.checked ? 'checks' : 'unchecks'} the "${truncatedLabel || 'checkbox'}" option.`;
+        }
+        if (tag === 'INPUT' && metadata.type === 'radio') {
+          return `User selects the "${truncatedLabel || 'radio'}" option.`;
+        }
+        return `User clicks ${elementDescription}${truncatedLabel ? ` labeled "${truncatedLabel}"` : ''}.`;
+        
+      case 'input':
+        if (tag === 'TEXTAREA') {
+          return `User enters text in the "${truncatedLabel || 'text area'}" field.`;
+        }
+        if (tag === 'SELECT') {
+          return `User selects an option from the "${truncatedLabel || 'dropdown'}" menu.`;
+        }
+        return `User enters text in the "${truncatedLabel || getInputTypeName(metadata.type)}" field.`;
+        
+      default:
+        return `User interacts with ${elementDescription}.`;
+    }
+  }
+
+  function getElementLabel(element, metadata) {
+    if (metadata.ariaLabel) return metadata.ariaLabel;
+    if (metadata.title) return metadata.title;
+    if (metadata.innerText) return metadata.innerText;
+    if (metadata.placeholder) return metadata.placeholder;
+    if (metadata.alt) return metadata.alt;
+    if (metadata.name) return humanizeString(metadata.name);
+    if (metadata.id) return humanizeString(metadata.id);
+    if (metadata.dataTestId) return humanizeString(metadata.dataTestId);
+    return '';
+  }
+
+  function getInputTypeName(type) {
+    const typeNames = {
+      text: 'Text Field',
+      email: 'Email Field',
+      password: 'Password Field',
+      search: 'Search Field',
+      tel: 'Phone Field',
+      url: 'URL Field',
+      number: 'Number Field',
+      date: 'Date Picker',
+      file: 'File Input',
+      checkbox: 'Checkbox',
+      radio: 'Radio Button',
+      submit: 'Submit Button',
+      button: 'Button'
+    };
+    return typeNames[type] || 'Input Field';
+  }
+
+  function getElementDescription(tag, role, metadata) {
+    if (role) {
+      const roleDescriptions = {
+        button: 'the button',
+        link: 'the link',
+        tab: 'the tab',
+        menuitem: 'the menu item',
+        checkbox: 'the checkbox',
+        radio: 'the radio button',
+        textbox: 'the text field',
+        combobox: 'the dropdown'
+      };
+      if (roleDescriptions[role]) return roleDescriptions[role];
+    }
+    
+    const tagDescriptions = {
+      BUTTON: 'the button',
+      A: 'the link',
+      INPUT: `the ${getInputTypeName(metadata.type).toLowerCase()}`,
+      TEXTAREA: 'the text area',
+      SELECT: 'the dropdown',
+      LABEL: 'the label',
+      IMG: 'the image'
+    };
+    
+    return tagDescriptions[tag] || 'the element';
+  }
+
+  function getButtonContext(metadata) {
+    if (metadata.type === 'submit') return ' to submit the form';
+    if (metadata.name?.toLowerCase().includes('cancel')) return ' to cancel the action';
+    if (metadata.name?.toLowerCase().includes('save')) return ' to save changes';
+    if (metadata.name?.toLowerCase().includes('delete')) return ' to delete the item';
+    return '';
+  }
+
+  function humanizeString(str) {
+    if (!str) return '';
+    return str
+      .replace(/[-_]/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, c => c.toUpperCase())
+      .trim();
+  }
+
+  function truncateText(text, maxLength) {
+    if (!text) return '';
+    text = text.trim();
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength - 3).trim() + '...';
   }
 
   function isInteractable(element) {
@@ -441,11 +722,18 @@
       console.log('[FlowCapture] Screenshot request failed:', e);
     }
 
+    const actionType = 'click';
+    const title = generateStepTitle(element, actionType);
+    const description = generateStepDescription(element, actionType);
+
     const step = {
-      action: 'click',
-      actionType: 'click',
+      action: actionType,
+      actionType: actionType,
+      title: title,
+      description: description,
       selector: selector,
       url: window.location.href,
+      pageTitle: document.title,
       screenshotDataUrl: screenshotDataUrl,
       elementMetadata: getElementMetadata(element),
       timestamp: Date.now()
@@ -476,11 +764,18 @@
     const selector = generateSelector(element);
     if (!selector) return;
 
+    const actionType = 'input';
+    const title = generateStepTitle(element, actionType);
+    const description = generateStepDescription(element, actionType);
+
     const step = {
-      action: 'input',
-      actionType: 'input',
+      action: actionType,
+      actionType: actionType,
+      title: title,
+      description: description,
       selector: selector,
       url: window.location.href,
+      pageTitle: document.title,
       elementMetadata: getElementMetadata(element),
       timestamp: Date.now()
     };

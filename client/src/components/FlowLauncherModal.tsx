@@ -43,11 +43,11 @@ export function FlowLauncherModal({
         <div className="bg-gradient-to-br from-brand-600 to-brand-700 p-6 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-display font-bold text-white">
-              Create New Flow
+              Create Step-by-Step Documentation
             </DialogTitle>
           </DialogHeader>
           <p className="text-brand-100 mt-2">
-            Capture your workflow automatically or upload existing screenshots
+            SOPs, training guides, onboarding docs, how-to tutorials - all in minutes
           </p>
         </div>
 
@@ -84,7 +84,7 @@ export function FlowLauncherModal({
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Automatically capture clicks, screenshots, and generate step descriptions using AI
+                  Just do your workflow - we capture every click with screenshots and AI descriptions
                 </p>
                 
                 {extensionReady && (

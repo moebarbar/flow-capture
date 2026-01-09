@@ -1083,22 +1083,41 @@ export default function GuideEditor() {
           <div className="flex-1 overflow-y-auto p-2">
             {sortedSteps.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                  <Plus className="h-6 w-6 text-muted-foreground" />
+                <div className="w-12 h-12 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center mb-3">
+                  <Play className="h-6 w-6 text-brand-600" />
                 </div>
-                <p className="text-sm text-muted-foreground mb-3">No steps yet</p>
+                <p className="text-sm font-medium text-foreground mb-1">Ready to capture</p>
+                <p className="text-xs text-muted-foreground mb-3">Start capturing to create steps</p>
                 <Button 
-                  onClick={handleAddStep} 
-                  disabled={isCreatingStep}
+                  onClick={async () => {
+                    if (isExtensionInstalled === false) {
+                      setShowExtensionDialog(true);
+                      return;
+                    }
+                    if (permissionStatus === 'denied') {
+                      setShowPermissionDialog(true);
+                      return;
+                    }
+                    if (permissionStatus !== 'granted') {
+                      const granted = await requestPermissions();
+                      if (!granted) {
+                        setShowPermissionDialog(true);
+                        return;
+                      }
+                    }
+                    startCaptureMutation.mutate();
+                  }} 
+                  disabled={startCaptureMutation.isPending || isCapturing}
                   size="sm"
-                  data-testid="button-add-first-step"
+                  className="bg-brand-600 hover:bg-brand-700"
+                  data-testid="button-start-capture-sidebar"
                 >
-                  {isCreatingStep ? (
+                  {startCaptureMutation.isPending ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Play className="h-4 w-4 mr-2" />
                   )}
-                  Add first step
+                  Start Capturing
                 </Button>
               </div>
             ) : (
@@ -1278,6 +1297,83 @@ export default function GuideEditor() {
                 )}
               </div>
             </motion.div>
+          ) : sortedSteps.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center max-w-md">
+              <div className="w-20 h-20 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center mb-6">
+                <Play className="h-10 w-10 text-brand-600" />
+              </div>
+              <h2 className="text-2xl font-display font-bold text-foreground mb-2">Start Capturing Your Workflow</h2>
+              <p className="text-muted-foreground mb-6">
+                Click the button below, then perform your workflow in any browser tab. 
+                We'll capture every click with screenshots and AI-generated descriptions.
+              </p>
+              <div className="flex flex-col gap-3 w-full max-w-xs">
+                <Button
+                  size="lg"
+                  className="w-full rounded-xl bg-brand-600 hover:bg-brand-700 shadow-lg shadow-brand-500/20"
+                  onClick={async () => {
+                    if (isExtensionInstalled === false) {
+                      setShowExtensionDialog(true);
+                      return;
+                    }
+                    if (permissionStatus === 'denied') {
+                      setShowPermissionDialog(true);
+                      return;
+                    }
+                    if (permissionStatus !== 'granted') {
+                      const granted = await requestPermissions();
+                      if (!granted) {
+                        setShowPermissionDialog(true);
+                        return;
+                      }
+                    }
+                    startCaptureMutation.mutate();
+                  }}
+                  disabled={startCaptureMutation.isPending || isCapturing}
+                  data-testid="button-start-capture-main"
+                >
+                  {startCaptureMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-5 w-5" />
+                      Start Capturing
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full rounded-xl"
+                  onClick={() => fileInputRef.current?.click()}
+                  data-testid="button-upload-screenshots-main"
+                >
+                  <Upload className="mr-2 h-5 w-5" />
+                  Or Upload Screenshots
+                </Button>
+              </div>
+              <div className="mt-8 grid grid-cols-2 gap-4 text-left w-full max-w-sm">
+                <div className="flex items-start gap-2">
+                  <ClipboardList className="h-4 w-4 text-brand-600 mt-0.5 shrink-0" />
+                  <span className="text-xs text-muted-foreground">SOPs & Procedures</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <GraduationCap className="h-4 w-4 text-brand-600 mt-0.5 shrink-0" />
+                  <span className="text-xs text-muted-foreground">Training Guides</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Library className="h-4 w-4 text-brand-600 mt-0.5 shrink-0" />
+                  <span className="text-xs text-muted-foreground">Knowledge Bases</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <HelpCircle className="h-4 w-4 text-brand-600 mt-0.5 shrink-0" />
+                  <span className="text-xs text-muted-foreground">How-to Tutorials</span>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="text-center text-muted-foreground">
               Select a step to edit

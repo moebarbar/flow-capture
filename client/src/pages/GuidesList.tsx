@@ -84,7 +84,7 @@ function FlowCard({ guide, viewMode, workspaceId, onShare, onCollection, onPubli
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 shrink-0 relative z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-8 w-8 shrink-0 relative z-10"
                 data-testid={`button-flow-actions-${guide.id}`}
               >
                 <MoreHorizontal className="h-4 w-4" />

@@ -71,7 +71,8 @@ class CaptureStateMachine {
       panelOpen: this.state.panelOpen,
       activeTabId: this.state.activeTabId,
       capturedTabs: Array.from(this.state.capturedTabs),
-      tabContexts: Object.fromEntries(this.tabContexts)
+      tabContexts: Object.fromEntries(this.tabContexts),
+      authExpired: syncManager.authExpired || false
     };
   }
 
@@ -468,6 +469,15 @@ async function startCapture(config = {}) {
       machine.broadcastStateUpdate();
     }
   });
+  syncManager.setAuthRequiredCallback(async () => {
+    console.log('[FlowCapture] Auth expired, notifying all tabs');
+    await broadcastToAllTabs('AUTH_REQUIRED');
+  });
+  syncManager.setAuthRestoredCallback(async () => {
+    console.log('[FlowCapture] Auth restored, notifying all tabs');
+    await broadcastToAllTabs('AUTH_RESTORED');
+  });
+  syncManager.clearAuthExpired();
   await syncManager.loadOfflineQueue();
   syncManager.startPeriodicSync();
 

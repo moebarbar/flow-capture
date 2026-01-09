@@ -19,7 +19,9 @@
     GET_STATE: 'GET_STATE',
     STATE_UPDATE: 'STATE_UPDATE',
     TOGGLE_PANEL: 'TOGGLE_PANEL',
-    PANEL_STATE_CHANGED: 'PANEL_STATE_CHANGED'
+    PANEL_STATE_CHANGED: 'PANEL_STATE_CHANGED',
+    AUTH_REQUIRED: 'AUTH_REQUIRED',
+    AUTH_RESTORED: 'AUTH_RESTORED'
   };
 
   let panelHost = null;
@@ -29,6 +31,7 @@
   let stepCount = 0;
   let port = null;
   let listenersAttached = false;
+  let authExpired = false;
   
   const STORAGE_KEY = 'flowcapture_panel_open';
   
@@ -213,6 +216,10 @@
 
     .status-dot.paused {
       background: #f59e0b;
+    }
+
+    .status-dot.auth-error {
+      background: #ef4444;
     }
 
     @keyframes pulse {
@@ -740,9 +747,15 @@
     const btnStartStop = shadowRoot.getElementById('btnStartStop');
     const btnPause = shadowRoot.getElementById('btnPause');
 
+    if (state.authExpired !== undefined) {
+      authExpired = state.authExpired;
+    }
+
     if (statusDot) {
       statusDot.className = 'status-dot';
-      if (isCapturing && !isPaused) {
+      if (authExpired) {
+        statusDot.classList.add('auth-error');
+      } else if (isCapturing && !isPaused) {
         statusDot.classList.add('capturing');
       } else if (isPaused) {
         statusDot.classList.add('paused');
@@ -750,12 +763,18 @@
     }
 
     if (statusText) {
-      if (isCapturing && !isPaused) {
-        statusText.textContent = 'Recording...';
-      } else if (isPaused) {
-        statusText.textContent = 'Paused';
+      if (authExpired) {
+        statusText.textContent = 'Re-authentication required';
+        statusText.style.color = '#ef4444';
       } else {
-        statusText.textContent = 'Ready to capture';
+        statusText.style.color = '';
+        if (isCapturing && !isPaused) {
+          statusText.textContent = 'Recording...';
+        } else if (isPaused) {
+          statusText.textContent = 'Paused';
+        } else {
+          statusText.textContent = 'Ready to capture';
+        }
       }
     }
 
@@ -1108,9 +1127,40 @@
           addStepToList(message.data);
           sendResponse({ success: true });
           break;
+        case MessageTypes.AUTH_REQUIRED:
+          authExpired = true;
+          updateAuthStatus();
+          sendResponse({ success: true });
+          break;
+        case MessageTypes.AUTH_RESTORED:
+          authExpired = false;
+          updateAuthStatus();
+          sendResponse({ success: true });
+          break;
       }
       return true;
     });
+  }
+
+  function updateAuthStatus() {
+    if (!shadowRoot) return;
+    
+    const statusDot = shadowRoot.getElementById('statusDot');
+    const statusText = shadowRoot.getElementById('statusText');
+    
+    if (authExpired) {
+      if (statusDot) {
+        statusDot.className = 'status-dot auth-error';
+      }
+      if (statusText) {
+        statusText.textContent = 'Re-authentication required';
+        statusText.style.color = '#ef4444';
+      }
+    } else {
+      if (statusText) {
+        statusText.style.color = '';
+      }
+    }
   }
 
   function init() {

@@ -25,8 +25,12 @@ class SyncManager {
     this.apiBaseUrl = null;
     this.guideId = null;
     this.onStatusChange = null;
+    this.onAuthRequired = null;
+    this.onAuthRestored = null;
     this.syncInterval = null;
     this.isOnline = true;
+    this.authExpired = false;
+    this.authCheckTimer = null;
   }
 
   configure(apiBaseUrl, guideId) {
@@ -36,6 +40,34 @@ class SyncManager {
 
   setStatusCallback(callback) {
     this.onStatusChange = callback;
+  }
+
+  setAuthRequiredCallback(callback) {
+    this.onAuthRequired = callback;
+  }
+
+  setAuthRestoredCallback(callback) {
+    this.onAuthRestored = callback;
+  }
+
+  clearAuthExpired() {
+    if (!this.authExpired) return;
+    
+    this.authExpired = false;
+    console.log('[SyncManager] Auth expired flag cleared');
+    
+    if (this.authCheckTimer) {
+      clearTimeout(this.authCheckTimer);
+      this.authCheckTimer = null;
+    }
+    
+    if (this.onAuthRestored) {
+      this.onAuthRestored();
+    }
+    
+    if (this.queue.length > 0 && !this.processing) {
+      this.processQueue();
+    }
   }
 
   async loadOfflineQueue() {
@@ -117,10 +149,15 @@ class SyncManager {
       return;
     }
 
+    if (this.authExpired) {
+      console.log('[SyncManager] Auth expired, queue paused until re-authentication');
+      return;
+    }
+
     this.processing = true;
 
     try {
-      while (this.queue.length > 0 && this.isOnline) {
+      while (this.queue.length > 0 && this.isOnline && !this.authExpired) {
         const now = Date.now();
         const readyItems = [];
         const deferredItems = [];
@@ -227,7 +264,14 @@ class SyncManager {
     } catch (error) {
       console.error('[SyncManager] Sync error:', error.message);
       
-      if (error.isNetworkError || error.errorType === 'transient') {
+      if (error.errorType === 'auth_required') {
+        this.authExpired = true;
+        console.log('[SyncManager] Auth expired detected, pausing sync');
+        if (this.onAuthRequired) {
+          this.onAuthRequired();
+        }
+        this.scheduleAuthCheck();
+      } else if (error.isNetworkError || error.errorType === 'transient') {
         this.isOnline = false;
         this.scheduleOnlineCheck();
       }
@@ -463,6 +507,9 @@ class SyncManager {
   }
 
   classifyHttpError(status) {
+    if (status === 401 || status === 403) {
+      return 'auth_required';
+    }
     if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
       return 'permanent';
     }
@@ -499,6 +546,38 @@ class SyncManager {
         this.scheduleOnlineCheck();
       }
     }, 10000);
+  }
+
+  scheduleAuthCheck() {
+    if (this.authCheckTimer) return;
+    if (!this.authExpired) return;
+    
+    this.authCheckTimer = setTimeout(async () => {
+      this.authCheckTimer = null;
+      
+      if (!this.apiBaseUrl || !this.authExpired) {
+        return;
+      }
+      
+      try {
+        const response = await this.fetchWithTimeout(
+          `${this.apiBaseUrl}/api/user`,
+          { method: 'GET', credentials: 'include' },
+          5000
+        );
+        
+        if (response.ok) {
+          console.log('[SyncManager] Auth restored, resuming sync');
+          this.clearAuthExpired();
+        } else if (response.status === 401 || response.status === 403) {
+          this.scheduleAuthCheck();
+        } else {
+          this.scheduleAuthCheck();
+        }
+      } catch {
+        this.scheduleAuthCheck();
+      }
+    }, 15000);
   }
 
   updateStepStatus(step, status) {

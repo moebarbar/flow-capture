@@ -34,7 +34,7 @@ export function CollectionAssignDialog({
     if (open) {
       setSelectedCollectionId(currentCollectionId?.toString() || "none");
     }
-  }, [open, currentCollectionId]);
+  }, [open, guideId, currentCollectionId]);
 
   const handleSave = () => {
     const collectionId = selectedCollectionId === "none" ? null : parseInt(selectedCollectionId);

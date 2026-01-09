@@ -41,7 +41,7 @@ export function KnowledgeBaseDialog({
       setCategoryId("");
       setTags("");
     }
-  }, [open, guideTitle, guideDescription]);
+  }, [open, guideId, guideTitle, guideDescription]);
 
   const { data: categories } = useQuery<KbCategory[]>({
     queryKey: ['/api/kb/categories'],

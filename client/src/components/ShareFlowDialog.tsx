@@ -19,23 +19,42 @@ export function ShareFlowDialog({ guideId, open, onOpenChange }: ShareFlowDialog
   const { toast } = useToast();
   const [sharePassword, setSharePassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [prevGuideId, setPrevGuideId] = useState<number | null>(null);
 
   const { data: shareSettings, refetch: refetchShare } = useQuery({
     queryKey: ['/api/guides', guideId, 'share'],
     queryFn: async () => {
-      const res = await fetch(`/api/guides/${guideId}/share`, { credentials: 'include' });
-      if (!res.ok) return { enabled: false, hasPassword: false, shareUrl: null };
-      return res.json();
+      try {
+        const res = await fetch(`/api/guides/${guideId}/share`, { credentials: 'include' });
+        if (!res.ok) {
+          return { enabled: false, hasPassword: false, shareUrl: null, accessCount: 0, lastAccessedAt: null };
+        }
+        const data = await res.json();
+        return {
+          enabled: data.enabled ?? false,
+          hasPassword: data.hasPassword ?? false,
+          shareUrl: data.shareUrl ?? null,
+          accessCount: data.accessCount ?? 0,
+          lastAccessedAt: data.lastAccessedAt ?? null,
+        };
+      } catch {
+        return { enabled: false, hasPassword: false, shareUrl: null, accessCount: 0, lastAccessedAt: null };
+      }
     },
     enabled: open && guideId > 0,
+    staleTime: 0,
   });
 
   useEffect(() => {
     if (open) {
       setSharePassword("");
       setShowPassword(false);
+      if (guideId !== prevGuideId) {
+        setPrevGuideId(guideId);
+        refetchShare();
+      }
     }
-  }, [open]);
+  }, [open, guideId, prevGuideId, refetchShare]);
 
   const updateShareMutation = useMutation({
     mutationFn: async (data: { password?: string | null; enabled?: boolean }) => {

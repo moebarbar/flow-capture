@@ -1,22 +1,159 @@
 import { useEffect, useRef, useState } from "react";
 import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
-import { useGuides, useCreateGuide } from "@/hooks/use-guides";
+import { useGuides, useCreateGuide, useUpdateGuide, useDeleteGuide } from "@/hooks/use-guides";
 import { useCollections } from "@/hooks/use-collections";
 import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, LayoutGrid, List as ListIcon, FolderOpen } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Search, LayoutGrid, List as ListIcon, FolderOpen, MoreHorizontal, Share2, BookOpen, CheckCircle, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { EmptyState } from "@/components/EmptyState";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { ShareFlowDialog } from "@/components/ShareFlowDialog";
+import { KnowledgeBaseDialog } from "@/components/KnowledgeBaseDialog";
+import { CollectionAssignDialog } from "@/components/CollectionAssignDialog";
+import type { Guide } from "@shared/schema";
+
+interface FlowCardProps {
+  guide: Guide;
+  viewMode: 'grid' | 'list';
+  workspaceId?: number;
+  onShare: (guide: Guide) => void;
+  onCollection: (guide: Guide) => void;
+  onPublish: (guide: Guide) => void;
+  onKnowledgeBase: (guide: Guide) => void;
+  onDelete: (guide: Guide) => void;
+}
+
+function FlowCard({ guide, viewMode, workspaceId, onShare, onCollection, onPublish, onKnowledgeBase, onDelete }: FlowCardProps) {
+  return (
+    <div className={cn(
+      "group bg-card border border-border hover:border-brand-300 hover:shadow-lg hover:shadow-brand-900/5 transition-all cursor-pointer overflow-hidden relative",
+      viewMode === 'grid' 
+        ? "rounded-xl sm:rounded-2xl flex flex-col h-full" 
+        : "rounded-xl p-3 sm:p-4 flex items-center gap-4 sm:gap-6"
+    )}>
+      <Link href={`/guides/${guide.id}/edit`} className="absolute inset-0 z-0" />
+      
+      {/* Thumbnail */}
+      <div className={viewMode === 'grid' 
+        ? "aspect-video bg-muted relative overflow-hidden" 
+        : "h-12 w-16 sm:h-16 sm:w-24 bg-muted rounded-lg shrink-0 relative overflow-hidden"
+      }>
+        {guide.coverImageUrl ? (
+          <img src={guide.coverImageUrl} className="w-full h-full object-cover" alt="" loading="lazy" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-950 dark:to-brand-900 flex items-center justify-center text-brand-300">
+            <LayoutGrid className="h-6 w-6 sm:h-8 sm:w-8" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
+      </div>
+
+      {/* Content */}
+      <div className={viewMode === 'grid' 
+        ? "p-4 sm:p-5 flex-1 flex flex-col" 
+        : "flex-1 min-w-0"
+      }>
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="font-bold text-base sm:text-lg font-display truncate group-hover:text-primary transition-colors">{guide.title}</h3>
+          
+          {/* Actions Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 shrink-0 relative z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                data-testid={`button-flow-actions-${guide.id}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShare(guide); }}
+                data-testid={`menu-share-${guide.id}`}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCollection(guide); }}
+                data-testid={`menu-collection-${guide.id}`}
+              >
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Assign Collection
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPublish(guide); }}
+                data-testid={`menu-publish-${guide.id}`}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {guide.status === 'published' ? 'Unpublish' : 'Publish'}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onKnowledgeBase(guide); }}
+                data-testid={`menu-kb-${guide.id}`}
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                Add to Knowledge Base
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(guide); }}
+                className="text-destructive focus:text-destructive"
+                data-testid={`menu-delete-${guide.id}`}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2 mb-3 sm:mb-4 flex-1">
+          {guide.description || "No description provided."}
+        </p>
+        
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground mt-auto pt-3 sm:pt-4 border-t border-border/50">
+          <span className="flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${guide.status === 'published' ? 'bg-green-500' : 'bg-orange-400'}`} />
+            <span className="capitalize">{guide.status}</span>
+          </span>
+          <span className="hidden sm:inline">{formatDistanceToNow(new Date(guide.updatedAt))} ago</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function GuidesListContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
   const { isCollapsed } = useSidebarState();
+  const { toast } = useToast();
   
   useEffect(() => {
     if (!workspacesLoading && workspaces && workspaces.length === 0 && !ensuredRef.current && !isEnsuring) {
@@ -29,9 +166,19 @@ function GuidesListContent() {
   const { data: guides, isLoading } = useGuides({ workspaceId });
   const { data: collections } = useCollections(workspaceId);
   const { mutate: createGuide, isPending: isCreating } = useCreateGuide();
+  const { mutate: updateGuide } = useUpdateGuide();
+  const { mutate: deleteGuide } = useDeleteGuide();
+  
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState("");
   const [collectionFilter, setCollectionFilter] = useState<string>("all");
+  
+  // Dialog states
+  const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
+  const [kbDialogOpen, setKbDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleCreateGuide = () => {
     if (!workspaceId) return;
@@ -48,6 +195,60 @@ function GuidesListContent() {
         }
       }
     );
+  };
+
+  const handleShare = (guide: Guide) => {
+    setSelectedGuide(guide);
+    setShareDialogOpen(true);
+  };
+
+  const handleCollection = (guide: Guide) => {
+    setSelectedGuide(guide);
+    setCollectionDialogOpen(true);
+  };
+
+  const handlePublish = (guide: Guide) => {
+    const newStatus = guide.status === 'published' ? 'draft' : 'published';
+    updateGuide(
+      { id: guide.id, status: newStatus },
+      {
+        onSuccess: () => {
+          toast({ 
+            title: newStatus === 'published' ? "Flow published" : "Flow unpublished",
+            description: newStatus === 'published' 
+              ? "Your flow is now visible to others."
+              : "Your flow is now a draft."
+          });
+        },
+        onError: () => {
+          toast({ title: "Failed to update status", variant: "destructive" });
+        }
+      }
+    );
+  };
+
+  const handleKnowledgeBase = (guide: Guide) => {
+    setSelectedGuide(guide);
+    setKbDialogOpen(true);
+  };
+
+  const handleDeleteClick = (guide: Guide) => {
+    setSelectedGuide(guide);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!selectedGuide) return;
+    deleteGuide(selectedGuide.id, {
+      onSuccess: () => {
+        toast({ title: "Flow deleted" });
+        setDeleteDialogOpen(false);
+        setSelectedGuide(null);
+      },
+      onError: () => {
+        toast({ title: "Failed to delete flow", variant: "destructive" });
+      }
+    });
   };
 
   const filteredGuides = guides?.data?.filter(g => {
@@ -165,55 +366,71 @@ function GuidesListContent() {
               : "space-y-3 sm:space-y-4"
             }>
               {filteredGuides?.map((guide) => (
-                <Link key={guide.id} href={`/guides/${guide.id}/edit`}>
-                  <div className={cn(
-                    "group bg-card border border-border hover:border-brand-300 hover:shadow-lg hover:shadow-brand-900/5 transition-all cursor-pointer overflow-hidden",
-                    viewMode === 'grid' 
-                      ? "rounded-xl sm:rounded-2xl flex flex-col h-full" 
-                      : "rounded-xl p-3 sm:p-4 flex items-center gap-4 sm:gap-6"
-                  )}>
-                    {/* Thumbnail */}
-                    <div className={viewMode === 'grid' 
-                      ? "aspect-video bg-muted relative overflow-hidden" 
-                      : "h-12 w-16 sm:h-16 sm:w-24 bg-muted rounded-lg shrink-0 relative overflow-hidden"
-                    }>
-                      {guide.coverImageUrl ? (
-                        <img src={guide.coverImageUrl} className="w-full h-full object-cover" alt="" loading="lazy" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-950 dark:to-brand-900 flex items-center justify-center text-brand-300">
-                          <LayoutGrid className="h-6 w-6 sm:h-8 sm:w-8" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors" />
-                    </div>
-
-                    {/* Content */}
-                    <div className={viewMode === 'grid' 
-                      ? "p-4 sm:p-5 flex-1 flex flex-col" 
-                      : "flex-1 min-w-0"
-                    }>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="font-bold text-base sm:text-lg font-display truncate group-hover:text-primary transition-colors">{guide.title}</h3>
-                      </div>
-                      <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2 mb-3 sm:mb-4 flex-1">
-                        {guide.description || "No description provided."}
-                      </p>
-                      
-                      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground mt-auto pt-3 sm:pt-4 border-t border-border/50">
-                        <span className="flex items-center gap-1.5">
-                          <span className={`h-2 w-2 rounded-full ${guide.status === 'published' ? 'bg-green-500' : 'bg-orange-400'}`} />
-                          <span className="capitalize">{guide.status}</span>
-                        </span>
-                        <span className="hidden sm:inline">{formatDistanceToNow(new Date(guide.updatedAt))} ago</span>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
+                <FlowCard
+                  key={guide.id}
+                  guide={guide}
+                  viewMode={viewMode}
+                  workspaceId={workspaceId}
+                  onShare={handleShare}
+                  onCollection={handleCollection}
+                  onPublish={handlePublish}
+                  onKnowledgeBase={handleKnowledgeBase}
+                  onDelete={handleDeleteClick}
+                />
               ))}
             </div>
           )}
         </div>
       </main>
+
+      {/* Dialogs */}
+      {selectedGuide && (
+        <>
+          <ShareFlowDialog
+            guideId={selectedGuide.id}
+            open={shareDialogOpen}
+            onOpenChange={setShareDialogOpen}
+          />
+          
+          <CollectionAssignDialog
+            guideId={selectedGuide.id}
+            workspaceId={workspaceId}
+            currentCollectionId={selectedGuide.collectionId}
+            open={collectionDialogOpen}
+            onOpenChange={setCollectionDialogOpen}
+          />
+          
+          <KnowledgeBaseDialog
+            guideId={selectedGuide.id}
+            guideTitle={selectedGuide.title}
+            guideDescription={selectedGuide.description}
+            open={kbDialogOpen}
+            onOpenChange={setKbDialogOpen}
+          />
+        </>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Flow?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{selectedGuide?.title}" and all its steps. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

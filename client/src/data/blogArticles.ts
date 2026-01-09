@@ -486,6 +486,362 @@ Remote work works when knowledge flows freely. Documentation is the pipeline.
     imageUrl: "",
     featured: false,
     tags: ["Remote Work", "Knowledge Sharing", "Distributed Teams", "Collaboration"]
+  },
+  {
+    id: "7",
+    slug: "capture-first-enterprise-visual-sops",
+    title: "The Capture-First Enterprise: Why Visual SOPs Are the New Operating System",
+    excerpt: "After building FlowCapture and working with hundreds of operations teams, I've discovered a pattern that separates thriving companies from struggling ones. It's not about having documentation—it's about how you create it.",
+    content: `
+# The Capture-First Enterprise: Why Visual SOPs Are the New Operating System
+
+After three years of building FlowCapture and working with hundreds of operations teams, I've discovered a pattern that separates thriving companies from struggling ones.
+
+It's not about having documentation. Everyone has documentation. The difference is *how* that documentation gets created.
+
+## The Documentation Graveyard
+
+Let me share something that surprised me when I started this company: **73% of our enterprise pilots begin with the same problem**—shadow IT.
+
+Not security shadow IT. *Process* shadow IT.
+
+Teams have official documentation in Confluence, SharePoint, or Google Docs. But nobody uses it. Instead, knowledge lives in:
+- Screenshots in Slack threads
+- Bookmarked Loom videos
+- Notes apps on personal devices
+- The heads of senior employees who "just know"
+
+The official docs became a graveyard. Beautiful tombstones marking where processes went to die.
+
+## Why Traditional Documentation Fails
+
+The fundamental problem is friction. Here's what creating documentation looks like at most companies:
+
+1. Do your job
+2. Open a separate tool
+3. Try to remember what you just did
+4. Type it out step by step
+5. Find or create screenshots
+6. Format everything nicely
+7. Get approval to publish
+8. Hope someone finds it
+
+That's 8 steps between doing work and documenting it. No wonder it doesn't happen.
+
+## The Capture-First Philosophy
+
+What if documentation was created *while* you work, not after?
+
+That's the core insight behind FlowCapture. We don't ask people to document their work. We capture their work *as* documentation.
+
+Click → Screenshot captured
+Type → Input recorded
+Navigate → Page transition logged
+
+The documentation creates itself. Your job is to do your job.
+
+## From Tool to Operating System
+
+Here's what I've learned watching companies adopt capture-first workflows:
+
+### Stage 1: Point Solutions
+Teams use FlowCapture for specific pain points—usually onboarding new hires or training on a new tool.
+
+### Stage 2: Process Infrastructure
+Documentation becomes systematic. Every new process gets captured. Every update triggers a re-capture.
+
+### Stage 3: Operating System
+Visual SOPs become how the company runs. Decisions reference them. Automation builds on them. AI enhances them.
+
+The companies that reach Stage 3 have something their competitors don't: **institutional memory that scales**.
+
+## The Competitive Advantage Nobody Talks About
+
+Here's the uncomfortable truth: your processes are your company.
+
+Not your strategy. Not your culture. Your processes.
+
+Strategy is just a document. Culture is just values. Processes are how work actually gets done.
+
+When those processes exist only in people's heads, you have risk:
+- Key person leaves = knowledge walks out the door
+- Acquisitions fail because you can't transfer how things work
+- Scaling means reinventing wheels because nobody knows what exists
+
+Capture-first enterprises convert human knowledge into organizational assets. That's not just efficiency. That's competitive advantage.
+
+## What I've Learned Building This
+
+Three years ago, I thought we were building a better documentation tool.
+
+I was wrong.
+
+We're building the infrastructure for how modern companies operate. Visual SOPs aren't just helpful—they're becoming essential.
+
+The companies that figure this out first will have an unfair advantage. They'll onboard faster, scale smoother, and adapt quicker.
+
+The capture-first enterprise isn't the future. It's already here.
+
+---
+
+*Moe Barbar is the Founder and CEO of FlowCapture, the capture-first documentation platform for modern teams.*
+    `,
+    category: "Founder's Perspective",
+    author: {
+      name: "Moe Barbar",
+      role: "Founder & CEO"
+    },
+    publishedAt: "2026-01-09",
+    readTime: "10 min read",
+    imageUrl: "",
+    featured: true,
+    tags: ["Enterprise", "SOPs", "Leadership", "Digital Transformation", "Founder Insights"]
+  },
+  {
+    id: "8",
+    slug: "latency-kills-documentation-real-time-workflow-memory",
+    title: "Latency Kills Documentation: Why Real-Time Capture Is the Only Way Forward",
+    excerpt: "I call it the 'workflow decay half-life'—the speed at which process knowledge becomes stale. Most companies measure documentation in pages. They should measure it in hours since last capture.",
+    content: `
+# Latency Kills Documentation: Why Real-Time Capture Is the Only Way Forward
+
+There's a metric I've become obsessed with. I call it the **workflow decay half-life**.
+
+It's the time it takes for 50% of your documented processes to become inaccurate.
+
+For most companies? It's about 3 months.
+
+That means half of everything in your wiki is wrong. Not outdated—*actively wrong*. Leading people astray. Creating confusion. Causing errors.
+
+## The Documentation Latency Problem
+
+Here's how documentation typically works:
+
+1. Someone does a process
+2. Days/weeks/months later, they document it
+3. They document from memory (already decayed)
+4. The document goes through review (more decay)
+5. It gets published (even more decay)
+6. Someone references it months later (maximum decay)
+
+At every step, the gap between reality and documentation grows. I call this gap **documentation latency**.
+
+And latency kills.
+
+## Why This Matters More Now
+
+Two forces are making documentation latency existential:
+
+### 1. AI Needs Fresh Data
+
+Everyone's rushing to add AI to their operations. AI assistants. Automated workflows. Intelligent routing.
+
+But here's what most people miss: **AI is only as good as the data it learns from**.
+
+Feed AI stale documentation, and you get confidently wrong automation. The AI doesn't know the process changed last week. It just knows what the 6-month-old wiki says.
+
+I've seen companies deploy AI chatbots trained on outdated SOPs. The bots answered questions quickly and accurately—about processes that no longer existed.
+
+### 2. Rate of Change Is Accelerating
+
+Software updates constantly. Interfaces change. Workflows evolve. What was true last quarter isn't true today.
+
+The average enterprise uses 371 SaaS applications. Each one updates regularly. Each update potentially obsoletes documentation.
+
+You can't document faster by typing faster. You need to change *how* you document.
+
+## Real-Time Capture Changes Everything
+
+When documentation happens in real-time, latency approaches zero.
+
+Do the work → Documentation exists.
+
+No memory decay. No review lag. No gap between reality and record.
+
+This is the architecture we built FlowCapture around. Not "easier documentation"—**zero-latency documentation**.
+
+### The Technical Reality
+
+Real-time capture means:
+- Screenshots at the moment of action
+- Element selectors as they exist *now*
+- URLs and contexts captured live
+- Timestamps for every step
+
+When the process changes, you re-capture. The old version gets archived. The new version is immediately accurate.
+
+## Measuring What Matters
+
+Most companies measure documentation by volume. Pages created. Articles published. Word counts.
+
+These are vanity metrics.
+
+Here's what actually matters:
+
+**Documentation Freshness Score**: Average age of last verification across all docs
+
+**Capture Latency**: Time between process execution and documentation
+
+**Accuracy Rate**: Percentage of docs verified accurate in the last 30 days
+
+**Coverage Decay**: Rate at which new processes outpace documentation
+
+Start measuring these. You'll see why latency is the enemy.
+
+## The Path Forward
+
+If you're building for AI-native operations, you need documentation that AI can trust.
+
+That means:
+- Real-time capture, not retrospective writing
+- Continuous verification, not annual reviews
+- Structured data, not prose paragraphs
+- Temporal awareness, not static snapshots
+
+The companies that solve documentation latency will have AI that actually works. The ones that don't will wonder why their automation keeps breaking.
+
+---
+
+*Moe Barbar is the Founder and CEO of FlowCapture, pioneering real-time workflow documentation for the AI era.*
+    `,
+    category: "Founder's Perspective",
+    author: {
+      name: "Moe Barbar",
+      role: "Founder & CEO"
+    },
+    publishedAt: "2026-01-09",
+    readTime: "9 min read",
+    imageUrl: "",
+    featured: true,
+    tags: ["AI", "Real-Time", "Documentation Strategy", "Automation", "Founder Insights"]
+  },
+  {
+    id: "9",
+    slug: "blueprint-trustworthy-automation-human-judgment",
+    title: "The Blueprint for Trustworthy Automation: Capture Human Judgment First",
+    excerpt: "Before you automate anything, answer this: Have you captured what your best people actually do? Not what the process says. What they actually do. The difference is where automation fails.",
+    content: `
+# The Blueprint for Trustworthy Automation: Capture Human Judgment First
+
+Everyone wants automation. Fewer meetings. Less manual work. More leverage.
+
+But I've watched dozens of automation projects fail. Not because the technology didn't work—because the *blueprint* was wrong.
+
+## The Automation Failure Pattern
+
+Here's how it usually goes:
+
+1. Company identifies manual process to automate
+2. Engineers review the "official" documentation
+3. They build automation based on documented steps
+4. Automation goes live
+5. Everything breaks
+
+The problem? The documentation described the *ideal* process. Not the *real* process.
+
+Real processes have exceptions. Edge cases. Judgment calls. The things experienced employees handle automatically—without even thinking about them.
+
+Automation doesn't have that judgment. It only knows what you tell it.
+
+## What I Learned From Our Customers
+
+Last year, a customer came to us after a failed automation project. They'd spent $200K building an automated approval workflow.
+
+It worked perfectly in testing. In production, it approved things it shouldn't have and rejected things it should have approved.
+
+The postmortem revealed the issue: the documented approval criteria covered 80% of cases. The other 20% relied on judgment calls the approvers made based on context, relationships, and experience.
+
+Nobody documented those judgment calls. Because nobody knew they were making them.
+
+## Capturing Human Judgment
+
+Here's the approach we've developed at FlowCapture:
+
+### Step 1: Shadow Your Best Performers
+
+Don't ask them to document. Watch them work. Capture what they actually do, not what they think they do.
+
+Use screen recording. Use FlowCapture. Use whatever captures reality.
+
+### Step 2: Identify Decision Points
+
+Review the captures looking for moments of judgment:
+- When do they pause and think?
+- When do they check additional information?
+- When do they deviate from the standard path?
+
+These are your judgment points.
+
+### Step 3: Decode the Decision Logic
+
+For each judgment point, interview the performer:
+- What were you considering here?
+- What factors influenced your choice?
+- What would make you choose differently?
+
+Document this as decision criteria, not just steps.
+
+### Step 4: Validate with Edge Cases
+
+Show them unusual scenarios. How would they handle:
+- The customer who's been with us 10 years?
+- The request that's technically against policy but obviously right?
+- The situation where two rules conflict?
+
+These edge cases are where automation fails—and where judgment matters most.
+
+### Step 5: Design Human-in-the-Loop Breaks
+
+Now you know where judgment lives. Design your automation with intentional human checkpoints at those exact moments.
+
+Don't automate the judgment. Route to humans who can exercise it.
+
+## The FlowCapture Automation Framework
+
+We've formalized this into what we call the **Trust Stack**:
+
+**Layer 1: Capture** - Record actual workflows from top performers
+**Layer 2: Analyze** - Identify judgment points and decision criteria
+**Layer 3: Document** - Create guides that include decision logic, not just steps
+**Layer 4: Automate** - Build automation with human-in-the-loop at judgment points
+**Layer 5: Monitor** - Track where automation struggles and humans intervene
+
+Each layer builds on the one below. Skip a layer, and the stack collapses.
+
+## Why This Matters Now
+
+The AI revolution is here. Every company wants to automate more, faster.
+
+But here's my prediction: the companies that rush to automate without capturing human judgment will fail. Their AI will be confidently wrong. Their automation will create more problems than it solves.
+
+The winners will be the ones who take time to understand—really understand—how their best people work. Who capture the judgment calls, the edge case handling, the contextual awareness.
+
+Then—and only then—they'll build automation that people can trust.
+
+## The Uncomfortable Truth
+
+You can't automate what you don't understand.
+
+And you don't understand your processes as well as you think you do.
+
+The first step isn't buying automation software. It's capturing reality.
+
+Everything else follows from there.
+
+---
+
+*Moe Barbar is the Founder and CEO of FlowCapture, building the foundation for trustworthy automation through real-time workflow capture.*
+    `,
+    category: "Founder's Perspective",
+    author: {
+      name: "Moe Barbar",
+      role: "Founder & CEO"
+    },
+    publishedAt: "2026-01-09",
+    readTime: "11 min read",
+    imageUrl: "",
+    featured: true,
+    tags: ["Automation", "AI", "Leadership", "Process Design", "Founder Insights"]
   }
 ];
 

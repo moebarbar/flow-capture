@@ -15,6 +15,9 @@ import aiImage from "@assets/generated_images/ai_knowledge_brain_network.png";
 import supportImage from "@assets/generated_images/customer_support_knowledge_transformation.png";
 import saasImage from "@assets/generated_images/saas_product_adoption_growth.png";
 import remoteImage from "@assets/generated_images/remote_team_global_knowledge.png";
+import enterpriseImage from "@assets/generated_images/enterprise_workflow_neural_network.png";
+import latencyImage from "@assets/generated_images/knowledge_decay_time_visualization.png";
+import trustImage from "@assets/generated_images/human_ai_collaboration_trust.png";
 
 const imageMap: Record<string, string> = {
   "1": sopImage,
@@ -23,6 +26,9 @@ const imageMap: Record<string, string> = {
   "4": supportImage,
   "5": saasImage,
   "6": remoteImage,
+  "7": enterpriseImage,
+  "8": latencyImage,
+  "9": trustImage,
 };
 
 interface SiteSettings {

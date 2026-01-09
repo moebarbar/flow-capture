@@ -45,11 +45,26 @@ class CaptureStateMachine {
   }
 
   getState() {
+    const recentSteps = this.state.steps.slice(-10).map(step => ({
+      order: step.order,
+      actionType: step.actionType,
+      title: step.title,
+      description: step.description,
+      selector: step.selector,
+      url: step.url,
+      timestamp: step.timestamp,
+      tabId: step.tabId,
+      screenshotUrl: step.screenshotUrl,
+      screenshotDataUrl: step.screenshotDataUrl,
+      syncStatus: step.syncStatus
+    }));
+
     return {
       status: this.state.status,
       isCapturing: this.state.status === CaptureStates.CAPTURING,
       isPaused: this.state.status === CaptureStates.PAUSED,
       stepCount: this.state.steps.length,
+      steps: recentSteps,
       guideId: this.state.guideId,
       workspaceId: this.state.workspaceId,
       panelOpen: this.state.panelOpen,
@@ -290,6 +305,9 @@ async function handleMessage(message, sender) {
     case MessageTypes.NAVIGATION:
       console.log('[FlowCapture] Navigation:', data?.url);
       return { success: true };
+    
+    case 'STEP_UPDATED':
+      return handleStepUpdated(data);
     
     case MessageTypes.SYNC_STEPS:
       return await syncStepsToServer();
@@ -587,6 +605,30 @@ async function handleReadyForCapture(data, tabId) {
     machine.pendingScreenshots.delete(tabId);
   }
   return { success: true };
+}
+
+function handleStepUpdated(data) {
+  if (!data || !data.order) {
+    return { success: false, error: 'Missing step order' };
+  }
+
+  const step = machine.state.steps.find(s => s.order === data.order);
+  if (!step) {
+    return { success: false, error: 'Step not found' };
+  }
+
+  if (data.title !== undefined) {
+    step.title = data.title;
+  }
+  if (data.description !== undefined) {
+    step.description = data.description;
+  }
+
+  console.log('[FlowCapture] Step updated:', step.order, step.title);
+
+  machine.broadcastStateUpdate();
+
+  return { success: true, step };
 }
 
 const SCREENSHOT_CONFIG = {

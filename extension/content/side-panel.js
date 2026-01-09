@@ -309,25 +309,66 @@
     .step-item {
       display: flex;
       align-items: flex-start;
-      gap: 12px;
-      padding: 12px;
+      gap: 10px;
+      padding: 10px;
       background: #f9fafb;
       border-radius: 8px;
       margin-bottom: 8px;
+      border: 1px solid #e5e7eb;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .step-item:hover {
+      border-color: #c7d2fe;
+      box-shadow: 0 2px 4px rgba(99, 102, 241, 0.1);
+    }
+
+    .step-item.editing {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
     }
 
     .step-number {
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       background: #6366f1;
       color: white;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
       flex-shrink: 0;
+    }
+
+    .step-screenshot {
+      width: 48px;
+      height: 36px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      flex-shrink: 0;
+      cursor: pointer;
+      border: 1px solid #d1d5db;
+    }
+
+    .step-screenshot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .step-screenshot.no-image {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-screenshot.no-image svg {
+      width: 16px;
+      height: 16px;
+      fill: #9ca3af;
     }
 
     .step-info {
@@ -335,19 +376,117 @@
       min-width: 0;
     }
 
-    .step-action {
-      font-size: 13px;
+    .step-title {
+      font-size: 12px;
       font-weight: 500;
       color: #111827;
       margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
     }
 
-    .step-element {
-      font-size: 11px;
+    .step-title:hover {
+      color: #6366f1;
+    }
+
+    .step-title-input {
+      width: 100%;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 4px;
+      border: 1px solid #6366f1;
+      border-radius: 4px;
+      outline: none;
+      margin-bottom: 2px;
+    }
+
+    .step-description {
+      font-size: 10px;
       color: #6b7280;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+
+    .step-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 9px;
+      color: #9ca3af;
+    }
+
+    .step-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .step-meta-item svg {
+      width: 10px;
+      height: 10px;
+      fill: currentColor;
+    }
+
+    .step-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .step-item:hover .step-actions {
+      opacity: 1;
+    }
+
+    .step-action-btn {
+      width: 20px;
+      height: 20px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .step-action-btn:hover {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .step-action-btn svg {
+      width: 12px;
+      height: 12px;
+      fill: currentColor;
+    }
+
+    .screenshot-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2147483647;
+      cursor: pointer;
+    }
+
+    .screenshot-modal img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 8px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
     }
 
     .empty-state {
@@ -504,7 +643,8 @@
 
     btnPause?.addEventListener('click', (e) => {
       e.stopPropagation();
-      sendMessage('PAUSE_CAPTURE');
+      const isPaused = btnPause.textContent.includes('Resume');
+      sendMessage(isPaused ? 'RESUME_CAPTURE' : 'PAUSE_CAPTURE');
     });
   }
 
@@ -536,6 +676,7 @@
     if (!shadowRoot) return;
 
     isCapturing = state.isCapturing || false;
+    const isPaused = state.isPaused || false;
     stepCount = state.stepCount || 0;
     
     if (state.panelOpen !== undefined) {
@@ -551,17 +692,17 @@
 
     if (statusDot) {
       statusDot.className = 'status-dot';
-      if (state.isCapturing) {
+      if (isCapturing && !isPaused) {
         statusDot.classList.add('capturing');
-      } else if (state.isPaused) {
+      } else if (isPaused) {
         statusDot.classList.add('paused');
       }
     }
 
     if (statusText) {
-      if (state.isCapturing) {
+      if (isCapturing && !isPaused) {
         statusText.textContent = 'Recording...';
-      } else if (state.isPaused) {
+      } else if (isPaused) {
         statusText.textContent = 'Paused';
       } else {
         statusText.textContent = 'Ready to capture';
@@ -592,8 +733,29 @@
 
     if (btnPause) {
       btnPause.style.display = isCapturing ? 'flex' : 'none';
+      if (isPaused) {
+        btnPause.innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <span>Resume</span>
+        `;
+        btnPause.classList.remove('btn-secondary');
+        btnPause.classList.add('btn-primary');
+      } else {
+        btnPause.innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          <span>Pause</span>
+        `;
+        btnPause.classList.remove('btn-primary');
+        btnPause.classList.add('btn-secondary');
+      }
+    }
+
+    if (state.steps && Array.isArray(state.steps)) {
+      renderAllSteps(state.steps);
     }
   }
+
+  let stepsData = [];
 
   function addStepToList(step) {
     const stepsList = shadowRoot.getElementById('stepsList');
@@ -605,21 +767,170 @@
       emptyState.style.display = 'none';
     }
 
-    const stepItem = document.createElement('div');
-    stepItem.className = 'step-item';
-    stepItem.innerHTML = `
-      <div class="step-number">${step.order || stepCount}</div>
-      <div class="step-info">
-        <div class="step-action">${step.actionType || 'Click'}</div>
-        <div class="step-element">${step.selector || 'Unknown element'}</div>
-      </div>
-    `;
+    stepsData.unshift(step);
+    if (stepsData.length > 10) stepsData.pop();
 
-    stepsList.insertBefore(stepItem, stepsList.firstChild);
+    renderStep(stepsList, step, true);
 
     while (stepsList.children.length > 5) {
       stepsList.removeChild(stepsList.lastChild);
     }
+  }
+
+  function renderStep(container, step, prepend = false) {
+    const stepItem = document.createElement('div');
+    stepItem.className = 'step-item';
+    stepItem.dataset.stepOrder = step.order;
+
+    const screenshotHtml = step.screenshotDataUrl || step.screenshotUrl
+      ? `<div class="step-screenshot" data-action="preview-screenshot">
+           <img src="${step.screenshotDataUrl || step.screenshotUrl}" alt="Step ${step.order}">
+         </div>`
+      : `<div class="step-screenshot no-image">
+           <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+         </div>`;
+
+    const title = step.title || `Step ${step.order}`;
+    const description = step.description || step.selector || '';
+    const actionType = step.actionType || 'click';
+
+    stepItem.innerHTML = `
+      <div class="step-number">${step.order}</div>
+      ${screenshotHtml}
+      <div class="step-info">
+        <div class="step-title" data-action="edit-title" title="Click to edit">${escapeHtml(title)}</div>
+        <div class="step-description">${escapeHtml(description)}</div>
+        <div class="step-meta">
+          <span class="step-meta-item">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/></svg>
+            ${formatTime(step.timestamp)}
+          </span>
+          <span class="step-meta-item action-badge">${actionType}</span>
+        </div>
+      </div>
+      <div class="step-actions">
+        <button class="step-action-btn" data-action="edit-title" title="Edit title">
+          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </button>
+      </div>
+    `;
+
+    stepItem.addEventListener('click', (e) => handleStepItemClick(e, step, stepItem));
+
+    if (prepend) {
+      container.insertBefore(stepItem, container.firstChild);
+    } else {
+      container.appendChild(stepItem);
+    }
+
+    return stepItem;
+  }
+
+  function handleStepItemClick(e, step, stepItem) {
+    e.stopPropagation();
+    const action = e.target.closest('[data-action]')?.dataset.action;
+
+    switch (action) {
+      case 'edit-title':
+        startEditingTitle(step, stepItem);
+        break;
+      case 'preview-screenshot':
+        showScreenshotModal(step);
+        break;
+    }
+  }
+
+  function startEditingTitle(step, stepItem) {
+    const titleEl = stepItem.querySelector('.step-title');
+    if (!titleEl) return;
+
+    stepItem.classList.add('editing');
+    const currentTitle = step.title || `Step ${step.order}`;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'step-title-input';
+    input.value = currentTitle;
+
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const finishEditing = (save = true) => {
+      const newTitle = input.value.trim() || `Step ${step.order}`;
+      stepItem.classList.remove('editing');
+
+      const newTitleEl = document.createElement('div');
+      newTitleEl.className = 'step-title';
+      newTitleEl.dataset.action = 'edit-title';
+      newTitleEl.title = 'Click to edit';
+      newTitleEl.textContent = newTitle;
+
+      input.replaceWith(newTitleEl);
+
+      if (save && newTitle !== currentTitle) {
+        step.title = newTitle;
+        sendMessage('STEP_UPDATED', { order: step.order, title: newTitle });
+      }
+    };
+
+    input.addEventListener('blur', () => finishEditing(true));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finishEditing(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        finishEditing(false);
+      }
+    });
+  }
+
+  function showScreenshotModal(step) {
+    const imgSrc = step.screenshotDataUrl || step.screenshotUrl;
+    if (!imgSrc) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'screenshot-modal';
+    modal.innerHTML = `<img src="${imgSrc}" alt="Step ${step.order} screenshot">`;
+
+    modal.addEventListener('click', () => modal.remove());
+
+    shadowRoot.appendChild(modal);
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatTime(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function renderAllSteps(steps) {
+    const stepsList = shadowRoot.getElementById('stepsList');
+    const emptyState = shadowRoot.getElementById('emptyState');
+
+    if (!stepsList) return;
+
+    stepsList.innerHTML = '';
+    stepsData = [...steps].reverse().slice(0, 10);
+
+    if (stepsData.length === 0) {
+      if (emptyState) emptyState.style.display = 'block';
+      return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+
+    stepsData.forEach(step => renderStep(stepsList, step, false));
   }
 
   function sendMessage(type, data = {}) {

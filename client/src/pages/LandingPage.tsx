@@ -17,6 +17,17 @@ import { SiGooglechrome, SiSlack } from "react-icons/si";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { getFeaturedArticles } from "@/data/blogArticles";
+
+import sopImage from "@assets/generated_images/sop_documentation_workflow_abstract.png";
+import onboardingImage from "@assets/generated_images/employee_onboarding_journey_path.png";
+import aiImage from "@assets/generated_images/ai_knowledge_brain_network.png";
+
+const blogImageMap: Record<string, string> = {
+  "1": sopImage,
+  "2": onboardingImage,
+  "3": aiImage,
+};
 
 interface SiteSettings {
   siteName?: string;
@@ -1228,6 +1239,81 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Blog Section */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-muted/30 border-y border-border">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            className="text-center mb-16"
+            {...fadeInUp}
+          >
+            <Badge variant="secondary" className="mb-4 rounded-full px-4 py-1.5" data-testid="badge-blog-section">
+              <BookOpen className="h-3.5 w-3.5 mr-1.5" />
+              From the Blog
+            </Badge>
+            <h2 className="text-4xl md:text-5xl font-display font-bold mb-6">
+              Insights for Documentation Excellence
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+              Expert tips, best practices, and strategies for creating documentation that teams actually use.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
+            {getFeaturedArticles().slice(0, 3).map((article, index) => (
+              <motion.div
+                key={article.id}
+                {...fadeInUp}
+                transition={{ delay: index * 0.1 }}
+              >
+                <a href={`/blog/${article.slug}`} data-testid={`card-landing-article-${article.slug}`}>
+                  <Card className="h-full overflow-hidden group hover-elevate cursor-pointer">
+                    <div className="aspect-video overflow-hidden bg-muted">
+                      <img
+                        src={blogImageMap[article.id]}
+                        alt={article.title}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    </div>
+                    <div className="p-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Badge variant="secondary" className="text-xs">
+                          {article.category}
+                        </Badge>
+                      </div>
+                      <h3 className="text-lg font-display font-bold mb-2 line-clamp-2 group-hover:text-brand-600 transition-colors">
+                        {article.title}
+                      </h3>
+                      <p className="text-muted-foreground text-sm mb-4 line-clamp-2">
+                        {article.excerpt}
+                      </p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {article.readTime}
+                        </span>
+                        <ArrowRight className="h-4 w-4 text-brand-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                  </Card>
+                </a>
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.div 
+            className="text-center"
+            {...fadeInUp}
+          >
+            <Button variant="outline" size="lg" className="rounded-full" asChild>
+              <a href="/blog" data-testid="button-view-all-articles">
+                View All Articles
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
+            </Button>
+          </motion.div>
+        </div>
+      </section>
+
       {/* Final CTA Section */}
       <section className="py-24 bg-gradient-to-br from-brand-600 to-brand-700 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMtOS45NDEgMC0xOCA4LjA1OS0xOCAxOHM4LjA1OSAxOCAxOCAxOGM5Ljk0MSAwIDE4LTguMDU5IDE4LTE4cy04LjA1OS0xOC0xOC0xOHptMCAzMmMtNy43MzIgMC0xNC02LjI2OC0xNC0xNHM2LjI2OC0xNCAxNC0xNHMxNCA2LjI2OCAxNCAxNC02LjI2OCAxNC0xNCAxNHoiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjA1Ii8+PC9nPjwvc3ZnPg==')] opacity-30" />
@@ -1314,7 +1400,7 @@ export default function LandingPage() {
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-about">About</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-blog">Blog</a></li>
+                <li><a href="/blog" className="hover:text-foreground transition-colors" data-testid="link-footer-blog">Blog</a></li>
                 <li><a href="#" className="hover:text-foreground transition-colors" data-testid="link-footer-careers">Careers</a></li>
                 {footerPages.map((page) => (
                   <li key={page.id}>

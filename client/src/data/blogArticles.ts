@@ -75,7 +75,7 @@ Start creating SOPs that work. Try FlowCapture free today.
     },
     publishedAt: "2024-01-15",
     readTime: "8 min read",
-    imageUrl: "",
+    imageUrl: "/blog-images/sop-documentation.png",
     featured: true,
     tags: ["SOPs", "Documentation", "Best Practices", "Process Management"]
   },

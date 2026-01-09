@@ -37,6 +37,8 @@ const KnowledgeBaseCategory = lazy(() => import("@/pages/KnowledgeBaseCategory")
 const KnowledgeBaseEmbed = lazy(() => import("@/pages/KnowledgeBaseEmbed"));
 const KnowledgeBaseManager = lazy(() => import("@/pages/KnowledgeBaseManager"));
 const Collections = lazy(() => import("@/pages/Collections"));
+const Blog = lazy(() => import("@/pages/Blog"));
+const BlogArticle = lazy(() => import("@/pages/BlogArticle"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const PageLoader = memo(function PageLoader() {
@@ -171,6 +173,20 @@ function Router() {
         {() => (
           <Suspense fallback={<PageLoader />}>
             <KnowledgeBaseEmbed />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/blog">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <Blog />
+          </Suspense>
+        )}
+      </Route>
+      <Route path="/blog/:slug">
+        {() => (
+          <Suspense fallback={<PageLoader />}>
+            <BlogArticle />
           </Suspense>
         )}
       </Route>

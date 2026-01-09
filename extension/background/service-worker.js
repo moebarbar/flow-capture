@@ -589,18 +589,119 @@ async function handleReadyForCapture(data, tabId) {
   return { success: true };
 }
 
+const SCREENSHOT_CONFIG = {
+  format: 'png',
+  quality: 92,
+  maxRetries: 3,
+  retryDelayMs: 100,
+  timeout: 5000
+};
+
 async function captureScreenshot(tabId) {
-  try {
-    const targetTabId = tabId || machine.state.activeTabId;
-    const dataUrl = await chrome.tabs.captureVisibleTab(null, { 
-      format: 'png',
-      quality: 90
-    });
-    return { dataUrl };
-  } catch (e) {
-    console.error('[FlowCapture] Screenshot failed:', e);
-    return { error: e.message };
+  const targetTabId = tabId || machine.state.activeTabId;
+  const captureTimestamp = Date.now();
+  
+  let windowId = null;
+  if (targetTabId) {
+    try {
+      const tab = await chrome.tabs.get(targetTabId);
+      windowId = tab.windowId;
+    } catch (e) {
+      console.log('[FlowCapture] Could not get tab window:', e.message);
+    }
   }
+
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= SCREENSHOT_CONFIG.maxRetries; attempt++) {
+    try {
+      const dataUrl = await captureWithTimeout(windowId, SCREENSHOT_CONFIG.timeout);
+      
+      return { 
+        dataUrl,
+        capturedAt: captureTimestamp,
+        tabId: targetTabId,
+        attempt
+      };
+    } catch (e) {
+      lastError = e;
+      const errorType = classifyScreenshotError(e);
+      
+      console.log(`[FlowCapture] Screenshot attempt ${attempt} failed:`, errorType, e.message);
+      
+      if (errorType === 'permanent') {
+        break;
+      }
+      
+      if (attempt < SCREENSHOT_CONFIG.maxRetries) {
+        const delay = SCREENSHOT_CONFIG.retryDelayMs * Math.pow(2, attempt - 1);
+        await sleep(delay);
+      }
+    }
+  }
+
+  return { 
+    error: lastError?.message || 'Screenshot capture failed',
+    errorType: classifyScreenshotError(lastError),
+    capturedAt: captureTimestamp,
+    tabId: targetTabId
+  };
+}
+
+async function captureWithTimeout(windowId, timeoutMs) {
+  return new Promise(async (resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Screenshot capture timed out'));
+    }, timeoutMs);
+
+    try {
+      const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { 
+        format: SCREENSHOT_CONFIG.format,
+        quality: SCREENSHOT_CONFIG.quality
+      });
+      clearTimeout(timeoutId);
+      resolve(dataUrl);
+    } catch (e) {
+      clearTimeout(timeoutId);
+      reject(e);
+    }
+  });
+}
+
+function classifyScreenshotError(error) {
+  if (!error) return 'unknown';
+  
+  const message = error.message?.toLowerCase() || '';
+  
+  if (message.includes('cannot access') || message.includes('chrome://') || message.includes('chrome-extension://')) {
+    return 'permanent';
+  }
+  
+  if (message.includes('no current browser') || message.includes('window not found')) {
+    return 'permanent';
+  }
+  
+  if (message.includes('tab') && message.includes('not found')) {
+    return 'permanent';
+  }
+  
+  if (message.includes('not ready') || message.includes('loading')) {
+    return 'transient';
+  }
+  
+  if (message.includes('minimized') || message.includes('occluded')) {
+    return 'transient';
+  }
+  
+  if (message.includes('timeout')) {
+    return 'transient';
+  }
+  
+  return 'unknown';
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function createGuideOnServer() {

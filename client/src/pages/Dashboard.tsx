@@ -4,8 +4,7 @@ import { useGuides, useCreateGuide } from "@/hooks/use-guides";
 import { useExtensionDetection } from "@/hooks/use-extension-detection";
 import { Sidebar, useSidebarState, MobileMenuTrigger, SidebarProvider } from "@/components/Sidebar";
 import { NotificationBell } from "@/components/NotificationBell";
-import { InstallExtensionDialog } from "@/components/InstallExtensionDialog";
-import { PermissionDeniedDialog } from "@/components/PermissionDeniedDialog";
+import { FlowLauncherModal } from "@/components/FlowLauncherModal";
 import { Button } from "@/components/ui/button";
 import { Plus, Clock, TrendingUp, BookOpen, MoreVertical, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { SiGooglechrome } from "react-icons/si";
@@ -28,8 +27,7 @@ function DashboardContent() {
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const { isExtensionInstalled, permissionStatus, requestPermissions } = useExtensionDetection();
-  const [showExtensionDialog, setShowExtensionDialog] = useState(false);
-  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [showLauncherModal, setShowLauncherModal] = useState(false);
   const ensuredRef = useRef(false);
   const { isCollapsed } = useSidebarState();
   
@@ -57,28 +55,16 @@ function DashboardContent() {
     staleTime: 60000,
   });
 
-  const handleCreateGuide = async () => {
+  const handleNewFlow = () => {
+    setShowLauncherModal(true);
+  };
+
+  const handleStartCapture = async () => {
     if (!workspaceId) return;
     
-    // Check if extension is installed before creating flow (only block if explicitly false)
-    if (isExtensionInstalled === false) {
-      setShowExtensionDialog(true);
-      return;
-    }
-    
-    // Check if permissions are denied
-    if (permissionStatus === 'denied') {
-      setShowPermissionDialog(true);
-      return;
-    }
-    
-    // If permissions unknown, request them first
     if (permissionStatus !== 'granted') {
       const granted = await requestPermissions();
-      if (!granted) {
-        setShowPermissionDialog(true);
-        return;
-      }
+      if (!granted) return;
     }
     
     createGuide(
@@ -90,7 +76,27 @@ function DashboardContent() {
       },
       {
         onSuccess: (newGuide) => {
-          window.location.href = `/guides/${newGuide.id}/edit`;
+          setShowLauncherModal(false);
+          window.location.href = `/guides/${newGuide.id}/edit?autoCapture=true`;
+        }
+      }
+    );
+  };
+
+  const handleUploadScreenshots = () => {
+    if (!workspaceId) return;
+    
+    createGuide(
+      { 
+        workspaceId,
+        title: "Untitled Flow",
+        status: "draft",
+        createdById: "current-user"
+      },
+      {
+        onSuccess: (newGuide) => {
+          setShowLauncherModal(false);
+          window.location.href = `/guides/${newGuide.id}/edit?mode=upload`;
         }
       }
     );
@@ -133,12 +139,11 @@ function DashboardContent() {
                 </Button>
               )}
               <Button 
-                onClick={handleCreateGuide} 
-                disabled={isCreating}
+                onClick={handleNewFlow} 
                 className="rounded-full px-4 sm:px-6 bg-brand-600 hover:bg-brand-700 shadow-lg shadow-brand-500/20 flex-1 sm:flex-none"
                 data-testid="button-dashboard-new-guide"
               >
-                {isCreating ? "Creating..." : <><Plus className="mr-2 h-4 w-4" /> New Flow</>}
+                <Plus className="mr-2 h-4 w-4" /> New Flow
               </Button>
             </div>
           </div>
@@ -194,7 +199,7 @@ function DashboardContent() {
                 title="No flows yet"
                 description="Create your first flow to start documenting your workflows."
                 actionLabel="Create Flow"
-                onAction={handleCreateGuide}
+                onAction={handleNewFlow}
               />
             ) : (
               <div className="bg-card border border-border rounded-xl sm:rounded-2xl overflow-hidden shadow-sm">
@@ -236,14 +241,14 @@ function DashboardContent() {
         </div>
       </main>
       
-      <InstallExtensionDialog 
-        open={showExtensionDialog} 
-        onOpenChange={setShowExtensionDialog} 
-      />
-      
-      <PermissionDeniedDialog 
-        open={showPermissionDialog} 
-        onOpenChange={setShowPermissionDialog} 
+      <FlowLauncherModal
+        open={showLauncherModal}
+        onOpenChange={setShowLauncherModal}
+        isExtensionInstalled={isExtensionInstalled}
+        permissionStatus={permissionStatus}
+        onStartCapture={handleStartCapture}
+        onUploadScreenshots={handleUploadScreenshots}
+        isCreating={isCreating}
       />
     </div>
   );

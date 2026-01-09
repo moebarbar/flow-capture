@@ -3,63 +3,100 @@
   "name": "FlowCapture",
   "version": "2.0.0",
   "description": "Capture browser workflows and create step-by-step guides automatically",
+
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
-      "48": "icons/icon48.png"
-    }
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "FlowCapture - Capture Workflows"
   },
+
   "background": {
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
+
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "tabs"
   ],
+
   "optional_host_permissions": [
     "<all_urls>"
   ],
+
+  "host_permissions": [
+    "https://*.replit.app/*",
+    "https://*.replit.dev/*",
+    "https://*.repl.co/*"
+  ],
+
   "externally_connectable": {
     "matches": [
-      "*://*.replit.dev/*",
-      "*://*.replit.app/*",
-      "*://*.repl.co/*",
-      "*://*.flowcapture.com/*",
-      "*://*.flowcapture.app/*",
-      "*://localhost:*/*",
-      "*://127.0.0.1:*/*"
+      "https://*.replit.dev/*",
+      "https://*.replit.app/*",
+      "https://*.repl.co/*",
+      "https://*.flowcapture.com/*",
+      "https://*.flowcapture.app/*",
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*"
     ]
   },
+
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/capture-agent.js"],
+      "js": [
+        "content/capture-agent.js",
+        "content/screenshot-agent.js",
+        "content/tab-bridge.js"
+      ],
       "run_at": "document_idle",
       "all_frames": false
     }
   ],
+
   "web_accessible_resources": [
     {
       "resources": [
-        "overlay/overlay.js",
-        "content/screenshot-agent.js",
-        "content/tab-bridge.js",
-        "shared/messages.js",
-        "shared/types.js"
+        "overlay/*",
+        "shared/*"
       ],
       "matches": ["<all_urls>"]
     }
   ],
+
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"
+  },
+
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C",
+        "mac": "Alt+Shift+C"
+      },
+      "description": "Open FlowCapture popup"
+    },
+    "toggle-capture": {
+      "suggested_key": {
+        "default": "Alt+Shift+R",
+        "mac": "Alt+Shift+R"
+      },
+      "description": "Toggle capture recording"
+    }
   }
 }

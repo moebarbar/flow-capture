@@ -87,6 +87,23 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log('[FlowCapture] Installed:', details.reason);
 });
 
+chrome.commands.onCommand.addListener(async (command) => {
+  console.log('[FlowCapture] Command received:', command);
+  
+  if (command === 'toggle-capture') {
+    const state = machine.getState();
+    
+    if (state.isCapturing) {
+      await handleStopCapture();
+    } else {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (activeTab?.id) {
+        await handleStartCapture({ tabId: activeTab.id });
+      }
+    }
+  }
+});
+
 chrome.runtime.onConnect.addListener((port) => {
   console.log('[FlowCapture] Port connected:', port.name);
   machine.ports.set(port.name + '_' + (port.sender?.tab?.id || 'popup'), port);

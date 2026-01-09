@@ -540,16 +540,53 @@ export default function GuideEditor() {
     });
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [imageUploading, setImageUploading] = useState(false);
+  
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedStep) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      updateStep({ id: selectedStep.id, guideId, imageUrl: dataUrl });
-    };
-    reader.readAsDataURL(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    
+    setImageUploading(true);
+    try {
+      // Request presigned URL for upload
+      const res = await fetch('/api/uploads/request-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to get upload URL');
+      }
+      
+      const { uploadURL, objectPath } = await res.json();
+      
+      // Upload directly to object storage
+      const uploadRes = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+      
+      if (!uploadRes.ok) {
+        throw new Error('Failed to upload file');
+      }
+      
+      // Update step with the object path
+      updateStep({ id: selectedStep.id, guideId, imageUrl: objectPath });
+      toast({ title: 'Screenshot updated' });
+    } catch (error) {
+      console.error('Image upload error:', error);
+      toast({ title: 'Failed to upload screenshot', variant: 'destructive' });
+    } finally {
+      setImageUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1147,6 +1184,16 @@ export default function GuideEditor() {
               className="w-full max-w-4xl bg-card rounded-lg shadow-2xl border border-border overflow-hidden"
             >
               <div className="aspect-video bg-gray-100 relative group/img overflow-hidden">
+                {/* Image upload loading overlay */}
+                {imageUploading && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-30">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-white" />
+                      <span className="text-white text-sm">Uploading...</span>
+                    </div>
+                  </div>
+                )}
+                
                 {selectedStep.imageUrl ? (
                   <>
                     <img src={selectedStep.imageUrl} alt="Step preview" className="w-full h-full object-contain bg-gray-900" />
@@ -1167,6 +1214,7 @@ export default function GuideEditor() {
                           size="sm"
                           onClick={() => openBeautifier(selectedStep.imageUrl!)}
                           data-testid="button-beautify-screenshot"
+                          disabled={imageUploading}
                         >
                           <Sparkles className="h-4 w-4 mr-2" />
                           Beautify
@@ -1176,6 +1224,7 @@ export default function GuideEditor() {
                           size="sm"
                           onClick={() => fileInputRef.current?.click()}
                           data-testid="button-replace-screenshot"
+                          disabled={imageUploading}
                         >
                           <Upload className="h-4 w-4 mr-2" />
                           Replace
@@ -1187,8 +1236,17 @@ export default function GuideEditor() {
                   <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
                     <ImageIcon className="h-16 w-16 mb-4 opacity-20" />
                     <p>No image captured</p>
-                    <Button variant="outline" className="mt-4" onClick={() => fileInputRef.current?.click()}>
-                      <Upload className="h-4 w-4 mr-2" />
+                    <Button 
+                      variant="outline" 
+                      className="mt-4" 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={imageUploading}
+                    >
+                      {imageUploading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4 mr-2" />
+                      )}
                       Upload Screenshot
                     </Button>
                   </div>

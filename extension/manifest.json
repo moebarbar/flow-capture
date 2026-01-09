@@ -1,49 +1,45 @@
 {
   "manifest_version": 3,
   "name": "FlowCapture",
-  "version": "2.0.0",
-  "description": "Enterprise workflow documentation - capture browser interactions automatically",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "tabs",
-    "scripting"
-  ],
-  "optional_permissions": [
-    "clipboardWrite"
-  ],
-  "optional_host_permissions": [
-    "<all_urls>"
-  ],
-  "host_permissions": [],
-  "background": {
-    "service_worker": "src/background.js",
-    "type": "module"
-  },
-  "action": {
-    "default_popup": "popup/popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
-  },
+  "version": "1.0.0",
+  "description": "Capture browser workflows and create step-by-step guides automatically",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
   "externally_connectable": {
     "matches": [
-      "*://*.replit.app/*",
       "*://*.replit.dev/*",
+      "*://*.replit.app/*",
+      "*://*.repl.co/*",
       "*://localhost:*/*",
       "*://127.0.0.1:*/*"
     ]
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/styles.css", "src/overlay.js", "src/selectorEngine.js", "src/screenshotService.js", "icons/*"],
+      "resources": ["messaging.js", "selector.js", "screenshot.js", "overlay.js", "styles.css"],
       "matches": ["<all_urls>"]
     }
   ]

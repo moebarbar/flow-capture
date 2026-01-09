@@ -50,8 +50,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function updateState() {
     try {
-      const state = await chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATE' });
-      const settings = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+      const state = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+      const settings = await chrome.storage.local.get(['highlightColor', 'apiBaseUrl']);
       
       if (settings.highlightColor) {
         borderColorInput.value = settings.highlightColor;
@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         apiUrlInput.value = settings.apiBaseUrl;
       }
 
-      if (state.isCapturing) {
+      if (state?.isCapturing) {
         showPanel(capturingPanel);
         stepCount.textContent = state.stepCount || 0;
         updatePauseResumeUI(state.isPaused);
@@ -89,21 +89,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function checkAndRequestPermissions() {
-    const result = await chrome.runtime.sendMessage({ type: 'CHECK_PERMISSIONS' });
-    
-    if (!result) {
-      const confirmed = confirm(
-        'FlowCapture needs permission to capture on all websites.\n\n' +
-        'Click OK to grant permission, or Cancel to configure specific sites in settings.'
-      );
+    try {
+      const hasPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
       
-      if (confirmed) {
-        const granted = await chrome.runtime.sendMessage({ type: 'REQUEST_PERMISSIONS' });
-        return granted.granted;
+      if (!hasPermission) {
+        const confirmed = confirm(
+          'FlowCapture needs permission to capture on all websites.\n\n' +
+          'Click OK to grant permission, or Cancel to configure specific sites in settings.'
+        );
+        
+        if (confirmed) {
+          const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
+          return granted;
+        }
+        return false;
       }
+      return true;
+    } catch (e) {
       return false;
     }
-    return true;
   }
 
   async function startCapture() {
@@ -114,33 +118,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const highlightColor = borderColorInput.value;
-    await chrome.runtime.sendMessage({ 
-      type: 'SAVE_SETTINGS', 
-      data: { highlightColor } 
-    });
+    await chrome.storage.local.set({ highlightColor });
 
     const result = await chrome.runtime.sendMessage({ 
       type: 'START_CAPTURE',
       data: { highlightColor }
     });
 
-    if (result.success) {
+    if (result?.success) {
       showPanel(capturingPanel);
       stepCount.textContent = '0';
       updatePauseResumeUI(false);
       window.close();
-    } else if (result.error === 'permissions_required') {
+    } else if (result?.error === 'Host permissions required') {
       alert('Permission required. Please grant access to capture on websites.');
     }
   }
 
   async function stopCapture() {
     const result = await chrome.runtime.sendMessage({ 
-      type: 'STOP_CAPTURE',
-      data: { cancelled: false }
+      type: 'STOP_CAPTURE'
     });
 
-    if (result.success) {
+    if (result?.success) {
       lastCaptureResult = result;
       showPanel(finishedPanel);
       finalStepCount.textContent = result.stepCount || 0;
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   viewBtn.addEventListener('click', async () => {
-    const settings = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+    const settings = await chrome.storage.local.get(['apiBaseUrl']);
     const apiBaseUrl = settings.apiBaseUrl || '';
     
     if (apiBaseUrl && lastCaptureResult?.guideId) {
@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   openDashboard.addEventListener('click', async (e) => {
     e.preventDefault();
-    const settings = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+    const settings = await chrome.storage.local.get(['apiBaseUrl']);
     const apiBaseUrl = settings.apiBaseUrl || '';
     
     if (apiBaseUrl) {
@@ -205,12 +205,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     apiUrl = apiUrl.replace(/\/$/, '');
     
-    await chrome.runtime.sendMessage({ 
-      type: 'SAVE_SETTINGS', 
-      data: { 
-        apiBaseUrl: apiUrl,
-        highlightColor: borderColorInput.value
-      } 
+    await chrome.storage.local.set({ 
+      apiBaseUrl: apiUrl,
+      highlightColor: borderColorInput.value
     });
     
     settingsModal.classList.add('hidden');
@@ -222,10 +219,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   borderColorInput.addEventListener('change', (e) => {
     updateActivePreset(e.target.value);
-    chrome.runtime.sendMessage({ 
-      type: 'SAVE_SETTINGS', 
-      data: { highlightColor: e.target.value } 
-    });
+    chrome.storage.local.set({ highlightColor: e.target.value });
   });
 
   colorPresets.forEach(preset => {
@@ -233,10 +227,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const color = preset.dataset.color;
       borderColorInput.value = color;
       updateActivePreset(color);
-      chrome.runtime.sendMessage({ 
-        type: 'SAVE_SETTINGS', 
-        data: { highlightColor: color } 
-      });
+      chrome.storage.local.set({ highlightColor: color });
     });
   });
 
@@ -268,8 +259,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'CAPTURE_STATE_CHANGED') {
-      const { isCapturing, isPaused, stepCount: count } = message.data;
+    if (message.type === 'STATE_UPDATE') {
+      const { isCapturing, isPaused, stepCount: count } = message.data || {};
       
       if (isCapturing) {
         showPanel(capturingPanel);

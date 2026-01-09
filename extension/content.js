@@ -114,7 +114,7 @@
     isPaused = false;
     
     if (window.FlowCaptureOverlay) {
-      window.FlowCaptureOverlay.stopRecording();
+      window.FlowCaptureOverlay.stopRecording(false);
     }
   }
 

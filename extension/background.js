@@ -40,10 +40,16 @@ async function handleMessage(message, sender) {
     
     case 'PAUSE_CAPTURE':
       State.isPaused = true;
+      if (State.activeTabId) {
+        sendToTab(State.activeTabId, 'PAUSE_CAPTURE');
+      }
       return { success: true };
     
     case 'RESUME_CAPTURE':
       State.isPaused = false;
+      if (State.activeTabId) {
+        sendToTab(State.activeTabId, 'RESUME_CAPTURE');
+      }
       return { success: true };
     
     case 'STEP_CAPTURED':

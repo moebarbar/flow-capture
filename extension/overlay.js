@@ -171,7 +171,7 @@
       const action = e.target.dataset.action;
       if (action === 'pause') togglePause();
       if (action === 'resume') togglePause();
-      if (action === 'stop') stopRecording();
+      if (action === 'stop') stopRecording(true);
     });
   }
 
@@ -186,7 +186,7 @@
     panel.classList.remove('hidden');
   }
 
-  function stopRecording() {
+  function stopRecording(userInitiated = false) {
     isRecording = false;
     isPaused = false;
     
@@ -194,7 +194,7 @@
     panel.classList.add('hidden');
     hideHighlight();
     
-    if (window.FlowCaptureMessaging) {
+    if (userInitiated && window.FlowCaptureMessaging) {
       window.FlowCaptureMessaging.stopCapture();
     }
   }

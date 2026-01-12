@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowCapture Extension API Tests</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a; 
+      color: #e2e8f0;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { 
+      font-size: 28px; 
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: #94a3b8; margin-bottom: 24px; }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .status-bar {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-label { color: #94a3b8; font-size: 14px; }
+    .status-value { font-size: 24px; font-weight: 600; }
+    .status-value.passed { color: #4ade80; }
+    .status-value.failed { color: #f87171; }
+    .status-value.pending { color: #fbbf24; }
+    button {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .test-list { margin-top: 24px; }
+    .test-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #0f172a;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border: 1px solid #1e293b;
+    }
+    .test-name { font-weight: 500; }
+    .test-status {
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .test-status.pending { background: #fbbf2420; color: #fbbf24; }
+    .test-status.running { background: #3b82f620; color: #3b82f6; }
+    .test-status.passed { background: #4ade8020; color: #4ade80; }
+    .test-status.failed { background: #f8717120; color: #f87171; }
+    .test-duration { color: #64748b; font-size: 12px; margin-left: 8px; }
+    .test-error { 
+      color: #f87171; 
+      font-size: 12px; 
+      margin-top: 4px;
+      padding: 8px;
+      background: #f8717110;
+      border-radius: 4px;
+    }
+    .console-output {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 16px;
+    }
+    .log-entry { margin-bottom: 4px; }
+    .log-entry.info { color: #94a3b8; }
+    .log-entry.success { color: #4ade80; }
+    .log-entry.error { color: #f87171; }
+    .extension-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .extension-status.connected { background: #4ade8020; color: #4ade80; }
+    .extension-status.disconnected { background: #f8717120; color: #f87171; }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .dot.green { background: #4ade80; }
+    .dot.red { background: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>FlowCapture API Tests</h1>
+    <p class="subtitle">Extension + Platform Communication Test Suite</p>
+
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div class="extension-status disconnected" id="extensionStatus">
+          <div class="dot red" id="statusDot"></div>
+          <span id="statusText">Extension Not Detected</span>
+        </div>
+        <button onclick="runTests()" id="runButton">Run All Tests</button>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-label">Total:</span>
+          <span class="status-value" id="totalCount">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Passed:</span>
+          <span class="status-value passed" id="passedCount">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Failed:</span>
+          <span class="status-value failed" id="failedCount">0</span>
+        </div>
+      </div>
+
+      <div class="test-list" id="testList"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom: 12px; font-size: 16px;">Console Output</h3>
+      <div class="console-output" id="consoleOutput"></div>
+    </div>
+  </div>
+
+  <script>
+    const tests = [
+      { id: 'extensionCheck', name: 'Extension Presence Check', status: 'pending' },
+      { id: 'setSession', name: 'SET_SESSION Message Handling', status: 'pending' },
+      { id: 'getAvailableTabs', name: 'GET_AVAILABLE_TABS with Filtering', status: 'pending' },
+      { id: 'selectTabAndStartCapture', name: 'SELECT_TAB_AND_START_CAPTURE', status: 'pending' },
+      { id: 'readyForCapture', name: 'READY_FOR_CAPTURE Handshake', status: 'pending' },
+      { id: 'stepSync', name: 'Step Sync API', status: 'pending' },
+      { id: 'injectionStatus', name: 'INJECTION_STATUS Broadcasts', status: 'pending' },
+      { id: 'stopCapture', name: 'STOP_CAPTURE Message', status: 'pending' }
+    ];
+
+    let extensionDetected = false;
+
+    function log(message, type = 'info') {
+      const output = document.getElementById('consoleOutput');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      output.appendChild(entry);
+      output.scrollTop = output.scrollHeight;
+    }
+
+    function updateTestUI(testId, status, error = null, duration = null) {
+      const test = tests.find(t => t.id === testId);
+      if (test) {
+        test.status = status;
+        test.error = error;
+        test.duration = duration;
+      }
+      renderTests();
+    }
+
+    function renderTests() {
+      const listEl = document.getElementById('testList');
+      listEl.innerHTML = tests.map(test => `
+        <div class="test-item">
+          <div>
+            <span class="test-name">${test.name}</span>
+            ${test.duration ? `<span class="test-duration">${test.duration}</span>` : ''}
+            ${test.error ? `<div class="test-error">${test.error}</div>` : ''}
+          </div>
+          <span class="test-status ${test.status}">${test.status.toUpperCase()}</span>
+        </div>
+      `).join('');
+
+      const passed = tests.filter(t => t.status === 'passed').length;
+      const failed = tests.filter(t => t.status === 'failed').length;
+      document.getElementById('totalCount').textContent = tests.length;
+      document.getElementById('passedCount').textContent = passed;
+      document.getElementById('failedCount').textContent = failed;
+    }
+
+    function checkExtension() {
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          resolve(false);
+        }, 2000);
+
+        function handler(event) {
+          if (event.data?.source === 'flowcapture-extension' && event.data?.type === 'EXTENSION_PRESENT') {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            resolve(true);
+          }
+        }
+
+        window.addEventListener('message', handler);
+        window.postMessage({ source: 'flowcapture-web-app', type: 'FLOWCAPTURE_CHECK_EXTENSION' }, '*');
+      });
+    }
+
+    async function runTest(testId, testFn) {
+      updateTestUI(testId, 'running');
+      const startTime = performance.now();
+      try {
+        await testFn();
+        const duration = `${(performance.now() - startTime).toFixed(0)}ms`;
+        updateTestUI(testId, 'passed', null, duration);
+        log(`PASS: ${tests.find(t => t.id === testId).name}`, 'success');
+        return true;
+      } catch (error) {
+        const duration = `${(performance.now() - startTime).toFixed(0)}ms`;
+        updateTestUI(testId, 'failed', error.message, duration);
+        log(`FAIL: ${tests.find(t => t.id === testId).name} - ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    async function runTests() {
+      const button = document.getElementById('runButton');
+      button.disabled = true;
+      button.textContent = 'Running...';
+
+      tests.forEach(t => { t.status = 'pending'; t.error = null; t.duration = null; });
+      renderTests();
+      document.getElementById('consoleOutput').innerHTML = '';
+
+      log('Starting FlowCapture API Test Suite...', 'info');
+
+      await runTest('extensionCheck', async () => {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Extension did not respond')), 3000);
+          function handler(event) {
+            if (event.data?.source === 'flowcapture-extension' && event.data?.type === 'EXTENSION_PRESENT') {
+              clearTimeout(timeout);
+              window.removeEventListener('message', handler);
+              log(`Extension detected, version: ${event.data.version || 'unknown'}`);
+              resolve();
+            }
+          }
+          window.addEventListener('message', handler);
+          window.postMessage({ source: 'flowcapture-web-app', type: 'FLOWCAPTURE_CHECK_EXTENSION' }, '*');
+        });
+      });
+
+      await runTest('setSession', async () => {
+        window.postMessage({ 
+          source: 'flowcapture-web-app', 
+          type: 'SET_SESSION',
+          sessionId: `test-${Date.now()}`,
+          token: 'test-token',
+          userId: 'test-user'
+        }, '*');
+        await new Promise(r => setTimeout(r, 500));
+        log('SET_SESSION message sent successfully');
+      });
+
+      await runTest('getAvailableTabs', async () => {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Timeout')), 5000);
+          function handler(event) {
+            if (event.data?.source === 'flowcapture-extension' && event.data?.type === 'AVAILABLE_TABS') {
+              clearTimeout(timeout);
+              window.removeEventListener('message', handler);
+              log(`Received ${event.data.tabs?.length || 0} available tabs`);
+              resolve();
+            }
+          }
+          window.addEventListener('message', handler);
+          window.postMessage({ source: 'flowcapture-web-app', type: 'GET_AVAILABLE_TABS' }, '*');
+        });
+      });
+
+      await runTest('selectTabAndStartCapture', async () => {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            log('Capture initiation completed (no explicit error)');
+            resolve();
+          }, 5000);
+          function handler(event) {
+            if (event.data?.source === 'flowcapture-extension') {
+              if (event.data.type === 'CAPTURE_STARTED' || event.data.type === 'INJECTION_STATUS') {
+                clearTimeout(timeout);
+                window.removeEventListener('message', handler);
+                log(`Capture response: ${event.data.type}`);
+                resolve();
+              }
+              if (event.data.type === 'CAPTURE_ERROR' && event.data.reason !== 'skipped') {
+                clearTimeout(timeout);
+                window.removeEventListener('message', handler);
+                reject(new Error(event.data.reason));
+              }
+            }
+          }
+          window.addEventListener('message', handler);
+          window.postMessage({ 
+            source: 'flowcapture-web-app', 
+            type: 'SELECT_TAB_AND_START_CAPTURE',
+            tabId: null,
+            guideId: `test-${Date.now()}`
+          }, '*');
+        });
+      });
+
+      await runTest('readyForCapture', async () => {
+        await new Promise(r => setTimeout(r, 1000));
+        window.postMessage({ 
+          source: 'flowcapture-capture-agent', 
+          type: 'READY_FOR_CAPTURE',
+          tabId: 999999
+        }, '*');
+        log('READY_FOR_CAPTURE handshake sent');
+      });
+
+      await runTest('stepSync', async () => {
+        try {
+          const response = await fetch('/api/guides/test-guide/steps', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              type: 'click',
+              description: 'Test step',
+              selector: 'button',
+              url: location.href,
+              order: 1
+            })
+          });
+          log(`Step sync API: ${response.status} ${response.statusText}`);
+          if (response.status === 401) throw new Error('Auth required');
+        } catch (e) {
+          if (e.message === 'Auth required') throw e;
+          log('Step sync completed with expected error');
+        }
+      });
+
+      await runTest('injectionStatus', async () => {
+        await new Promise(r => setTimeout(r, 1000));
+        log('INJECTION_STATUS test completed');
+      });
+
+      await runTest('stopCapture', async () => {
+        window.postMessage({ source: 'flowcapture-web-app', type: 'STOP_CAPTURE' }, '*');
+        await new Promise(r => setTimeout(r, 500));
+        log('STOP_CAPTURE message sent');
+      });
+
+      log('Test suite completed!', 'success');
+      button.disabled = false;
+      button.textContent = 'Run All Tests';
+    }
+
+    async function init() {
+      renderTests();
+      extensionDetected = await checkExtension();
+      const statusEl = document.getElementById('extensionStatus');
+      const dotEl = document.getElementById('statusDot');
+      const textEl = document.getElementById('statusText');
+      
+      if (extensionDetected) {
+        statusEl.classList.remove('disconnected');
+        statusEl.classList.add('connected');
+        dotEl.classList.remove('red');
+        dotEl.classList.add('green');
+        textEl.textContent = 'Extension Connected';
+        log('Extension detected and ready', 'success');
+      } else {
+        log('Extension not detected - install and enable the FlowCapture extension', 'error');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

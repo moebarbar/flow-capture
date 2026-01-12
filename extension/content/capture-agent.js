@@ -7,6 +7,13 @@
   if (window.__flowCaptureCaptureAgent) return;
   window.__flowCaptureCaptureAgent = true;
 
+  // Set DOM marker for extension detection by the web app
+  try {
+    document.documentElement.dataset.flowcaptureExtension = chrome.runtime.getManifest().version || 'true';
+  } catch (e) {
+    // Silently fail if chrome.runtime is not available
+  }
+
   const MessageTypes = {
     START_CAPTURE: 'START_CAPTURE',
     STOP_CAPTURE: 'STOP_CAPTURE',

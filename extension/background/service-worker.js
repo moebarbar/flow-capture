@@ -218,9 +218,13 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     try {
       const tab = await chrome.tabs.get(tabId);
       if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
-        await injectContentScripts(tabId);
-        machine.addPendingTab(tabId, { url: tab.url, title: tab.title });
-        console.log('[FlowCapture] Injected into new tab, waiting for READY_FOR_CAPTURE:', tabId, tab.url);
+        const injectResult = await injectContentScripts(tabId);
+        if (injectResult.success) {
+          machine.addPendingTab(tabId, { url: tab.url, title: tab.title });
+          console.log('[FlowCapture] Injected into new tab, waiting for READY_FOR_CAPTURE:', tabId, tab.url);
+        } else if (!injectResult.skipped) {
+          console.log('[FlowCapture] Tab injection failed:', injectResult.error);
+        }
       }
     } catch (e) {
       console.log('[FlowCapture] Tab injection skipped:', e.message);
@@ -252,14 +256,18 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
     
     try {
-      await injectContentScripts(tabId);
-      machine.state.pendingTabs.set(tabId, { 
-        ...existingContext, 
-        url: tab.url, 
-        title: tab.title, 
-        injectedAt: Date.now() 
-      });
-      console.log('[FlowCapture] Reinjected after navigation, waiting for READY_FOR_CAPTURE:', tabId, tab.url);
+      const injectResult = await injectContentScripts(tabId);
+      if (injectResult.success) {
+        machine.state.pendingTabs.set(tabId, { 
+          ...existingContext, 
+          url: tab.url, 
+          title: tab.title, 
+          injectedAt: Date.now() 
+        });
+        console.log('[FlowCapture] Reinjected after navigation, waiting for READY_FOR_CAPTURE:', tabId, tab.url);
+      } else if (!injectResult.skipped) {
+        console.log('[FlowCapture] Reinjection failed:', injectResult.error);
+      }
     } catch (e) {
       console.log('[FlowCapture] Reinjection failed:', e.message);
     }
@@ -399,21 +407,95 @@ async function handleMessage(message, sender) {
     
     case 'GET_AVAILABLE_TABS':
       try {
-        const tabs = await chrome.tabs.query({ currentWindow: true });
-        return {
-          tabs: tabs
-            .filter(t => t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://'))
-            .map(t => ({
-              id: t.id,
-              title: t.title,
-              url: t.url,
-              favIconUrl: t.favIconUrl,
-              active: t.active,
-              isCapturing: machine.state.capturedTabs.has(t.id)
-            }))
-        };
+        const allTabs = await chrome.tabs.query({});
+        const validTabs = allTabs.filter(t => 
+          t.url && 
+          !t.url.startsWith('chrome://') && 
+          !t.url.startsWith('chrome-extension://') &&
+          !t.url.startsWith('about:') &&
+          !t.url.startsWith('edge://') &&
+          !t.url.includes('chrome.google.com/webstore')
+        );
+        
+        const tabsWithMeta = await Promise.all(validTabs.map(async (t) => {
+          let description = '';
+          try {
+            const url = new URL(t.url);
+            description = url.hostname;
+            
+            const results = await chrome.scripting.executeScript({
+              target: { tabId: t.id },
+              func: () => {
+                const metaDesc = document.querySelector('meta[name="description"]');
+                return metaDesc ? metaDesc.content : null;
+              }
+            });
+            if (results?.[0]?.result) {
+              description = results[0].result.substring(0, 100);
+            }
+          } catch (e) {
+            try {
+              const url = new URL(t.url);
+              description = url.hostname;
+            } catch {
+              description = 'Unknown site';
+            }
+          }
+          
+          return {
+            id: t.id,
+            title: t.title || 'Untitled',
+            url: t.url,
+            favIconUrl: t.favIconUrl,
+            active: t.active,
+            windowId: t.windowId,
+            description,
+            isCapturing: machine.state.capturedTabs.has(t.id),
+            isPending: machine.state.pendingTabs.has(t.id)
+          };
+        }));
+        
+        return { tabs: tabsWithMeta };
       } catch (e) {
         return { tabs: [], error: e.message };
+      }
+    
+    case 'SELECT_TAB_AND_START_CAPTURE':
+      if (!data?.tabId) {
+        return { success: false, error: 'No tabId provided' };
+      }
+      
+      try {
+        const targetTab = await chrome.tabs.get(data.tabId);
+        
+        await chrome.windows.update(targetTab.windowId, { focused: true });
+        
+        if (!targetTab.active) {
+          await chrome.tabs.update(data.tabId, { active: true });
+          
+          await new Promise((resolve) => {
+            const listener = (activeInfo) => {
+              if (activeInfo.tabId === data.tabId) {
+                chrome.tabs.onActivated.removeListener(listener);
+                resolve();
+              }
+            };
+            chrome.tabs.onActivated.addListener(listener);
+            setTimeout(() => {
+              chrome.tabs.onActivated.removeListener(listener);
+              resolve();
+            }, 1000);
+          });
+        }
+        
+        const captureResult = await startCapture({ 
+          tabId: data.tabId, 
+          highlightColor: data.highlightColor 
+        });
+        
+        return captureResult;
+      } catch (e) {
+        return { success: false, error: e.message };
       }
     
     case 'SELECT_TAB_FOR_CAPTURE':
@@ -428,10 +510,14 @@ async function handleMessage(message, sender) {
         if (!isAlreadyCaptured && !isPending) {
           try {
             const tab = await chrome.tabs.get(tabId);
-            await injectContentScripts(tabId);
-            machine.addPendingTab(tabId, { url: tab.url, title: tab.title });
-            console.log('[FlowCapture] Tab selected for capture, waiting for READY_FOR_CAPTURE:', tabId);
-            return { success: true, tabId: tabId, status: 'pending_ready' };
+            const injectResult = await injectContentScripts(tabId);
+            if (injectResult.success) {
+              machine.addPendingTab(tabId, { url: tab.url, title: tab.title });
+              console.log('[FlowCapture] Tab selected for capture, waiting for READY_FOR_CAPTURE:', tabId);
+              return { success: true, tabId: tabId, status: 'pending_ready' };
+            } else {
+              return { success: false, error: injectResult.error || 'Injection failed' };
+            }
           } catch (e) {
             return { success: false, error: e.message };
           }
@@ -576,9 +662,16 @@ async function startCapture(config = {}) {
   if (primaryTab && primaryTab.id) {
     machine.state.activeTabId = primaryTab.id;
     
-    await injectContentScripts(primaryTab.id);
-    machine.addPendingTab(primaryTab.id, { url: primaryTab.url, title: primaryTab.title });
-    console.log('[FlowCapture] Injected primary tab, waiting for READY_FOR_CAPTURE:', primaryTab.id, primaryTab.url);
+    const injectResult = await injectContentScripts(primaryTab.id);
+    if (injectResult.success) {
+      machine.addPendingTab(primaryTab.id, { url: primaryTab.url, title: primaryTab.title });
+      console.log('[FlowCapture] Injected primary tab, waiting for READY_FOR_CAPTURE:', primaryTab.id, primaryTab.url);
+    } else if (injectResult.skipped) {
+      console.log('[FlowCapture] Primary tab skipped (restricted URL):', primaryTab.url);
+    } else {
+      console.warn('[FlowCapture] Primary tab injection failed, will retry via handshake:', injectResult.error);
+      machine.addPendingTab(primaryTab.id, { url: primaryTab.url, title: primaryTab.title, injectionFailed: true });
+    }
   }
 
   const injectedCount = await injectIntoAllTabs();
@@ -993,40 +1086,81 @@ async function checkPermissions() {
   }
 }
 
-async function injectContentScripts(tabId) {
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-      console.log('[FlowCapture] Skipping injection for:', tab.url);
-      return false;
+async function injectContentScripts(tabId, options = {}) {
+  const maxRetries = options.maxRetries ?? 3;
+  const baseDelay = options.baseDelay ?? 500;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        console.log('[FlowCapture] Skipping injection for:', tab.url);
+        return { success: false, error: 'Restricted URL', skipped: true };
+      }
+      
+      if (tab.url.includes('chrome.google.com/webstore')) {
+        console.log('[FlowCapture] Cannot inject into Chrome Web Store');
+        return { success: false, error: 'Chrome Web Store not supported', skipped: true };
+      }
+
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/capture-agent.js']
+      });
+
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/screenshot-agent.js']
+      });
+
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/tab-bridge.js']
+      });
+
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/side-panel.js']
+      });
+
+      console.log('[FlowCapture] Scripts injected into tab:', tabId, '(attempt', attempt, ')');
+      
+      broadcastInjectionStatus(tabId, 'success');
+      return { success: true };
+    } catch (e) {
+      console.log(`[FlowCapture] Injection attempt ${attempt}/${maxRetries} failed:`, e.message);
+      
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.log(`[FlowCapture] Retrying in ${delay}ms...`);
+        broadcastInjectionStatus(tabId, 'retrying', { attempt, maxRetries, error: e.message });
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        console.error('[FlowCapture] All injection attempts failed for tab:', tabId);
+        broadcastInjectionStatus(tabId, 'error', { error: e.message });
+        return { success: false, error: e.message };
+      }
     }
-
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['content/capture-agent.js']
-    });
-
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['content/screenshot-agent.js']
-    });
-
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['content/tab-bridge.js']
-    });
-
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['content/side-panel.js']
-    });
-
-    console.log('[FlowCapture] Scripts injected into tab:', tabId);
-    return true;
-  } catch (e) {
-    console.log('[FlowCapture] Injection failed:', e.message);
-    return false;
   }
+  
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+function broadcastInjectionStatus(tabId, status, details = {}) {
+  const message = {
+    type: 'INJECTION_STATUS',
+    data: { tabId, status, ...details, timestamp: Date.now() }
+  };
+  
+  machine.ports.forEach((port) => {
+    try {
+      port.postMessage(message);
+    } catch (e) {}
+  });
+  
+  try {
+    chrome.tabs.sendMessage(tabId, message).catch(() => {});
+  } catch (e) {}
 }
 
 async function injectIntoAllTabs() {
@@ -1042,15 +1176,15 @@ async function injectIntoAllTabs() {
     
     const results = await Promise.allSettled(
       validTabs.map(async (tab) => {
-        const injected = await injectContentScripts(tab.id);
-        if (injected) {
+        const result = await injectContentScripts(tab.id);
+        if (result.success) {
           machine.addPendingTab(tab.id, { url: tab.url, title: tab.title });
         }
-        return { tabId: tab.id, injected };
+        return { tabId: tab.id, success: result.success, error: result.error };
       })
     );
     
-    const successCount = results.filter(r => r.status === 'fulfilled' && r.value.injected).length;
+    const successCount = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
     console.log(`[FlowCapture] Pre-injected scripts into ${successCount}/${validTabs.length} tabs`);
     return successCount;
   } catch (e) {

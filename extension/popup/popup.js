@@ -110,29 +110,86 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  async function startCapture() {
+  async function showTabSelector() {
     const hasPermission = await checkAndRequestPermissions();
     if (!hasPermission) {
       alert('Permission required to capture. Please grant access in the extension settings.');
       return;
     }
 
+    tabList.innerHTML = '<div class="tab-loading">Loading tabs...</div>';
+    tabSelectorModal.classList.remove('hidden');
+    
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'GET_AVAILABLE_TABS' });
+      
+      if (result?.error) {
+        tabList.innerHTML = `<div class="tab-error">Error: ${escapeHtml(result.error)}</div>`;
+        return;
+      }
+      
+      if (!result?.tabs || result.tabs.length === 0) {
+        tabList.innerHTML = '<div class="tab-empty">No available tabs found. Open a website first.</div>';
+        return;
+      }
+      
+      tabList.innerHTML = '';
+      
+      result.tabs.forEach(tab => {
+        const tabItem = document.createElement('div');
+        tabItem.className = 'tab-item';
+        tabItem.dataset.tabId = tab.id;
+        tabItem.dataset.testid = `tab-item-${tab.id}`;
+        
+        const favicon = tab.favIconUrl 
+          ? `<img src="${escapeHtml(tab.favIconUrl)}" class="tab-favicon" onerror="this.style.display='none'"/>`
+          : '<div class="tab-favicon-placeholder"></div>';
+        
+        tabItem.innerHTML = `
+          ${favicon}
+          <div class="tab-info">
+            <div class="tab-title">${escapeHtml(tab.title)}</div>
+            <div class="tab-description">${escapeHtml(tab.description || new URL(tab.url).hostname)}</div>
+          </div>
+          ${tab.active ? '<span class="tab-active-badge">Active</span>' : ''}
+        `;
+        
+        tabItem.addEventListener('click', () => selectTabAndStartCapture(tab.id));
+        tabList.appendChild(tabItem);
+      });
+    } catch (e) {
+      tabList.innerHTML = `<div class="tab-error">Failed to load tabs: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+  
+  async function selectTabAndStartCapture(tabId) {
     const highlightColor = borderColorInput.value;
     await chrome.storage.local.set({ highlightColor });
+    
+    tabList.innerHTML = '<div class="tab-loading">Starting capture...</div>';
+    
+    try {
+      const result = await chrome.runtime.sendMessage({ 
+        type: 'SELECT_TAB_AND_START_CAPTURE',
+        data: { tabId, highlightColor }
+      });
 
-    const result = await chrome.runtime.sendMessage({ 
-      type: 'START_CAPTURE',
-      data: { highlightColor }
-    });
-
-    if (result?.success) {
-      showPanel(capturingPanel);
-      stepCount.textContent = '0';
-      updatePauseResumeUI(false);
-      window.close();
-    } else if (result?.error === 'Host permissions required') {
-      alert('Permission required. Please grant access to capture on websites.');
+      if (result?.success) {
+        tabSelectorModal.classList.add('hidden');
+        showPanel(capturingPanel);
+        stepCount.textContent = '0';
+        updatePauseResumeUI(false);
+        window.close();
+      } else {
+        tabList.innerHTML = `<div class="tab-error">Failed to start capture: ${escapeHtml(result?.error || 'Unknown error')}</div>`;
+      }
+    } catch (e) {
+      tabList.innerHTML = `<div class="tab-error">Error: ${escapeHtml(e.message)}</div>`;
     }
+  }
+
+  async function startCapture() {
+    await showTabSelector();
   }
 
   async function stopCapture() {

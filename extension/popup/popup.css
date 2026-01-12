@@ -551,3 +551,76 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.tab-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: white;
+}
+
+.tab-item:hover {
+  background: #f0f4ff;
+  border-color: #8b5cf6;
+  transform: translateX(2px);
+}
+
+.tab-item:active {
+  background: #e8eeff;
+}
+
+.tab-favicon-placeholder {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  flex-shrink: 0;
+}
+
+.tab-description {
+  font-size: 12px;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.tab-active-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #22c55e;
+  background: #dcfce7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.tab-loading {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.tab-error {
+  padding: 16px;
+  text-align: center;
+  color: #ef4444;
+  font-size: 13px;
+  background: #fef2f2;
+  border-radius: 8px;
+}
+
+.tab-empty {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}

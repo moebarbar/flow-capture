@@ -689,6 +689,7 @@ async function startCapture(config = {}) {
 async function stopCapture() {
   const steps = [...machine.state.steps];
   const guideId = machine.state.guideId;
+  const apiBaseUrl = machine.state.apiBaseUrl;
 
   if (machine.canTransition(machine.state.status, CaptureStates.SYNCING)) {
     machine.transition(CaptureStates.SYNCING);
@@ -696,7 +697,7 @@ async function stopCapture() {
 
   await broadcastToAllTabs(MessageTypes.STOP_CAPTURE);
 
-  if (steps.length > 0 && machine.state.apiBaseUrl && guideId) {
+  if (steps.length > 0 && apiBaseUrl && guideId) {
     try {
       const flushResult = await syncManager.flush();
       console.log('[FlowCapture] Sync flush complete:', flushResult);
@@ -707,6 +708,59 @@ async function stopCapture() {
 
   syncManager.stopPeriodicSync();
   machine.transition(CaptureStates.IDLE);
+
+  // Redirect user to the editor with captured steps
+  if (guideId && apiBaseUrl) {
+    const editorUrl = `${apiBaseUrl}/guides/${guideId}/edit`;
+    const editorPath = `/guides/${guideId}/edit`;
+    try {
+      // Parse hostname safely - handle both absolute and relative URLs
+      let origin = '';
+      let hostname = '';
+      try {
+        const url = new URL(apiBaseUrl);
+        origin = url.origin;
+        hostname = url.hostname;
+      } catch (e) {
+        // Relative URL - skip redirect since we can't determine target
+        console.log('[FlowCapture] Skipping redirect - apiBaseUrl is relative:', apiBaseUrl);
+        return { success: true, stepCount: steps.length, guideId };
+      }
+      
+      // Find existing FlowCapture tab for THIS guide (same origin required)
+      const tabs = await chrome.tabs.query({});
+      const sameGuideTab = tabs.find(tab => {
+        if (!tab.url) return false;
+        try {
+          const tabUrl = new URL(tab.url);
+          return tabUrl.origin === origin && tab.url.includes(editorPath);
+        } catch {
+          return false;
+        }
+      });
+
+      if (sameGuideTab && sameGuideTab.id) {
+        // Just focus the existing tab - TanStack Query will auto-refresh data
+        await chrome.tabs.update(sameGuideTab.id, { active: true });
+        if (sameGuideTab.windowId) {
+          await chrome.windows.update(sameGuideTab.windowId, { focused: true });
+        }
+        // Send message to refresh steps instead of hard reload
+        try {
+          await chrome.tabs.sendMessage(sameGuideTab.id, { type: 'REFRESH_STEPS' });
+        } catch (e) {
+          // Tab may not have listener, fallback to soft navigation
+          console.log('[FlowCapture] Could not send refresh message:', e.message);
+        }
+      } else {
+        // Create new tab for the editor
+        await chrome.tabs.create({ url: editorUrl, active: true });
+      }
+      console.log('[FlowCapture] Redirected to editor:', editorUrl);
+    } catch (e) {
+      console.error('[FlowCapture] Failed to redirect to editor:', e);
+    }
+  }
 
   return { 
     success: true, 

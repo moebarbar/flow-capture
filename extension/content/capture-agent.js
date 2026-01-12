@@ -715,18 +715,54 @@
     const selector = generateSelector(element);
     if (!selector) return;
 
-    if (window.FlowCaptureOverlay) {
-      window.FlowCaptureOverlay.flashHighlight(element);
-    }
-
+    // Create persistent highlight box that will appear in the screenshot
+    let highlightBox = null;
     let screenshotDataUrl = null;
+    
     try {
+      // Only create highlight if document.body is available
+      if (document.body) {
+        highlightBox = document.createElement('div');
+        highlightBox.id = 'flowcapture-screenshot-highlight';
+        highlightBox.style.cssText = `
+          position: fixed;
+          border: 3px solid #ef4444;
+          background: rgba(239, 68, 68, 0.15);
+          border-radius: 4px;
+          pointer-events: none;
+          z-index: 2147483646;
+          box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3);
+          transition: none;
+        `;
+        
+        const rect = element.getBoundingClientRect();
+        highlightBox.style.left = `${rect.left - 4}px`;
+        highlightBox.style.top = `${rect.top - 4}px`;
+        highlightBox.style.width = `${rect.width + 8}px`;
+        highlightBox.style.height = `${rect.height + 8}px`;
+        
+        document.body.appendChild(highlightBox);
+        
+        // Wait for the highlight to render before capturing
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      }
+
       const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
       if (response?.dataUrl) {
         screenshotDataUrl = response.dataUrl;
       }
     } catch (e) {
-      console.log('[FlowCapture] Screenshot request failed:', e);
+      console.log('[FlowCapture] Screenshot capture failed:', e);
+    } finally {
+      // Always clean up the highlight, even if errors occur
+      if (highlightBox && highlightBox.parentNode) {
+        highlightBox.remove();
+      }
+      // Also clean up any orphaned highlights from previous captures
+      const orphanedHighlight = document.getElementById('flowcapture-screenshot-highlight');
+      if (orphanedHighlight) {
+        orphanedHighlight.remove();
+      }
     }
 
     const actionType = 'click';

@@ -109,6 +109,7 @@ class SyncManager {
       stepId,
       step: this.prepareStepPayload(step),
       screenshotDataUrl: step.screenshotDataUrl,
+      screenshotUrl: step.screenshotUrl, // Already-uploaded URL (if available)
       addedAt: Date.now(),
       attempts: 0
     };
@@ -219,13 +220,14 @@ class SyncManager {
   }
 
   async syncStep(item) {
-    const { step, screenshotDataUrl, stepId } = item;
+    const { step, screenshotDataUrl, screenshotUrl, stepId } = item;
 
     try {
       this.updateStepStatus(step, SyncStatus.UPLOADING);
 
-      let imageUrl = null;
-      if (screenshotDataUrl) {
+      // Use already-uploaded URL if available, otherwise upload the data URL
+      let imageUrl = screenshotUrl || null;
+      if (!imageUrl && screenshotDataUrl) {
         imageUrl = await this.uploadScreenshot(screenshotDataUrl, stepId);
       }
 
@@ -326,7 +328,8 @@ class SyncManager {
       throw new SyncError('Screenshot upload failed', uploadResponse.status, 'transient');
     }
 
-    return objectPath;
+    // Ensure URL has /objects/ prefix for consistency with service-worker
+    return objectPath.startsWith('/objects/') ? objectPath : `/objects/${objectPath}`;
   }
 
   async compressScreenshot(dataUrl) {
@@ -434,7 +437,8 @@ class SyncManager {
       throw new SyncError('Multipart complete failed', completeResponse.status, 'transient');
     }
 
-    return objectPath;
+    // Ensure URL has /objects/ prefix for consistency with service-worker
+    return objectPath.startsWith('/objects/') ? objectPath : `/objects/${objectPath}`;
   }
 
   async uploadScreenshotDirect(blob, stepId) {
@@ -468,7 +472,8 @@ class SyncManager {
       throw new SyncError('Direct upload failed', uploadResponse.status, 'transient');
     }
 
-    return objectPath;
+    // Ensure URL has /objects/ prefix for consistency with service-worker
+    return objectPath.startsWith('/objects/') ? objectPath : `/objects/${objectPath}`;
   }
 
   async fetchWithTimeout(url, options, timeoutMs) {

@@ -21,6 +21,7 @@ class CaptureStateMachine {
       expiresAt: null,
       panelOpen: true,
       capturedTabs: new Set(),
+      pendingTabs: new Map(),
       captureStartedAt: null,
       pausedElapsedMs: 0
     };
@@ -28,6 +29,39 @@ class CaptureStateMachine {
     this.ports = new Map();
     this.tabContexts = new Map();
     this.pendingScreenshots = new Map();
+  }
+  
+  addPendingTab(tabId, context = {}) {
+    if (!this.state.capturedTabs.has(tabId) && !this.state.pendingTabs.has(tabId)) {
+      this.state.pendingTabs.set(tabId, { ...context, injectedAt: Date.now() });
+      console.log('[FlowCapture] Tab marked as pending:', tabId);
+    }
+  }
+  
+  promotePendingTab(tabId) {
+    const pendingContext = this.state.pendingTabs.get(tabId);
+    if (pendingContext) {
+      this.state.pendingTabs.delete(tabId);
+      this.state.capturedTabs.add(tabId);
+      
+      const existingContext = this.tabContexts.get(tabId) || {};
+      
+      const defaults = {
+        url: '',
+        title: '',
+        stepCount: 0,
+        firstCapturedAt: Date.now()
+      };
+      
+      this.tabContexts.set(tabId, { 
+        ...defaults, 
+        ...existingContext, 
+        ...pendingContext 
+      });
+      console.log('[FlowCapture] Tab promoted from pending to captured:', tabId);
+      return true;
+    }
+    return false;
   }
 
   transition(newStatus) {
@@ -85,6 +119,7 @@ class CaptureStateMachine {
     this.state.stepCounter = 0;
     this.state.activeTabId = null;
     this.state.capturedTabs.clear();
+    this.state.pendingTabs.clear();
     this.tabContexts.clear();
     this.state.captureStartedAt = null;
     this.state.pausedElapsedMs = 0;
@@ -132,6 +167,7 @@ class CaptureStateMachine {
         port.postMessage({ type: MessageTypes.STATE_UPDATE, data: state });
       } catch {}
     });
+    broadcastToAllTabs(MessageTypes.STATE_UPDATE, state);
   }
 
   addStep(step) {
@@ -175,22 +211,22 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   
   machine.state.activeTabId = tabId;
   
-  if (!machine.state.capturedTabs.has(tabId)) {
+  const isAlreadyActive = machine.state.capturedTabs.has(tabId);
+  const isPending = machine.state.pendingTabs.has(tabId);
+  
+  if (!isAlreadyActive && !isPending) {
     try {
       const tab = await chrome.tabs.get(tabId);
       if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
         await injectContentScripts(tabId);
-        machine.addCapturedTab(tabId, { url: tab.url, title: tab.title });
-        if (machine.state.status === CaptureStates.CAPTURING) {
-          await sendToTab(tabId, MessageTypes.START_CAPTURE);
-        }
-        console.log('[FlowCapture] Injected into new tab:', tabId, tab.url);
+        machine.addPendingTab(tabId, { url: tab.url, title: tab.title });
+        console.log('[FlowCapture] Injected into new tab, waiting for READY_FOR_CAPTURE:', tabId, tab.url);
       }
     } catch (e) {
       console.log('[FlowCapture] Tab injection skipped:', e.message);
     }
   } else if (previousActiveTabId !== tabId) {
-    console.log('[FlowCapture] Switched to captured tab:', tabId);
+    console.log('[FlowCapture] Switched to', isPending ? 'pending' : 'captured', 'tab:', tabId);
     machine.broadcastStateUpdate();
   }
 });
@@ -198,15 +234,32 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (machine.state.status !== CaptureStates.CAPTURING) return;
   if (changeInfo.status !== 'complete') return;
-  if (!machine.state.capturedTabs.has(tabId)) return;
+  
+  const isCaptured = machine.state.capturedTabs.has(tabId);
+  const isPending = machine.state.pendingTabs.has(tabId);
+  
+  if (!isCaptured && !isPending) return;
   
   if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
-    machine.updateTabContext(tabId, { url: tab.url, title: tab.title });
+    let existingContext = {};
+    
+    if (isCaptured) {
+      existingContext = machine.tabContexts.get(tabId) || {};
+      machine.state.capturedTabs.delete(tabId);
+    } else {
+      existingContext = machine.state.pendingTabs.get(tabId) || {};
+      machine.state.pendingTabs.delete(tabId);
+    }
     
     try {
       await injectContentScripts(tabId);
-      await sendToTab(tabId, MessageTypes.START_CAPTURE);
-      console.log('[FlowCapture] Reinjected after navigation:', tabId, tab.url);
+      machine.state.pendingTabs.set(tabId, { 
+        ...existingContext, 
+        url: tab.url, 
+        title: tab.title, 
+        injectedAt: Date.now() 
+      });
+      console.log('[FlowCapture] Reinjected after navigation, waiting for READY_FOR_CAPTURE:', tabId, tab.url);
     } catch (e) {
       console.log('[FlowCapture] Reinjection failed:', e.message);
     }
@@ -214,6 +267,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  if (machine.state.pendingTabs.has(tabId)) {
+    machine.state.pendingTabs.delete(tabId);
+    console.log('[FlowCapture] Pending tab removed:', tabId);
+  }
   if (machine.state.capturedTabs.has(tabId)) {
     machine.removeCapturedTab(tabId);
     console.log('[FlowCapture] Tab removed from capture:', tabId);
@@ -364,16 +421,23 @@ async function handleMessage(message, sender) {
         return { success: false, error: 'No tabId provided' };
       }
       if (machine.state.status === CaptureStates.CAPTURING) {
-        if (!machine.state.capturedTabs.has(data.tabId)) {
+        const tabId = data.tabId;
+        const isAlreadyCaptured = machine.state.capturedTabs.has(tabId);
+        const isPending = machine.state.pendingTabs.has(tabId);
+        
+        if (!isAlreadyCaptured && !isPending) {
           try {
-            const tab = await chrome.tabs.get(data.tabId);
-            await injectContentScripts(tab.id);
-            machine.addCapturedTab(tab.id, { url: tab.url, title: tab.title });
-            await sendToTab(tab.id, MessageTypes.START_CAPTURE);
-            return { success: true, tabId: tab.id };
+            const tab = await chrome.tabs.get(tabId);
+            await injectContentScripts(tabId);
+            machine.addPendingTab(tabId, { url: tab.url, title: tab.title });
+            console.log('[FlowCapture] Tab selected for capture, waiting for READY_FOR_CAPTURE:', tabId);
+            return { success: true, tabId: tabId, status: 'pending_ready' };
           } catch (e) {
             return { success: false, error: e.message };
           }
+        } else if (isPending) {
+          console.log('[FlowCapture] Tab already pending, waiting for READY_FOR_CAPTURE:', tabId);
+          return { success: true, tabId: tabId, status: 'already_pending' };
         }
         return { success: true, tabId: data.tabId, alreadyCapturing: true };
       }
@@ -494,34 +558,38 @@ async function startCapture(config = {}) {
   syncManager.startPeriodicSync();
 
   const targetTabId = config.tabId;
-  let tab;
+  let primaryTab;
   
   if (targetTabId) {
     try {
-      tab = await chrome.tabs.get(targetTabId);
+      primaryTab = await chrome.tabs.get(targetTabId);
     } catch (e) {
       console.log('[FlowCapture] Specified tab not found, using active tab');
     }
   }
   
-  if (!tab) {
+  if (!primaryTab) {
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    tab = activeTab;
+    primaryTab = activeTab;
   }
   
-  if (tab && tab.id) {
-    machine.state.activeTabId = tab.id;
-    machine.addCapturedTab(tab.id, { url: tab.url, title: tab.title });
-    await injectContentScripts(tab.id);
-    await sendToTab(tab.id, MessageTypes.START_CAPTURE);
-    console.log('[FlowCapture] Started capture on tab:', tab.id, tab.url);
+  if (primaryTab && primaryTab.id) {
+    machine.state.activeTabId = primaryTab.id;
+    
+    await injectContentScripts(primaryTab.id);
+    machine.addPendingTab(primaryTab.id, { url: primaryTab.url, title: primaryTab.title });
+    console.log('[FlowCapture] Injected primary tab, waiting for READY_FOR_CAPTURE:', primaryTab.id, primaryTab.url);
   }
+
+  const injectedCount = await injectIntoAllTabs();
+  console.log(`[FlowCapture] Pre-injected into ${injectedCount} additional tabs (waiting for READY_FOR_CAPTURE)`);
 
   return { 
     success: true, 
     guideId: machine.state.guideId,
     activeTabId: machine.state.activeTabId,
-    capturedTabs: Array.from(machine.state.capturedTabs)
+    capturedTabs: Array.from(machine.state.capturedTabs),
+    injectedCount
   };
 }
 
@@ -627,6 +695,8 @@ async function handleStepCaptured(stepData, tabId) {
     syncManager.enqueueStep(step);
   }
 
+  await broadcastToAllTabs('STEP_ADDED', { ...step });
+  
   machine.broadcastStateUpdate();
 
   return { success: true, stepCount: machine.state.steps.length, step };
@@ -638,6 +708,40 @@ async function handleReadyForCapture(data, tabId) {
     pendingCapture.resolve(data);
     machine.pendingScreenshots.delete(tabId);
   }
+  
+  if (machine.state.status !== CaptureStates.CAPTURING) {
+    return { success: true, message: 'Not capturing' };
+  }
+  
+  const isAlreadyCaptured = machine.state.capturedTabs.has(tabId);
+  
+  if (isAlreadyCaptured) {
+    console.log('[FlowCapture] Tab already captured, sending START_CAPTURE for reload:', tabId);
+    await sendToTab(tabId, MessageTypes.START_CAPTURE);
+    return { success: true, message: 'Reactivated' };
+  }
+  
+  const wasPending = machine.state.pendingTabs.has(tabId);
+  
+  if (!wasPending) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+        machine.addPendingTab(tabId, { url: tab.url, title: tab.title });
+        console.log('[FlowCapture] New tab ready, adding to pending then promoting:', tabId);
+      } else {
+        return { success: true, message: 'Invalid tab URL' };
+      }
+    } catch (e) {
+      console.log('[FlowCapture] Tab ready but could not get info:', e.message);
+      return { success: false, error: e.message };
+    }
+  }
+  
+  machine.promotePendingTab(tabId);
+  console.log('[FlowCapture] Tab promoted, sending START_CAPTURE:', tabId);
+  await sendToTab(tabId, MessageTypes.START_CAPTURE);
+  
   return { success: true };
 }
 
@@ -912,11 +1016,46 @@ async function injectContentScripts(tabId) {
       files: ['content/tab-bridge.js']
     });
 
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/side-panel.js']
+    });
+
     console.log('[FlowCapture] Scripts injected into tab:', tabId);
     return true;
   } catch (e) {
     console.log('[FlowCapture] Injection failed:', e.message);
     return false;
+  }
+}
+
+async function injectIntoAllTabs() {
+  try {
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const validTabs = tabs.filter(t => 
+      t.url && 
+      !t.url.startsWith('chrome://') && 
+      !t.url.startsWith('chrome-extension://') &&
+      !machine.state.capturedTabs.has(t.id) &&
+      !machine.state.pendingTabs.has(t.id)
+    );
+    
+    const results = await Promise.allSettled(
+      validTabs.map(async (tab) => {
+        const injected = await injectContentScripts(tab.id);
+        if (injected) {
+          machine.addPendingTab(tab.id, { url: tab.url, title: tab.title });
+        }
+        return { tabId: tab.id, injected };
+      })
+    );
+    
+    const successCount = results.filter(r => r.status === 'fulfilled' && r.value.injected).length;
+    console.log(`[FlowCapture] Pre-injected scripts into ${successCount}/${validTabs.length} tabs`);
+    return successCount;
+  } catch (e) {
+    console.error('[FlowCapture] Failed to inject into all tabs:', e);
+    return 0;
   }
 }
 

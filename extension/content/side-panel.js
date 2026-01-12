@@ -632,6 +632,60 @@
       margin: 0;
     }
 
+    .current-page-info {
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .current-page-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .current-page-url {
+      font-size: 12px;
+      color: #374151;
+      word-break: break-all;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .current-page-title {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tab-count-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      background: #6366f1;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      margin-top: 6px;
+    }
+
+    .tab-count-badge svg {
+      width: 10px;
+      height: 10px;
+      fill: currentColor;
+    }
+
     .panel-footer {
       padding: 12px 16px;
       border-top: 1px solid #e5e7eb;
@@ -670,6 +724,15 @@
             </div>
             <div class="step-counter" id="stepCounter">0</div>
             <div class="step-label">Steps captured</div>
+          </div>
+          <div class="current-page-info" id="currentPageInfo" style="display: none;">
+            <div class="current-page-label">Current Page</div>
+            <div class="current-page-url" id="currentPageUrl"></div>
+            <div class="current-page-title" id="currentPageTitle"></div>
+            <div class="tab-count-badge" id="tabCountBadge">
+              <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>
+              <span id="tabCountText">1 tab</span>
+            </div>
           </div>
           <div class="action-buttons">
             <button class="btn btn-primary" id="btnStartStop">
@@ -906,6 +969,39 @@
 
     if (state.steps && Array.isArray(state.steps)) {
       renderAllSteps(state.steps);
+    }
+
+    updateCurrentPageInfo(state);
+  }
+
+  function updateCurrentPageInfo(state) {
+    const currentPageInfo = shadowRoot.getElementById('currentPageInfo');
+    const currentPageUrl = shadowRoot.getElementById('currentPageUrl');
+    const currentPageTitle = shadowRoot.getElementById('currentPageTitle');
+    const tabCountText = shadowRoot.getElementById('tabCountText');
+
+    if (!currentPageInfo) return;
+
+    if (isCapturing || state.isPaused) {
+      currentPageInfo.style.display = 'block';
+      
+      const pageUrl = window.location.href;
+      const pageTitle = document.title;
+      
+      if (currentPageUrl) {
+        currentPageUrl.textContent = pageUrl;
+        currentPageUrl.title = pageUrl;
+      }
+      if (currentPageTitle) {
+        currentPageTitle.textContent = pageTitle || 'Untitled Page';
+      }
+      
+      const tabCount = state.capturedTabs?.length || 1;
+      if (tabCountText) {
+        tabCountText.textContent = `${tabCount} tab${tabCount !== 1 ? 's' : ''} tracked`;
+      }
+    } else {
+      currentPageInfo.style.display = 'none';
     }
   }
 

@@ -1,4 +1,4 @@
-import type { Config } from "tailwindcss";
+STRICT, EXTENSION ↔ PLATFORM COMMUNICATION TEST SUITE.import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],

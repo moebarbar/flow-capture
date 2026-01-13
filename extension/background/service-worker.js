@@ -1134,8 +1134,12 @@ function dataUrlToBlob(dataUrl) {
 
 async function checkPermissions() {
   try {
-    return await chrome.permissions.contains({ origins: ['<all_urls>'] });
-  } catch {
+    // Check if we have the optional <all_urls> permission
+    const hasAllUrls = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+    console.log('[FlowCapture] Permission check - hasAllUrls:', hasAllUrls);
+    return hasAllUrls;
+  } catch (e) {
+    console.error('[FlowCapture] Permission check error:', e);
     return false;
   }
 }

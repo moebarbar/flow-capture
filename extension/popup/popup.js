@@ -90,22 +90,47 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function checkAndRequestPermissions() {
     try {
-      const hasPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+      // First check if we already have the permission for all URLs
+      let hasAllUrlsPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
       
-      if (!hasPermission) {
-        const confirmed = confirm(
-          'FlowCapture needs permission to capture on all websites.\n\n' +
-          'Click OK to grant permission, or Cancel to configure specific sites in settings.'
-        );
-        
-        if (confirmed) {
-          const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
-          return granted;
-        }
+      if (hasAllUrlsPermission) {
+        console.log('[FlowCapture] Already has <all_urls> permission');
+        return true;
+      }
+      
+      // Ask user for confirmation before requesting permissions
+      const userConfirmed = confirm(
+        'FlowCapture needs permission to capture on websites.\n\n' +
+        'Click OK to grant permission, or Cancel to skip.'
+      );
+      
+      if (!userConfirmed) {
+        console.log('[FlowCapture] User declined permission prompt');
         return false;
       }
-      return true;
+      
+      // Try to request permission - this must be called from a user gesture context
+      console.log('[FlowCapture] Requesting <all_urls> permission...');
+      try {
+        const granted = await chrome.permissions.request({ origins: ['<all_urls>'] });
+        console.log('[FlowCapture] Permission request result:', granted);
+        
+        if (granted) {
+          // Verify the permission was actually granted with a small delay
+          await new Promise(resolve => setTimeout(resolve, 200));
+          hasAllUrlsPermission = await chrome.permissions.contains({ origins: ['<all_urls>'] });
+          console.log('[FlowCapture] Permission verification after delay:', hasAllUrlsPermission);
+          return hasAllUrlsPermission;
+        }
+      } catch (requestError) {
+        console.error('[FlowCapture] Permission request failed:', requestError);
+      }
+      
+      // Permission not granted
+      console.log('[FlowCapture] Permission not granted');
+      return false;
     } catch (e) {
+      console.error('[FlowCapture] Permission check failed:', e);
       return false;
     }
   }
@@ -113,7 +138,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function showTabSelector() {
     const hasPermission = await checkAndRequestPermissions();
     if (!hasPermission) {
-      alert('Permission required to capture. Please grant access in the extension settings.');
+      alert(
+        'FlowCapture needs permission to capture on all websites.\n\n' +
+        'To grant permission manually:\n' +
+        '1. Right-click the FlowCapture extension icon\n' +
+        '2. Click "Manage extension"\n' +
+        '3. Go to "Site access"\n' +
+        '4. Select "On all sites"\n\n' +
+        'Then try again.'
+      );
       return;
     }
 

@@ -74,7 +74,8 @@
     {
       "resources": [
         "overlay/*",
-        "shared/*"
+        "shared/*",
+        "tab-selector/*"
       ],
       "matches": ["<all_urls>"]
     }

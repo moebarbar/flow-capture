@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
+import { extensionBridge } from "@/lib/extensionBridge";
 
 type PermissionStatus = 'unknown' | 'granted' | 'denied' | 'pending';
+
+const EXTENSION_ID_KEY = 'flowcapture_extension_id';
 
 export function useExtensionDetection() {
   const [isExtensionInstalled, setIsExtensionInstalled] = useState<boolean | null>(null);
   const [extensionVersion, setExtensionVersion] = useState<string | null>(null);
+  const [extensionId, setExtensionId] = useState<string | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('unknown');
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
 
@@ -82,6 +86,11 @@ export function useExtensionDetection() {
         responded = true;
         setIsExtensionInstalled(true);
         setExtensionVersion(event.data.version || null);
+        if (event.data.extensionId) {
+          setExtensionId(event.data.extensionId);
+          localStorage.setItem(EXTENSION_ID_KEY, event.data.extensionId);
+          extensionBridge.setExtensionId(event.data.extensionId);
+        }
         clearTimeout(timeoutId);
       }
     };
@@ -126,7 +135,8 @@ export function useExtensionDetection() {
 
   return { 
     isExtensionInstalled, 
-    extensionVersion, 
+    extensionVersion,
+    extensionId,
     isLoading: isExtensionInstalled === null,
     permissionStatus,
     isRequestingPermission,

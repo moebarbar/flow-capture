@@ -74,13 +74,14 @@ export default function GuideEditor() {
   const [kbConvertDialogOpen, setKbConvertDialogOpen] = useState(false);
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [captureToken, setCaptureToken] = useState<string | null>(null);
+  const [captureSessionNonce, setCaptureSessionNonce] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [showExtensionDialog, setShowExtensionDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { isExtensionInstalled, permissionStatus, requestPermissions } = useExtensionDetection();
+  const { isExtensionInstalled, permissionStatus, requestPermissions, extensionId } = useExtensionDetection();
 
   // Capture session status
   const { data: captureStatus, refetch: refetchCaptureStatus } = useQuery({
@@ -373,12 +374,49 @@ export default function GuideEditor() {
         if (typeof event.data.isPaused === 'boolean') {
           setIsPaused(event.data.isPaused);
         }
+      } else if (event.data?.type === 'FLOWCAPTURE_CAPTURE_STARTED') {
+        // Store the session nonce for secure completion verification
+        if (event.data.guideId === guideId && event.data.sessionNonce) {
+          console.log('Capture started, storing session nonce');
+          setCaptureSessionNonce(event.data.sessionNonce);
+        }
+      } else if (event.data?.type === 'FLOWCAPTURE_CAPTURE_COMPLETE') {
+        // Validate that this completion is for the current guide (security check)
+        if (event.data.guideId !== guideId) {
+          console.log('Ignoring completion for different guide:', event.data.guideId, 'vs current:', guideId);
+          return;
+        }
+        // Validate extensionId to prevent spoofing from malicious pages (security check)
+        if (extensionId && event.data.extensionId !== extensionId) {
+          console.log('Ignoring completion with invalid extensionId:', event.data.extensionId, 'vs expected:', extensionId);
+          return;
+        }
+        // Validate session nonce for cryptographic authenticity (security check)
+        if (captureSessionNonce && event.data.sessionNonce !== captureSessionNonce) {
+          console.log('Ignoring completion with invalid session nonce (possible spoof attempt)');
+          return;
+        }
+        // Capture completed - refresh steps and show toast
+        console.log('Capture complete from extension:', event.data);
+        setCaptureToken(null);
+        setCaptureSessionNonce(null);
+        setIsPaused(false);
+        localStorage.removeItem('flowcapture_session');
+        refetchCaptureStatus();
+        queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+        toast({ 
+          title: "Capture Complete", 
+          description: event.data.stepCount 
+            ? `Captured ${event.data.stepCount} steps` 
+            : "Your captured steps have been saved.",
+          variant: "default" 
+        });
       }
     };
 
     window.addEventListener('message', handleExtensionMessage);
     return () => window.removeEventListener('message', handleExtensionMessage);
-  }, [toast, guideId, refetchCaptureStatus]);
+  }, [toast, guideId, refetchCaptureStatus, extensionId, captureSessionNonce]);
 
   // Share settings query
   const { data: shareSettings, refetch: refetchShare } = useQuery({

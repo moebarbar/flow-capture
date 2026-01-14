@@ -144,7 +144,8 @@
         case 'FLOWCAPTURE_CHECK_EXTENSION':
           window.postMessage({
             type: 'FLOWCAPTURE_EXTENSION_PRESENT',
-            version: chrome.runtime.getManifest().version
+            version: chrome.runtime.getManifest().version,
+            extensionId: chrome.runtime.id
           }, event.origin);
           break;
           
@@ -893,6 +894,33 @@
           break;
         case MessageTypes.PING:
           sendResponse({ pong: true });
+          break;
+        case 'FLOWCAPTURE_CAPTURE_STARTED':
+          if (message.guideId && message.sessionNonce) {
+            window.postMessage({
+              type: 'FLOWCAPTURE_CAPTURE_STARTED',
+              guideId: message.guideId,
+              sessionNonce: message.sessionNonce,
+              extensionId: chrome.runtime.id
+            }, window.location.origin);
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Invalid capture started payload' });
+          }
+          break;
+        case 'FLOWCAPTURE_CAPTURE_COMPLETE':
+          if (message.guideId && typeof message.stepCount === 'number' && message.sessionNonce) {
+            window.postMessage({
+              type: 'FLOWCAPTURE_CAPTURE_COMPLETE',
+              guideId: message.guideId,
+              stepCount: message.stepCount,
+              sessionNonce: message.sessionNonce,
+              extensionId: chrome.runtime.id
+            }, window.location.origin);
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Invalid completion payload' });
+          }
           break;
       }
       return true;

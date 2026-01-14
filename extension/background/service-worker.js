@@ -488,6 +488,11 @@ async function handleMessage(message, sender) {
           });
         }
         
+        if (data.guideId) machine.state.guideId = data.guideId;
+        if (data.workspaceId) machine.state.workspaceId = data.workspaceId;
+        if (data.apiBaseUrl) machine.state.apiBaseUrl = data.apiBaseUrl;
+        if (data.requestingAppTabId) machine.state.requestingAppTabId = data.requestingAppTabId;
+        
         const captureResult = await startCapture({ 
           tabId: data.tabId, 
           highlightColor: data.highlightColor 
@@ -565,6 +570,10 @@ async function handleMessage(message, sender) {
       console.log('[FlowCapture] Session cleared');
       return { success: true };
     
+    case 'CANCEL_TAB_SELECTOR':
+      console.log('[FlowCapture] Tab selector cancelled');
+      return { success: true };
+    
     default:
       return { error: 'Unknown message type' };
   }
@@ -588,7 +597,21 @@ async function handleExternalMessage(message, sender) {
         }
       }
       
-      return await startCapture();
+      const returnTabId = sender.tab?.id;
+      const selectorUrl = new URL(chrome.runtime.getURL('tab-selector/tab-selector.html'));
+      if (machine.state.guideId) selectorUrl.searchParams.set('guideId', machine.state.guideId);
+      if (machine.state.workspaceId) selectorUrl.searchParams.set('workspaceId', machine.state.workspaceId);
+      if (machine.state.apiBaseUrl) selectorUrl.searchParams.set('apiBaseUrl', machine.state.apiBaseUrl);
+      if (returnTabId) selectorUrl.searchParams.set('returnTabId', returnTabId);
+      
+      try {
+        await chrome.tabs.create({ url: selectorUrl.toString(), active: true });
+        console.log('[FlowCapture] Tab selector opened');
+        return { success: true, message: 'Tab selector opened' };
+      } catch (e) {
+        console.error('[FlowCapture] Failed to open tab selector:', e);
+        return { success: false, error: 'Failed to open tab selector' };
+      }
     
     case 'STOP_CAPTURE_SESSION':
       return await stopCapture();
@@ -621,6 +644,8 @@ async function startCapture(config = {}) {
 
   machine.reset(true);
   machine.state.captureStartedAt = Date.now();
+  // Generate a cryptographically random session nonce for secure completion verification
+  machine.state.sessionNonce = crypto.randomUUID();
   machine.transition(CaptureStates.CAPTURING);
 
   syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
@@ -677,12 +702,27 @@ async function startCapture(config = {}) {
   const injectedCount = await injectIntoAllTabs();
   console.log(`[FlowCapture] Pre-injected into ${injectedCount} additional tabs (waiting for READY_FOR_CAPTURE)`);
 
+  // Send capture started message to the requesting app tab with the session nonce
+  if (machine.state.requestingAppTabId && machine.state.sessionNonce) {
+    try {
+      await chrome.tabs.sendMessage(machine.state.requestingAppTabId, {
+        type: 'FLOWCAPTURE_CAPTURE_STARTED',
+        guideId: machine.state.guideId,
+        sessionNonce: machine.state.sessionNonce
+      });
+      console.log('[FlowCapture] Sent capture started with nonce to requesting tab');
+    } catch (e) {
+      console.log('[FlowCapture] Could not send capture started message:', e.message);
+    }
+  }
+
   return { 
     success: true, 
     guideId: machine.state.guideId,
     activeTabId: machine.state.activeTabId,
     capturedTabs: Array.from(machine.state.capturedTabs),
-    injectedCount
+    injectedCount,
+    sessionNonce: machine.state.sessionNonce
   };
 }
 
@@ -709,58 +749,53 @@ async function stopCapture() {
   syncManager.stopPeriodicSync();
   machine.transition(CaptureStates.IDLE);
 
+  // Notify web app about capture completion - only to the requesting app tab (security)
+  // Include the session nonce for cryptographic verification
+  const sessionNonce = machine.state.sessionNonce;
+  const completionPayload = {
+    type: 'FLOWCAPTURE_CAPTURE_COMPLETE',
+    guideId,
+    stepCount: steps.length,
+    sessionNonce
+  };
+  
+  const requestingAppTabId = machine.state.requestingAppTabId;
+
   // Redirect user to the editor with captured steps
   if (guideId && apiBaseUrl) {
     const editorUrl = `${apiBaseUrl}/guides/${guideId}/edit`;
-    const editorPath = `/guides/${guideId}/edit`;
+    
     try {
-      // Parse hostname safely - handle both absolute and relative URLs
-      let origin = '';
-      let hostname = '';
-      try {
-        const url = new URL(apiBaseUrl);
-        origin = url.origin;
-        hostname = url.hostname;
-      } catch (e) {
-        // Relative URL - skip redirect since we can't determine target
-        console.log('[FlowCapture] Skipping redirect - apiBaseUrl is relative:', apiBaseUrl);
-        return { success: true, stepCount: steps.length, guideId };
-      }
-      
-      // Find existing FlowCapture tab for THIS guide (same origin required)
-      const tabs = await chrome.tabs.query({});
-      const sameGuideTab = tabs.find(tab => {
-        if (!tab.url) return false;
+      // Send completion message only to the requesting app tab (secure channel)
+      if (requestingAppTabId) {
         try {
-          const tabUrl = new URL(tab.url);
-          return tabUrl.origin === origin && tab.url.includes(editorPath);
-        } catch {
-          return false;
-        }
-      });
-
-      if (sameGuideTab && sameGuideTab.id) {
-        // Just focus the existing tab - TanStack Query will auto-refresh data
-        await chrome.tabs.update(sameGuideTab.id, { active: true });
-        if (sameGuideTab.windowId) {
-          await chrome.windows.update(sameGuideTab.windowId, { focused: true });
-        }
-        // Send message to refresh steps instead of hard reload
-        try {
-          await chrome.tabs.sendMessage(sameGuideTab.id, { type: 'REFRESH_STEPS' });
+          const requestingTab = await chrome.tabs.get(requestingAppTabId);
+          if (requestingTab) {
+            // Focus the requesting tab
+            await chrome.tabs.update(requestingAppTabId, { active: true });
+            if (requestingTab.windowId) {
+              await chrome.windows.update(requestingTab.windowId, { focused: true });
+            }
+            // Send completion message via content script
+            await chrome.tabs.sendMessage(requestingAppTabId, completionPayload);
+            console.log('[FlowCapture] Sent completion to requesting tab:', requestingAppTabId);
+          }
         } catch (e) {
-          // Tab may not have listener, fallback to soft navigation
-          console.log('[FlowCapture] Could not send refresh message:', e.message);
+          console.log('[FlowCapture] Could not notify requesting tab, opening new editor tab:', e.message);
+          await chrome.tabs.create({ url: editorUrl, active: true });
         }
       } else {
-        // Create new tab for the editor
+        // No requesting tab stored - fallback to opening a new editor tab
         await chrome.tabs.create({ url: editorUrl, active: true });
+        console.log('[FlowCapture] Opened new editor tab:', editorUrl);
       }
-      console.log('[FlowCapture] Redirected to editor:', editorUrl);
     } catch (e) {
       console.error('[FlowCapture] Failed to redirect to editor:', e);
     }
   }
+  
+  // Clear the requesting app tab ID
+  machine.state.requestingAppTabId = null;
 
   return { 
     success: true, 

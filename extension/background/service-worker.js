@@ -104,6 +104,7 @@ class CaptureStateMachine {
       steps: recentSteps,
       guideId: this.state.guideId,
       workspaceId: this.state.workspaceId,
+      apiBaseUrl: this.state.apiBaseUrl,
       panelOpen: this.state.panelOpen,
       activeTabId: this.state.activeTabId,
       capturedTabs: Array.from(this.state.capturedTabs),

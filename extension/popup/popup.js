@@ -232,6 +232,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (result?.success) {
       lastCaptureResult = result;
+      
+      // Background service-worker handles the redirect automatically
+      // Just close the popup for a clean experience
+      if (result.guideId) {
+        // Background already redirected user to editor - just close popup
+        window.close();
+        return;
+      }
+      
+      // Fallback: show finished panel if no guideId (should be rare)
       showPanel(finishedPanel);
       finalStepCount.textContent = result.stepCount || 0;
     }
@@ -252,11 +262,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   viewBtn.addEventListener('click', async () => {
-    const settings = await chrome.storage.local.get(['apiBaseUrl']);
-    const apiBaseUrl = settings.apiBaseUrl || '';
+    // Try machine state first (most reliable source after capture)
+    const state = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+    let apiBaseUrl = state?.apiBaseUrl || '';
+    
+    // Fallback to settings
+    if (!apiBaseUrl) {
+      const settings = await chrome.storage.local.get(['apiBaseUrl', 'flowcapture_session']);
+      apiBaseUrl = settings.apiBaseUrl || '';
+      
+      // Fallback to session apiBaseUrl (stored as object, not string)
+      if (!apiBaseUrl && settings.flowcapture_session) {
+        const session = settings.flowcapture_session;
+        if (typeof session === 'object' && session.apiBaseUrl) {
+          apiBaseUrl = session.apiBaseUrl;
+        }
+      }
+    }
     
     if (apiBaseUrl && lastCaptureResult?.guideId) {
-      chrome.tabs.create({ url: `${apiBaseUrl}/guides/${lastCaptureResult.guideId}` });
+      // Open the editor directly
+      chrome.tabs.create({ url: `${apiBaseUrl}/guides/${lastCaptureResult.guideId}/edit` });
     } else if (apiBaseUrl) {
       chrome.tabs.create({ url: apiBaseUrl });
     } else {
@@ -271,8 +297,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   openDashboard.addEventListener('click', async (e) => {
     e.preventDefault();
-    const settings = await chrome.storage.local.get(['apiBaseUrl']);
-    const apiBaseUrl = settings.apiBaseUrl || '';
+    // Try machine state first (most reliable source)
+    const state = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
+    let apiBaseUrl = state?.apiBaseUrl || '';
+    
+    // Fallback to settings
+    if (!apiBaseUrl) {
+      const settings = await chrome.storage.local.get(['apiBaseUrl', 'flowcapture_session']);
+      apiBaseUrl = settings.apiBaseUrl || '';
+      
+      // Fallback to session apiBaseUrl (stored as object, not string)
+      if (!apiBaseUrl && settings.flowcapture_session) {
+        const session = settings.flowcapture_session;
+        if (typeof session === 'object' && session.apiBaseUrl) {
+          apiBaseUrl = session.apiBaseUrl;
+        }
+      }
+    }
     
     if (apiBaseUrl) {
       chrome.tabs.create({ url: apiBaseUrl });

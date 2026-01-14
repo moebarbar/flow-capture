@@ -237,6 +237,28 @@
         case 'PING':
           sendResponse({ pong: true });
           break;
+        case 'FLOWCAPTURE_CAPTURE_STARTED':
+          window.postMessage({
+            type: 'FLOWCAPTURE_CAPTURE_STARTED',
+            guideId: message.guideId,
+            tabId: message.tabId,
+            sessionNonce: message.sessionNonce,
+            extensionId: chrome.runtime.id
+          }, window.location.origin);
+          sendResponse({ success: true });
+          break;
+        case 'FLOWCAPTURE_CAPTURE_COMPLETE':
+          window.postMessage({
+            type: 'FLOWCAPTURE_CAPTURE_COMPLETE',
+            guideId: message.guideId,
+            stepCount: message.stepCount,
+            success: message.success,
+            syncStatus: message.syncStatus,
+            sessionNonce: message.sessionNonce,
+            extensionId: chrome.runtime.id
+          }, window.location.origin);
+          sendResponse({ success: true });
+          break;
       }
       return true;
     });

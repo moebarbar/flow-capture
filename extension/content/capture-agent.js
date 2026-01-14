@@ -769,8 +769,10 @@
     const actionType = 'click';
     const title = generateStepTitle(element, actionType);
     const description = generateStepDescription(element, actionType);
+    const clientStepId = `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const step = {
+      clientStepId: clientStepId,
       action: actionType,
       actionType: actionType,
       title: title,
@@ -785,6 +787,7 @@
 
     if (window.FlowCaptureOverlay) {
       window.FlowCaptureOverlay.incrementStepCount();
+      window.FlowCaptureOverlay.addCapturedStep(step);
     }
 
     if (port) {
@@ -811,8 +814,10 @@
     const actionType = 'input';
     const title = generateStepTitle(element, actionType);
     const description = generateStepDescription(element, actionType);
+    const clientStepId = `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const step = {
+      clientStepId: clientStepId,
       action: actionType,
       actionType: actionType,
       title: title,
@@ -823,6 +828,11 @@
       elementMetadata: getElementMetadata(element),
       timestamp: Date.now()
     };
+
+    if (window.FlowCaptureOverlay) {
+      window.FlowCaptureOverlay.incrementStepCount();
+      window.FlowCaptureOverlay.addCapturedStep(step);
+    }
 
     if (port) {
       port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });

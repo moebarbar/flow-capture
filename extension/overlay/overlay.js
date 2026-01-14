@@ -1,6 +1,6 @@
 /**
  * FlowCapture Overlay
- * Shadow DOM-based sticky UI with highlight box and control panel
+ * Shadow DOM-based sticky UI with highlight box, control panel, and step preview panel
  */
 
 (function() {
@@ -8,6 +8,7 @@
 
   const OVERLAY_ID = 'flowcapture-overlay';
   const Z_INDEX = 2147483647;
+  const MAX_PREVIEW_STEPS = 5;
   
   let container = null;
   let shadow = null;
@@ -16,6 +17,11 @@
   let stepCount = 0;
   let highlightBox = null;
   let controlPanel = null;
+  let previewPanel = null;
+  let previewContent = null;
+  let isPanelCollapsed = false;
+  let capturedSteps = [];
+  let updateDebounceTimer = null;
 
   function createOverlay() {
     if (document.getElementById(OVERLAY_ID)) {
@@ -23,6 +29,8 @@
       shadow = container.shadowRoot;
       highlightBox = shadow.querySelector('.highlight-box');
       controlPanel = shadow.querySelector('.control-panel');
+      previewPanel = shadow.querySelector('.preview-panel');
+      previewContent = shadow.querySelector('.preview-content');
       return;
     }
 
@@ -154,6 +162,16 @@
         background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
       }
       
+      .btn-toggle {
+        background: rgba(255,255,255,0.1);
+        color: #fff;
+        padding: 8px 12px;
+      }
+      
+      .btn-toggle:hover {
+        background: rgba(255,255,255,0.2);
+      }
+      
       .highlight-box {
         position: fixed;
         border: 3px solid #ef4444;
@@ -189,18 +207,251 @@
         }
       }
       
-      .badge {
-        position: absolute;
-        top: -8px;
-        right: -8px;
+      /* Preview Panel Styles */
+      .preview-panel {
+        position: fixed;
+        bottom: 80px;
+        right: 20px;
+        width: 380px;
+        max-height: calc(100vh - 120px);
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border-radius: 16px;
+        pointer-events: auto;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+        transition: opacity 0.3s, transform 0.3s;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .preview-panel.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      
+      .preview-panel.collapsed {
+        max-height: 52px;
+      }
+      
+      .preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        background: rgba(0,0,0,0.2);
+        cursor: pointer;
+        user-select: none;
+      }
+      
+      .preview-header:hover {
+        background: rgba(0,0,0,0.3);
+      }
+      
+      .preview-title {
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .preview-badge {
         background: #ef4444;
-        color: white;
+        color: #fff;
         font-size: 11px;
         font-weight: 700;
-        padding: 2px 6px;
+        padding: 2px 8px;
         border-radius: 10px;
-        min-width: 20px;
+      }
+      
+      .collapse-icon {
+        color: rgba(255,255,255,0.6);
+        font-size: 18px;
+        transition: transform 0.2s;
+      }
+      
+      .preview-panel.collapsed .collapse-icon {
+        transform: rotate(180deg);
+      }
+      
+      .preview-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      
+      .preview-content::-webkit-scrollbar {
+        width: 6px;
+      }
+      
+      .preview-content::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.05);
+        border-radius: 3px;
+      }
+      
+      .preview-content::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.2);
+        border-radius: 3px;
+      }
+      
+      .preview-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,255,255,0.3);
+      }
+      
+      .step-card {
+        background: rgba(255,255,255,0.05);
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.08);
+        animation: slideIn 0.3s ease-out;
+      }
+      
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      
+      .step-card-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: rgba(0,0,0,0.2);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+      
+      .step-number {
+        background: #ef4444;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      
+      .step-action {
+        color: rgba(255,255,255,0.7);
+        font-size: 12px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      .step-screenshot {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000;
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .step-screenshot img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      
+      .step-screenshot-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+        color: rgba(255,255,255,0.3);
+        font-size: 12px;
+      }
+      
+      .step-fields {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      
+      .step-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      
+      .step-field-label {
+        color: rgba(255,255,255,0.5);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      .step-field-input {
+        background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        padding: 10px 12px;
+        color: #fff;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.2s, background 0.2s;
+        resize: none;
+        font-family: inherit;
+      }
+      
+      .step-field-input:focus {
+        border-color: rgba(239, 68, 68, 0.5);
+        background: rgba(0,0,0,0.4);
+      }
+      
+      .step-field-input::placeholder {
+        color: rgba(255,255,255,0.3);
+      }
+      
+      .step-field-input.title {
+        font-weight: 600;
+      }
+      
+      .step-field-input.description {
+        min-height: 60px;
+        line-height: 1.4;
+      }
+      
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        color: rgba(255,255,255,0.4);
         text-align: center;
+      }
+      
+      .empty-state-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+      }
+      
+      .empty-state-text {
+        font-size: 14px;
+        line-height: 1.5;
       }
     `;
 
@@ -212,14 +463,36 @@
         <span class="status-text">Recording</span>
       </div>
       <div class="step-count">0 steps</div>
+      <button class="btn btn-toggle" data-action="toggle" title="Toggle preview panel">Preview</button>
       <button class="btn btn-pause" data-action="pause">Pause</button>
       <button class="btn btn-stop" data-action="stop">Stop</button>
+    `;
+
+    previewPanel = document.createElement('div');
+    previewPanel.className = 'preview-panel';
+    previewPanel.innerHTML = `
+      <div class="preview-header">
+        <div class="preview-title">
+          <span>Captured Steps</span>
+          <span class="preview-badge">0</span>
+        </div>
+        <span class="collapse-icon">▼</span>
+      </div>
+      <div class="preview-content">
+        <div class="empty-state">
+          <div class="empty-state-icon">📸</div>
+          <div class="empty-state-text">Click on elements to capture steps.<br/>Screenshots will appear here.</div>
+        </div>
+      </div>
     `;
 
     highlightBox = document.createElement('div');
     highlightBox.className = 'highlight-box';
 
+    previewContent = previewPanel.querySelector('.preview-content');
+
     shadow.appendChild(styles);
+    shadow.appendChild(previewPanel);
     shadow.appendChild(controlPanel);
     shadow.appendChild(highlightBox);
 
@@ -230,6 +503,11 @@
       if (action === 'pause') togglePause();
       if (action === 'resume') togglePause();
       if (action === 'stop') stopRecording(true);
+      if (action === 'toggle') togglePreviewPanel();
+    });
+
+    previewPanel.querySelector('.preview-header').addEventListener('click', () => {
+      togglePreviewCollapse();
     });
   }
 
@@ -238,11 +516,64 @@
     isRecording = true;
     isPaused = false;
     stepCount = 0;
+    cleanupBlobUrls(capturedSteps);
+    capturedSteps = [];
+    isPanelCollapsed = false;
     updateUI();
+    updatePreviewPanel();
+    setupMessageListener();
     
     requestAnimationFrame(() => {
       controlPanel.classList.add('visible');
+      previewPanel.classList.add('visible');
+      previewPanel.classList.remove('collapsed');
     });
+  }
+  
+  function cleanupBlobUrls(steps) {
+    steps.forEach(s => {
+      if (s.screenshotDataUrl && s.screenshotDataUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(s.screenshotDataUrl); } catch (e) {}
+      }
+    });
+  }
+  
+  let messageListenerSetup = false;
+  
+  function setupMessageListener() {
+    if (messageListenerSetup) return;
+    messageListenerSetup = true;
+    
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'STEP_ADDED' && message.data) {
+        updateStepWithMachineOrder(message.data);
+      }
+      return false;
+    });
+  }
+  
+  function updateStepWithMachineOrder(machineStep) {
+    if (!machineStep.order) return;
+    
+    let matchedStep = null;
+    
+    if (machineStep.clientStepId) {
+      matchedStep = capturedSteps.find(s => s.clientStepId === machineStep.clientStepId);
+    }
+    
+    if (!matchedStep && machineStep.timestamp) {
+      matchedStep = capturedSteps.find(s => 
+        s.timestamp && 
+        Math.abs(s.timestamp - machineStep.timestamp) < 500 &&
+        !s.machineOrder
+      );
+    }
+    
+    if (matchedStep) {
+      matchedStep.machineOrder = machineStep.order;
+      matchedStep.order = machineStep.order;
+      updatePreviewPanel();
+    }
   }
 
   function stopRecording(userInitiated = false) {
@@ -250,7 +581,11 @@
     isPaused = false;
     
     controlPanel.classList.remove('visible');
+    previewPanel.classList.remove('visible');
     hideHighlight();
+    
+    cleanupBlobUrls(capturedSteps);
+    capturedSteps = [];
     
     if (userInitiated) {
       chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' }).catch(() => {});
@@ -263,6 +598,23 @@
     
     const type = isPaused ? 'PAUSE_CAPTURE' : 'RESUME_CAPTURE';
     chrome.runtime.sendMessage({ type }).catch(() => {});
+  }
+
+  function togglePreviewPanel() {
+    if (previewPanel.classList.contains('visible')) {
+      previewPanel.classList.remove('visible');
+    } else {
+      previewPanel.classList.add('visible');
+    }
+  }
+
+  function togglePreviewCollapse() {
+    isPanelCollapsed = !isPanelCollapsed;
+    if (isPanelCollapsed) {
+      previewPanel.classList.add('collapsed');
+    } else {
+      previewPanel.classList.remove('collapsed');
+    }
   }
 
   function updateUI() {
@@ -293,6 +645,168 @@
 
     if (stepCountEl) {
       stepCountEl.textContent = `${stepCount} step${stepCount !== 1 ? 's' : ''}`;
+    }
+  }
+
+  function updatePreviewPanel() {
+    if (!previewContent || !previewPanel) return;
+
+    const badge = previewPanel.querySelector('.preview-badge');
+    if (badge) {
+      badge.textContent = capturedSteps.length;
+    }
+
+    if (capturedSteps.length === 0) {
+      previewContent.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📸</div>
+          <div class="empty-state-text">Click on elements to capture steps.<br/>Screenshots will appear here.</div>
+        </div>
+      `;
+      return;
+    }
+
+    const stepsToShow = capturedSteps.slice(-MAX_PREVIEW_STEPS);
+    
+    previewContent.innerHTML = stepsToShow.map((step, index) => {
+      const stepNumber = step.order || (capturedSteps.length - stepsToShow.length + index + 1);
+      const stepId = step.stepId || `temp-${index}`;
+      const hasScreenshot = step.screenshotDataUrl && step.screenshotDataUrl.length > 0;
+      const screenshotHtml = hasScreenshot
+        ? `<img src="${step.screenshotDataUrl}" alt="Step ${stepNumber} screenshot" />`
+        : `<div class="step-screenshot-placeholder">${step.actionType === 'input' ? 'Input action' : 'Capturing...'}</div>`;
+      
+      return `
+        <div class="step-card" data-step-id="${stepId}" data-step-order="${stepNumber}">
+          <div class="step-card-header">
+            <div class="step-number">${stepNumber}</div>
+            <div class="step-action">${step.actionType || step.action || 'click'}</div>
+          </div>
+          <div class="step-screenshot">
+            ${screenshotHtml}
+          </div>
+          <div class="step-fields">
+            <div class="step-field">
+              <label class="step-field-label">Title</label>
+              <input 
+                type="text" 
+                class="step-field-input title" 
+                placeholder="Enter step title..."
+                value="${escapeHtml(step.title || '')}"
+                data-step-id="${stepId}"
+                data-step-order="${stepNumber}"
+                data-field="title"
+              />
+            </div>
+            <div class="step-field">
+              <label class="step-field-label">Description</label>
+              <textarea 
+                class="step-field-input description" 
+                placeholder="Add a description..."
+                data-step-id="${stepId}"
+                data-step-order="${stepNumber}"
+                data-field="description"
+              >${escapeHtml(step.description || '')}</textarea>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    previewContent.querySelectorAll('.step-field-input').forEach(input => {
+      input.addEventListener('input', handleFieldInput);
+      input.addEventListener('blur', handleFieldBlur);
+    });
+
+    previewContent.scrollTop = previewContent.scrollHeight;
+  }
+
+  function handleFieldInput(e) {
+    const stepId = e.target.dataset.stepId;
+    const stepOrder = parseInt(e.target.dataset.stepOrder);
+    const field = e.target.dataset.field;
+    const value = e.target.value;
+
+    const step = capturedSteps.find(s => s.stepId === stepId);
+    if (step) {
+      step[field] = value;
+    }
+
+    if (updateDebounceTimer) {
+      clearTimeout(updateDebounceTimer);
+    }
+    updateDebounceTimer = setTimeout(() => {
+      sendMetadataUpdate(stepId, stepOrder, field, value);
+    }, 500);
+  }
+
+  function handleFieldBlur(e) {
+    const stepId = e.target.dataset.stepId;
+    const stepOrder = parseInt(e.target.dataset.stepOrder);
+    const field = e.target.dataset.field;
+    const value = e.target.value;
+
+    if (updateDebounceTimer) {
+      clearTimeout(updateDebounceTimer);
+    }
+    sendMetadataUpdate(stepId, stepOrder, field, value);
+  }
+
+  function sendMetadataUpdate(stepId, stepOrder, field, value) {
+    const step = capturedSteps.find(s => s.stepId === stepId);
+    const clientStepId = step?.clientStepId || stepId;
+    const machineOrder = step?.machineOrder;
+    
+    if (!clientStepId && machineOrder === undefined) {
+      console.log('[FlowCapture Overlay] Cannot send metadata update - no identifier available');
+      return;
+    }
+    
+    chrome.runtime.sendMessage({
+      type: 'UPDATE_STEP_METADATA',
+      data: {
+        stepIndex: machineOrder,
+        clientStepId: clientStepId,
+        field,
+        value
+      }
+    }).catch(() => {});
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function addCapturedStep(stepData) {
+    const stepId = stepData.clientStepId || `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    capturedSteps.push({
+      ...stepData,
+      stepId: stepId,
+      clientStepId: stepData.clientStepId || stepId,
+      order: stepCount
+    });
+
+    if (capturedSteps.length > MAX_PREVIEW_STEPS * 2) {
+      const removedSteps = capturedSteps.slice(0, capturedSteps.length - MAX_PREVIEW_STEPS);
+      capturedSteps = capturedSteps.slice(-MAX_PREVIEW_STEPS);
+      removedSteps.forEach(s => {
+        if (s.screenshotDataUrl && s.screenshotDataUrl.startsWith('blob:')) {
+          try { URL.revokeObjectURL(s.screenshotDataUrl); } catch (e) {}
+        }
+      });
+    }
+
+    updatePreviewPanel();
+
+    if (isPanelCollapsed) {
+      isPanelCollapsed = false;
+      previewPanel?.classList.remove('collapsed');
     }
   }
 
@@ -341,12 +855,17 @@
   }
 
   function destroy() {
+    cleanupBlobUrls(capturedSteps);
+    capturedSteps = [];
+    
     if (container) {
       container.remove();
       container = null;
       shadow = null;
       highlightBox = null;
       controlPanel = null;
+      previewPanel = null;
+      previewContent = null;
     }
   }
 
@@ -358,6 +877,7 @@
     hideHighlight,
     flashHighlight,
     incrementStepCount,
+    addCapturedStep,
     isOverlayClick,
     destroy,
     isRecording: () => isRecording,

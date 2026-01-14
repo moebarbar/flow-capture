@@ -384,8 +384,13 @@ async function handleMessage(message, sender) {
       console.log('[FlowCapture] Navigation:', data?.url);
       return { success: true };
     
+    case MessageTypes.STEP_UPDATED:
     case 'STEP_UPDATED':
       return handleStepUpdated(data);
+    
+    case MessageTypes.UPDATE_STEP_METADATA:
+    case 'UPDATE_STEP_METADATA':
+      return handleUpdateStepMetadata(data?.stepIndex, data?.field, data?.value, data?.clientStepId);
     
     case 'GET_SYNC_STATS':
       return syncManager.getStats();
@@ -855,6 +860,7 @@ async function handleStepCaptured(stepData, tabId) {
   machine.incrementTabStepCount(targetTabId);
 
   const step = machine.addStep({
+    clientStepId: stepData.clientStepId,
     actionType: stepData.action || stepData.actionType || 'click',
     selector: stepData.selector,
     tabId: targetTabId,
@@ -945,6 +951,43 @@ function handleStepUpdated(data) {
   }
 
   console.log('[FlowCapture] Step updated:', step.order, step.title);
+
+  machine.broadcastStateUpdate();
+
+  return { success: true, step };
+}
+
+function handleUpdateStepMetadata(stepIndex, field, value, clientStepId) {
+  if (!field) {
+    return { success: false, error: 'Missing field' };
+  }
+
+  if (!clientStepId && stepIndex === undefined) {
+    return { success: false, error: 'Missing step identifier' };
+  }
+
+  let step = null;
+  
+  if (clientStepId) {
+    step = machine.state.steps.find(s => s.clientStepId === clientStepId);
+  }
+  
+  if (!step && stepIndex !== undefined && stepIndex !== null) {
+    step = machine.state.steps.find(s => s.order === stepIndex);
+  }
+  
+  if (!step) {
+    console.log('[FlowCapture] Step not found for metadata update:', { clientStepId, stepIndex, stepsCount: machine.state.steps.length });
+    return { success: false, error: 'Step not found' };
+  }
+
+  if (field === 'title') {
+    step.title = value || '';
+  } else if (field === 'description') {
+    step.description = value || '';
+  }
+
+  console.log('[FlowCapture] Step metadata updated:', step.order, field, value?.substring?.(0, 50) || value);
 
   machine.broadcastStateUpdate();
 

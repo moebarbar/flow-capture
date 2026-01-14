@@ -1,0 +1,112 @@
+The platform and extension already have many features implemented.
+Your task is NOT to rebuild or remove features, but to verify, stabilize, and harden the core fundamentals so the entire system works reliably.
+
+Objective
+
+Ensure the core capture loop is solid, predictable, and production-safe before any advanced features are expanded.
+
+Core Basics That MUST Work Reliably
+
+Validate and fix these fundamentals without breaking existing features:
+
+The web app and browser extension communicate reliably
+
+Capture sessions start and stop correctly
+
+Screenshots are actually captured
+
+Screenshots are visible inside the extension widget
+
+Screenshots are sent to the backend
+
+Screenshots are stored correctly
+
+After capture ends, the user is redirected to the FlowCapture editor
+
+The editor loads the already captured screenshots clearly
+
+Data persists on refresh
+
+No silent failures occur
+
+Validation Requirements
+
+You must:
+
+Test real user flows end-to-end
+
+Verify actual data (not placeholders)
+
+Confirm screenshots are real, readable images
+
+Ensure state is synchronized between:
+
+extension
+
+backend
+
+editor
+
+If something works inconsistently, treat it as broken.
+
+What NOT To Do
+
+Do NOT remove advanced features
+
+Do NOT redesign the UI
+
+Do NOT rename concepts
+
+Do NOT assume features work because UI exists
+
+Do NOT introduce new experimental logic
+
+Your job is stability, not expansion.
+
+Required Checks
+
+Confirm:
+
+Capture does not require manual workarounds
+
+Widget shows real screenshots (not blank or tiny images)
+
+Network requests succeed and return expected data
+
+Redirect occurs automatically after capture completion
+
+Editor renders large, clear screenshots already captured
+
+Refreshing the editor does not lose data
+
+Debug Expectations
+
+Add or verify logging for:
+
+Capture start / stop
+
+Screenshot creation
+
+Network requests
+
+Backend responses
+
+Redirect trigger
+
+Editor data load
+
+No silent failures allowed.
+
+Definition of Success
+
+The basics are considered solid only when:
+
+The capture experience feels smooth
+
+Screenshots are always visible and transferred correctly
+
+The extension and platform feel connected, not separate
+
+A user can capture → stop → edit without confusion
+
+Stability and reliability take priority over new features.

@@ -315,6 +315,31 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
   return true;
 });
 
+// Shared helper for consistent session handling across all entry points
+async function applySessionToMachine(session) {
+  if (!session) return false;
+  
+  // Update machine state
+  machine.state.captureToken = session.token || null;
+  machine.state.guideId = session.guideId || null;
+  machine.state.expiresAt = session.expiresAt || null;
+  machine.state.apiBaseUrl = session.apiBaseUrl || machine.state.apiBaseUrl || '';
+  machine.state.workspaceId = session.workspaceId || machine.state.workspaceId || null;
+  
+  // Persist session to storage
+  await saveSession(session);
+  
+  // Configure SyncManager so uploads work (for both initial and recovery flows)
+  if (machine.state.apiBaseUrl && machine.state.guideId) {
+    syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
+  }
+  
+  // Broadcast state update to all connected tabs
+  machine.broadcastStateUpdate();
+  
+  return true;
+}
+
 async function handlePortMessage(port, message) {
   const { type, data, requestId } = message;
   let response;
@@ -557,11 +582,8 @@ async function handleMessage(message, sender) {
     
     case MessageTypes.SET_SESSION:
       if (message.session) {
-        machine.state.captureToken = message.session.token;
-        machine.state.guideId = message.session.guideId;
-        machine.state.expiresAt = message.session.expiresAt;
-        machine.state.apiBaseUrl = message.session.apiBaseUrl || machine.state.apiBaseUrl;
-        await saveSession(message.session);
+        // Use shared helper for consistent session handling
+        await applySessionToMachine(message.session);
         console.log('[FlowCapture] Session set:', { guideId: machine.state.guideId });
         return { success: true };
       }
@@ -578,6 +600,44 @@ async function handleMessage(message, sender) {
     case 'CANCEL_TAB_SELECTOR':
       console.log('[FlowCapture] Tab selector cancelled');
       return { success: true };
+    
+    case 'START_CAPTURE_SESSION_VIA_CONTENT':
+      // Handle capture session start from content script (triggered by web app postMessage)
+      const sessionInfo = message.data || {};
+      
+      // Store the requesting tab ID (the tab where the user clicked Start Capture)
+      const contentSenderTabId = sender?.tab?.id;
+      if (contentSenderTabId) {
+        machine.state.requestingAppTabId = contentSenderTabId;
+      }
+      
+      // Use shared helper for consistent session handling (same as SET_SESSION)
+      if (sessionInfo.token && sessionInfo.guideId) {
+        await applySessionToMachine({
+          token: sessionInfo.token,
+          guideId: sessionInfo.guideId,
+          expiresAt: sessionInfo.expiresAt,
+          apiBaseUrl: sessionInfo.apiBaseUrl,
+          workspaceId: sessionInfo.workspaceId
+        });
+        console.log('[FlowCapture] Session applied from content script:', { guideId: sessionInfo.guideId });
+      }
+      
+      // Build tab selector URL
+      const tabSelectorUrl = new URL(chrome.runtime.getURL('tab-selector/tab-selector.html'));
+      if (machine.state.guideId) tabSelectorUrl.searchParams.set('guideId', machine.state.guideId);
+      if (machine.state.workspaceId) tabSelectorUrl.searchParams.set('workspaceId', machine.state.workspaceId);
+      if (machine.state.apiBaseUrl) tabSelectorUrl.searchParams.set('apiBaseUrl', machine.state.apiBaseUrl);
+      if (contentSenderTabId) tabSelectorUrl.searchParams.set('returnTabId', contentSenderTabId);
+      
+      try {
+        await chrome.tabs.create({ url: tabSelectorUrl.toString(), active: true });
+        console.log('[FlowCapture] Tab selector opened via content script');
+        return { success: true, message: 'Tab selector opened' };
+      } catch (e) {
+        console.error('[FlowCapture] Failed to open tab selector via content:', e);
+        return { success: false, error: 'Failed to open tab selector' };
+      }
     
     default:
       return { error: 'Unknown message type' };

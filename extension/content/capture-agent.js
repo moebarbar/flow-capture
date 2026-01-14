@@ -94,6 +94,11 @@
         port = null;
         setTimeout(connectPort, 1000);
       });
+      
+      // Send READY_FOR_CAPTURE immediately after port connects
+      // This tells the service worker to promote this tab from pending to captured
+      console.log('[FlowCapture] Port connected, sending READY_FOR_CAPTURE');
+      port.postMessage({ type: MessageTypes.READY_FOR_CAPTURE, data: { ready: true } });
     } catch (e) {
       console.log('[FlowCapture] Port connection failed, retrying...');
       setTimeout(connectPort, 1000);
@@ -210,6 +215,30 @@
               type: 'FLOWCAPTURE_SESSION_SET',
               success: response?.success || false,
               error: response?.error
+            }, event.origin);
+          });
+          break;
+        
+        case 'FLOWCAPTURE_START_CAPTURE_SESSION':
+          // This triggers opening the tab selector and starts the capture session flow
+          // Uses external messaging to the background service worker
+          const sessionData = event.data.session || {};
+          chrome.runtime.sendMessage({ 
+            type: 'START_CAPTURE_SESSION_VIA_CONTENT',
+            data: {
+              guideId: sessionData.guideId,
+              workspaceId: sessionData.workspaceId,
+              apiBaseUrl: window.location.origin,
+              token: sessionData.token,
+              expiresAt: sessionData.expiresAt,
+              returnTabId: 'current' // Will be resolved by service worker
+            }
+          }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_CAPTURE_SESSION_STARTED',
+              success: response?.success || false,
+              error: response?.error,
+              message: response?.message
             }, event.origin);
           });
           break;

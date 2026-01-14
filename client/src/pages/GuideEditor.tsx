@@ -95,10 +95,30 @@ export default function GuideEditor() {
     refetchInterval: captureToken ? 5000 : false, // Poll while capturing
   });
 
-  // Function to send session to extension via postMessage
-  const sendSessionToExtension = (session: { token: string; guideId: number; expiresAt: string }) => {
+  // Function to send session to extension via postMessage (for recovery/sync)
+  const sendSessionToExtension = (session: { token: string; guideId: number; expiresAt: string; apiBaseUrl?: string; workspaceId?: number }) => {
     // Use window.origin for security - only same-origin pages can receive this message
-    window.postMessage({ type: 'FLOWCAPTURE_SET_SESSION', session }, window.origin);
+    // Include complete payload so recovery scenarios can fully configure state
+    window.postMessage({ 
+      type: 'FLOWCAPTURE_SET_SESSION', 
+      session: {
+        ...session,
+        apiBaseUrl: session.apiBaseUrl || window.location.origin
+      }
+    }, window.origin);
+  };
+
+  // Function to start capture session with tab selector - opens immediately
+  const startCaptureSessionWithTabSelector = (session: { token: string; guideId: number; expiresAt: string }) => {
+    // This triggers the tab selector to open, allowing user to pick which tab to capture
+    window.postMessage({ 
+      type: 'FLOWCAPTURE_START_CAPTURE_SESSION', 
+      session: {
+        ...session,
+        workspaceId: guide?.workspaceId,
+        apiBaseUrl: window.location.origin
+      }
+    }, window.origin);
   };
 
   // Function to clear session from extension
@@ -168,20 +188,28 @@ export default function GuideEditor() {
       setIsPaused(false); // Reset pause state
       refetchCaptureStatus();
       
-      // Send session to extension via postMessage bridge
+      // Build session with complete payload for reliable recovery
       const session = {
         token: data.token,
         guideId: guideId,
         expiresAt: data.expiresAt,
+        apiBaseUrl: window.location.origin,
+        workspaceId: guide?.workspaceId,
       };
+      
+      // CRITICAL: First send SET_SESSION to establish session persistence in background FSM
+      // This ensures the canonical session saving path is used for reconnects
       sendSessionToExtension(session);
       
-      // Also store in localStorage as fallback
+      // Then open tab selector so user can pick which tab to capture
+      startCaptureSessionWithTabSelector(session);
+      
+      // Also store in localStorage as fallback for session recovery
       localStorage.setItem('flowcapture_session', JSON.stringify(session));
       
       toast({ 
-        title: "Capture Started", 
-        description: "The FlowCapture extension is now capturing. Navigate to another tab and interact with the page." 
+        title: "Select a Tab", 
+        description: "Choose which browser tab you want to capture." 
       });
     },
     onError: () => {

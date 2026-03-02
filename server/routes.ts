@@ -31,7 +31,7 @@ export async function registerRoutes(
   // === SECURITY MIDDLEWARE ===
   // Helmet for secure headers (XSS protection, etc.)
   app.use(helmet({
-    contentSecurityPolicy: false, // Disable CSP for development
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
   }));
 
@@ -926,6 +926,11 @@ export async function registerRoutes(
     res.send(html);
   });
 
+  const allowIframe = (_req: any, res: any, next: any) => {
+    res.removeHeader('X-Frame-Options');
+    next();
+  };
+
   // Get embed info for a guide (returns embed code)
   app.get('/api/guides/:guideId/embed', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
@@ -967,7 +972,7 @@ export async function registerRoutes(
   });
 
   // Public: Get embed content (for iframe)
-  app.get('/api/embed/:token', async (req, res) => {
+  app.get('/api/embed/:token', allowIframe, async (req, res) => {
     try {
       const { token } = req.params;
       
@@ -5039,7 +5044,7 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
   });
 
   // KB Article Embed Info (public)
-  app.get('/api/kb/articles/:slug/embed', async (req, res) => {
+  app.get('/api/kb/articles/:slug/embed', allowIframe, async (req, res) => {
     try {
       const article = await storage.getKbArticleBySlug(req.params.slug);
       if (!article) return res.status(404).json({ message: 'Article not found' });

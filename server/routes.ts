@@ -33,6 +33,7 @@ export async function registerRoutes(
   app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
+    frameguard: false,
   }));
 
   // Rate limiting for auth endpoints (strict)

@@ -440,7 +440,7 @@ function IntegrationsPageContent() {
                       {!aiStatus?.openai?.configured && (
                         <div className="p-3 bg-muted/50 rounded-lg text-sm">
                           <p className="text-muted-foreground">
-                            The OpenAI API key is managed securely through Replit secrets. 
+                            The OpenAI API key is managed securely through environment variables. 
                             Contact your administrator to configure this integration.
                           </p>
                         </div>

@@ -61,7 +61,7 @@ const ProtectedRoute = memo(function ProtectedRoute({
   }
 
   if (!user) {
-    window.location.href = "/";
+    window.location.href = "/auth";
     return null;
   }
 

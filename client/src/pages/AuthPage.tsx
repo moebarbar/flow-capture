@@ -12,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, Mail, Lock, User } from "lucide-react";
 
-// Validation schemas
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
@@ -29,12 +28,17 @@ const registerSchema = z.object({
   path: ["confirmPassword"],
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+});
+
 type LoginFormData = z.infer<typeof loginSchema>;
 type RegisterFormData = z.infer<typeof registerSchema>;
+type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
 export default function AuthPage() {
   const [, setLocation] = useLocation();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const { toast } = useToast();
 
   const loginForm = useForm<LoginFormData>({
@@ -45,6 +49,11 @@ export default function AuthPage() {
   const registerForm = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: { email: "", password: "", confirmPassword: "", firstName: "", lastName: "" },
+  });
+
+  const forgotForm = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: "" },
   });
 
   const loginMutation = useMutation({
@@ -86,105 +95,187 @@ export default function AuthPage() {
     },
   });
 
+  const forgotMutation = useMutation({
+    mutationFn: async (data: ForgotPasswordFormData) => {
+      const res = await apiRequest("POST", "/api/auth/forgot-password", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Check your email", description: "If an account exists, you'll receive a reset link." });
+      setMode("login");
+    },
+    onError: () => {
+      toast({ title: "Check your email", description: "If an account exists, you'll receive a reset link." });
+      setMode("login");
+    },
+  });
+
   const onLogin = (data: LoginFormData) => loginMutation.mutate(data);
   const onRegister = (data: RegisterFormData) => registerMutation.mutate(data);
+  const onForgot = (data: ForgotPasswordFormData) => forgotMutation.mutate(data);
+
+  const titles = {
+    login: "Welcome back",
+    register: "Create your account",
+    forgot: "Reset your password",
+  };
+
+  const descriptions = {
+    login: "Enter your credentials to access your workspace",
+    register: "Fill in your details to get started for free",
+    forgot: "We'll send you a link to reset your password",
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl" data-testid="text-auth-title">
-            {mode === "login" ? "Welcome Back" : "Create Account"}
-          </CardTitle>
-          <CardDescription>
-            {mode === "login" 
-              ? "Enter your credentials to access your account" 
-              : "Fill in your details to get started"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {mode === "login" ? (
-            <Form {...loginForm}>
-              <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
-                <FormField
-                  control={loginForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            {...field} 
-                            type="email" 
-                            placeholder="you@example.com"
-                            className="pl-10"
-                            data-testid="input-login-email"
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={loginForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            {...field} 
-                            type="password" 
-                            placeholder="Enter your password"
-                            className="pl-10"
-                            data-testid="input-login-password"
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={loginMutation.isPending}
-                  data-testid="button-login-submit"
-                >
-                  {loginMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    "Sign In"
-                  )}
-                </Button>
-              </form>
-            </Form>
-          ) : (
-            <Form {...registerForm}>
-              <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-primary-foreground font-bold text-xl mb-4">
+            F
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">FlowCapture</h1>
+          <p className="text-sm text-muted-foreground mt-1">Workflow documentation, automated</p>
+        </div>
+
+        <Card>
+          <CardHeader className="text-center pb-2">
+            <CardTitle className="text-xl" data-testid="text-auth-title">
+              {titles[mode]}
+            </CardTitle>
+            <CardDescription>{descriptions[mode]}</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            {mode === "login" && (
+              <Form {...loginForm}>
+                <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
                   <FormField
-                    control={registerForm.control}
-                    name="firstName"
+                    control={loginForm.control}
+                    name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>First Name</FormLabel>
+                        <FormLabel>Email</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input 
                               {...field} 
-                              placeholder="John"
+                              type="email" 
+                              placeholder="you@example.com"
                               className="pl-10"
-                              data-testid="input-register-firstname"
+                              data-testid="input-login-email"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={loginForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Password</FormLabel>
+                          <button
+                            type="button"
+                            onClick={() => setMode("forgot")}
+                            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
+                          >
+                            Forgot password?
+                          </button>
+                        </div>
+                        <FormControl>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                              {...field} 
+                              type="password" 
+                              placeholder="Enter your password"
+                              className="pl-10"
+                              data-testid="input-login-password"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button 
+                    type="submit" 
+                    className="w-full" 
+                    disabled={loginMutation.isPending}
+                    data-testid="button-login-submit"
+                  >
+                    {loginMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : "Sign In"}
+                  </Button>
+                </form>
+              </Form>
+            )}
+
+            {mode === "register" && (
+              <Form {...registerForm}>
+                <form onSubmit={registerForm.handleSubmit(onRegister)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={registerForm.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                              <Input 
+                                {...field} 
+                                placeholder="John"
+                                className="pl-10"
+                                data-testid="input-register-firstname"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={registerForm.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              placeholder="Doe"
+                              data-testid="input-register-lastname"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={registerForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                              {...field} 
+                              type="email" 
+                              placeholder="you@example.com"
+                              className="pl-10"
+                              data-testid="input-register-email"
                             />
                           </div>
                         </FormControl>
@@ -194,155 +285,145 @@ export default function AuthPage() {
                   />
                   <FormField
                     control={registerForm.control}
-                    name="lastName"
+                    name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Last Name</FormLabel>
+                        <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="Doe"
-                            data-testid="input-register-lastname"
-                          />
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                              {...field} 
+                              type="password" 
+                              placeholder="At least 8 characters"
+                              className="pl-10"
+                              data-testid="input-register-password"
+                            />
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
-                <FormField
-                  control={registerForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            {...field} 
-                            type="email" 
-                            placeholder="you@example.com"
-                            className="pl-10"
-                            data-testid="input-register-email"
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={registerForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Password</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            {...field} 
-                            type="password" 
-                            placeholder="At least 8 characters"
-                            className="pl-10"
-                            data-testid="input-register-password"
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={registerForm.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Confirm Password</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            {...field} 
-                            type="password" 
-                            placeholder="Confirm your password"
-                            className="pl-10"
-                            data-testid="input-register-confirm-password"
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={registerMutation.isPending}
-                  data-testid="button-register-submit"
-                >
-                  {registerMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating account...
-                    </>
-                  ) : (
-                    "Create Account"
-                  )}
-                </Button>
-              </form>
-            </Form>
-          )}
+                  <FormField
+                    control={registerForm.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirm Password</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                              {...field} 
+                              type="password" 
+                              placeholder="Confirm your password"
+                              className="pl-10"
+                              data-testid="input-register-confirm-password"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button 
+                    type="submit" 
+                    className="w-full" 
+                    disabled={registerMutation.isPending}
+                    data-testid="button-register-submit"
+                  >
+                    {registerMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating account...
+                      </>
+                    ) : "Create Account"}
+                  </Button>
+                </form>
+              </Form>
+            )}
 
-          <div className="mt-6 text-center text-sm">
-            {mode === "login" ? (
-              <p className="text-muted-foreground">
-                Don't have an account?{" "}
-                <button 
-                  onClick={() => setMode("register")}
-                  className="text-foreground font-medium underline underline-offset-4"
-                  data-testid="button-switch-to-register"
-                >
-                  Sign up
-                </button>
-              </p>
-            ) : (
-              <p className="text-muted-foreground">
-                Already have an account?{" "}
+            {mode === "forgot" && (
+              <Form {...forgotForm}>
+                <form onSubmit={forgotForm.handleSubmit(onForgot)} className="space-y-4">
+                  <FormField
+                    control={forgotForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email address</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                              {...field} 
+                              type="email" 
+                              placeholder="you@example.com"
+                              className="pl-10"
+                              data-testid="input-forgot-email"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button 
+                    type="submit" 
+                    className="w-full" 
+                    disabled={forgotMutation.isPending}
+                    data-testid="button-forgot-submit"
+                  >
+                    {forgotMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : "Send Reset Link"}
+                  </Button>
+                </form>
+              </Form>
+            )}
+
+            <div className="mt-6 text-center text-sm">
+              {mode === "login" && (
+                <p className="text-muted-foreground">
+                  Don't have an account?{" "}
+                  <button 
+                    onClick={() => setMode("register")}
+                    className="text-foreground font-medium underline underline-offset-4"
+                    data-testid="button-switch-to-register"
+                  >
+                    Sign up free
+                  </button>
+                </p>
+              )}
+              {mode === "register" && (
+                <p className="text-muted-foreground">
+                  Already have an account?{" "}
+                  <button 
+                    onClick={() => setMode("login")}
+                    className="text-foreground font-medium underline underline-offset-4"
+                    data-testid="button-switch-to-login"
+                  >
+                    Sign in
+                  </button>
+                </p>
+              )}
+              {mode === "forgot" && (
                 <button 
                   onClick={() => setMode("login")}
-                  className="text-foreground font-medium underline underline-offset-4"
-                  data-testid="button-switch-to-login"
+                  className="text-muted-foreground hover:text-foreground underline underline-offset-4"
+                  data-testid="button-back-to-login"
                 >
-                  Sign in
+                  Back to sign in
                 </button>
-              </p>
-            )}
-          </div>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
+              )}
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-            </div>
-          </div>
-
-          <Button 
-            variant="outline" 
-            className="w-full"
-            onClick={() => window.location.href = "/api/login"}
-            data-testid="button-replit-auth"
-          >
-            <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10S2 17.523 2 12zm10-6a1 1 0 00-1 1v4H7a1 1 0 100 2h4v4a1 1 0 102 0v-4h4a1 1 0 100-2h-4V7a1 1 0 00-1-1z"/>
-            </svg>
-            Continue with Replit
-          </Button>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -1185,7 +1185,7 @@ function IntegrationsTab() {
               data-testid="input-ga-measurement-id"
             />
             <p className="text-xs text-muted-foreground">
-              To add your Google Analytics Measurement ID, go to Replit Secrets and add VITE_GA_MEASUREMENT_ID with your GA4 Measurement ID (starts with "G-").
+              To add your Google Analytics Measurement ID, set the VITE_GA_MEASUREMENT_ID environment variable with your GA4 Measurement ID (starts with "G-").
             </p>
           </div>
           <div className="rounded-lg bg-muted p-4 text-sm">

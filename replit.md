@@ -80,9 +80,11 @@ Key entities in `shared/schema.ts`:
 - **Drizzle ORM**: Type-safe database queries with schema defined in `shared/schema.ts`
 
 ### Authentication
-- **Replit Auth**: OpenID Connect provider at `ISSUER_URL`
+- **Email/Password Auth**: Custom auth system with bcrypt hashing, no external OAuth dependency
 - **Session Secret**: `SESSION_SECRET` for cookie signing
 - Sessions stored in PostgreSQL `sessions` table
+- Auth routes: `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`, `POST /api/auth/forgot-password`
+- Legacy `/api/login` and `/api/logout` redirect to `/auth` page
 
 ### AI Services
 - **OpenAI API**: Via Replit AI Integrations

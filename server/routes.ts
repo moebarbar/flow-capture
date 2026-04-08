@@ -7,7 +7,7 @@ import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
-import { openai } from "./replit_integrations/image/client";
+import { anthropic } from "./lib/anthropic";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { insertBlogPostSchema, users, steps, guideVersions, SUPPORTED_LANGUAGES } from "@shared/schema";
@@ -248,9 +248,14 @@ export async function registerRoutes(
 
   app.get(api.workspaces.get.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    const workspace = await storage.getWorkspace(Number(req.params.id));
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const workspaceId = Number(req.params.id);
+    const workspace = await storage.getWorkspace(workspaceId);
     if (!workspace) return res.status(404).json({ message: "Workspace not found" });
-    // TODO: Check if user is member
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
     res.json(workspace);
   });
 
@@ -282,13 +287,19 @@ export async function registerRoutes(
   // === GUIDES ===
   app.get(api.guides.list.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
     const workspaceId = req.query.workspaceId ? Number(req.query.workspaceId) : undefined;
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const offset = (page - 1) * limit;
-    
+
     if (!workspaceId) {
-       return res.json({ data: [], total: 0, page, limit, hasMore: false });
+      return res.json({ data: [], total: 0, page, limit, hasMore: false });
+    }
+
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     const guides = await storage.getGuidesByWorkspace(workspaceId);
@@ -325,6 +336,9 @@ export async function registerRoutes(
 
     try {
       const input = api.guides.create.input.parse({ ...req.body, createdById: userId });
+      if (!await canAccessWorkspace(userId, input.workspaceId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const guide = await storage.createGuide(input);
       res.status(201).json(guide);
     } catch (err) {
@@ -339,11 +353,17 @@ export async function registerRoutes(
   });
 
   app.get(api.guides.get.path, async (req, res) => {
-    // Public guides? For now require auth except if published maybe
-    // if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
-    const guide = await storage.getGuide(Number(req.params.id));
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.id);
+
+    const guide = await storage.getGuide(guideId);
     if (!guide) return res.status(404).json({ message: "Guide not found" });
+
+    if (!await canAccessWorkspace(userId, guide.workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
 
     const steps = await storage.getStepsByGuide(guide.id);
     res.json({ ...guide, steps });
@@ -351,10 +371,17 @@ export async function registerRoutes(
 
   app.put(api.guides.update.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.id);
+
+    if (!await canManageGuideShare(userId, guideId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     try {
       const input = api.guides.update.input.parse(req.body);
-      const guide = await storage.updateGuide(Number(req.params.id), input);
+      const guide = await storage.updateGuide(guideId, input);
       res.json(guide);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -369,24 +396,45 @@ export async function registerRoutes(
 
   app.delete(api.guides.delete.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    await storage.deleteGuide(Number(req.params.id));
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.id);
+
+    if (!await canManageGuideShare(userId, guideId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    await storage.deleteGuide(guideId);
     res.status(204).send();
   });
 
   // === STEPS ===
   app.get(api.steps.list.path, async (req, res) => {
-    const steps = await storage.getStepsByGuide(Number(req.params.guideId));
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.guideId);
+    if (!await canAccessGuide(userId, guideId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    const steps = await storage.getStepsByGuide(guideId);
     res.json(steps);
   });
 
   app.post(api.steps.create.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const guideId = Number(req.params.guideId);
+
+    if (!await canManageGuideShare(userId, guideId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     try {
       // Validate request body (flowId is omitted from input schema)
       const input = api.steps.create.input.parse(req.body);
       // Merge flowId from URL parameter
-      const stepData = { ...input, flowId: Number(req.params.guideId) };
+      const stepData = { ...input, flowId: guideId };
       const step = await storage.createStep(stepData);
       res.status(201).json(step);
     } catch (err) {
@@ -458,13 +506,20 @@ export async function registerRoutes(
 
   // === COLLECTIONS ===
   
-  // Helper to check workspace access
+  // Helper to check workspace access (any role — owner or any member)
   async function canAccessWorkspace(userId: string, workspaceId: number): Promise<boolean> {
     const workspace = await storage.getWorkspace(workspaceId);
     if (!workspace) return false;
     if (workspace.ownerId === userId) return true;
     const members = await storage.getWorkspaceMembers(workspaceId);
     return members.some(m => m.userId === userId);
+  }
+
+  // Helper to check read access to a guide (any workspace member)
+  async function canAccessGuide(userId: string, guideId: number): Promise<boolean> {
+    const guide = await storage.getGuide(guideId);
+    if (!guide) return false;
+    return canAccessWorkspace(userId, guide.workspaceId);
   }
 
   app.get('/api/workspaces/:workspaceId/collections', async (req, res) => {
@@ -1034,12 +1089,10 @@ export async function registerRoutes(
       if (nextStep) groundedContext.push(`Next step: ${nextStep}`);
       if (context) groundedContext.push(`Additional context: ${context}`);
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a technical writer for a workflow documentation tool. Your job is to write clear, accurate step descriptions.
+      const completion = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 150,
+        system: `You are a technical writer for a workflow documentation tool. Your job is to write clear, accurate step descriptions.
 
 CRITICAL RULES - FOLLOW EXACTLY:
 1. ONLY describe what is explicitly provided in the input data. Never invent or assume details.
@@ -1055,8 +1108,8 @@ DO NOT:
 - Make up button names, field names, or page names not in the input
 - Assume what the user is trying to accomplish beyond what's stated
 - Add extra steps or details not captured
-- Use technical jargon when simple words work`
-          },
+- Use technical jargon when simple words work`,
+        messages: [
           {
             role: "user",
             content: `Generate a step description based on this captured action:
@@ -1068,10 +1121,9 @@ ${groundedContext.length > 0 ? '\n' + groundedContext.join('\n') : ''}
 Write a clear, accurate description for this step.`
           }
         ],
-        max_tokens: 150
       });
 
-      const description = completion.choices[0].message.content || getDefaultDescription(actionType, stepTitle);
+      const description = (completion.content[0].type === 'text' ? completion.content[0].text : null) || getDefaultDescription(actionType, stepTitle);
       res.json({ description });
     } catch (error) {
       console.error("AI Generation error:", error);
@@ -1100,6 +1152,59 @@ Write a clear, accurate description for this step.`
     }
   }
 
+  // Batch-generate AI descriptions for all steps in a guide that lack one.
+  // Called automatically by the frontend after capture completes.
+  app.post("/api/guides/:guideId/generate-all-descriptions", async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+
+    const guideId = Number(req.params.guideId);
+    if (!guideId) return res.status(400).json({ message: "Invalid guide ID" });
+
+    try {
+      const allSteps = await storage.getStepsByGuide(guideId);
+      // Only process steps that have no meaningful description yet
+      const stepsToProcess = allSteps.filter(
+        (s) => !s.description || s.description.trim().length < 20
+      );
+
+      if (stepsToProcess.length === 0) {
+        return res.json({ updated: 0, message: "All steps already have descriptions" });
+      }
+
+      let updated = 0;
+      for (const step of stepsToProcess) {
+        try {
+          const completion = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 100,
+            system: "You are a technical writer for workflow documentation. Write a single clear, concise step description (1-2 sentences). Start with an action verb. Only describe what you can infer from the provided data.",
+            messages: [
+              {
+                role: "user",
+                content: `Action: ${step.actionType}\nElement: ${step.title || "Unknown"}\nSelector: ${step.selector || "N/A"}\nURL: ${step.url || "N/A"}\n\nWrite a step description.`,
+              },
+            ],
+          });
+
+          const description =
+            (completion.content[0].type === 'text' ? completion.content[0].text.trim() : null) ||
+            getDefaultDescription(step.actionType, step.title ?? '');
+
+          await storage.updateStep(step.id, { description });
+          updated++;
+        } catch (stepErr) {
+          console.error(`Failed to generate description for step ${step.id}:`, stepErr);
+          // Continue with remaining steps even if one fails
+        }
+      }
+
+      res.json({ updated, total: stepsToProcess.length });
+    } catch (error) {
+      console.error("Batch description generation error:", error);
+      res.status(500).json({ message: "Failed to generate descriptions" });
+    }
+  });
+
   // AI Screenshot Analysis - analyze screenshot and generate step description
   app.post("/api/ai/analyze-screenshot", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
@@ -1111,9 +1216,9 @@ Write a clear, accurate description for this step.`
         return res.status(400).json({ message: "Either imageUrl or imageBase64 is required" });
       }
 
-      const imageContent = imageBase64 
-        ? { type: "image_url" as const, image_url: { url: `data:image/png;base64,${imageBase64}` } }
-        : { type: "image_url" as const, image_url: { url: imageUrl } };
+      const imageContent = imageBase64
+        ? { type: "image" as const, source: { type: "base64" as const, media_type: "image/png" as const, data: imageBase64 } }
+        : { type: "image" as const, source: { type: "url" as const, url: imageUrl as string } };
 
       // Build grounded context
       const groundedInfo = [];
@@ -1122,12 +1227,10 @@ Write a clear, accurate description for this step.`
       if (pageUrl) groundedInfo.push(`Page URL: ${pageUrl}`);
       if (context) groundedInfo.push(`Context: ${context}`);
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a technical writer analyzing screenshots for workflow documentation.
+      const completion = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 300,
+        system: `You are a technical writer analyzing screenshots for workflow documentation.
 
 CRITICAL RULES - FOLLOW EXACTLY:
 1. ONLY describe what you can actually see in the screenshot. Never invent details.
@@ -1145,21 +1248,19 @@ DO NOT:
 
 If the screenshot is unclear or messy, provide a simple, accurate description of what IS visible.
 
-Format your response as JSON: { "title": "...", "description": "...", "highlights": ["..."] }`
-          },
+Return ONLY valid JSON with no extra text: { "title": "...", "description": "...", "highlights": ["..."] }`,
+        messages: [
           {
             role: "user",
             content: [
+              imageContent,
               { type: "text", text: `Analyze this screenshot and describe the action shown.${groundedInfo.length > 0 ? '\n\nKnown information:\n' + groundedInfo.join('\n') : ''}` },
-              imageContent
             ]
           }
         ],
-        max_tokens: 300,
-        response_format: { type: "json_object" }
       });
 
-      const content = completion.choices[0].message.content;
+      const content = completion.content[0].type === 'text' ? completion.content[0].text : null;
       const analysis = content ? JSON.parse(content) : { title: "Complete this step", description: "Follow the action shown in the screenshot.", highlights: [] };
       
       res.json(analysis);
@@ -1206,29 +1307,25 @@ Format your response as JSON: { "title": "...", "description": "...", "highlight
         actionType: s.actionType
       }));
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert technical writer. Review this workflow guide and suggest improvements:
+      const completion = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: `You are an expert technical writer. Review this workflow guide and suggest improvements:
 1. Make titles more action-oriented and clear
 2. Ensure descriptions are concise but complete
 3. Check for missing context or unclear steps
 4. Suggest a better overall title if needed
 
-Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "improvedTitle": "...", "improvedDescription": "..." }], "suggestions": ["..."] }`
-          },
+Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{ "order": 1, "improvedTitle": "...", "improvedDescription": "..." }], "suggestions": ["..."] }`,
+        messages: [
           {
             role: "user",
             content: `Guide Title: ${guide.title}\n\nSteps:\n${JSON.stringify(stepsInfo, null, 2)}`
           }
         ],
-        max_tokens: 1000,
-        response_format: { type: "json_object" }
       });
 
-      const content = completion.choices[0].message.content;
+      const content = completion.content[0].type === 'text' ? completion.content[0].text : null;
       const improvements = content ? JSON.parse(content) : { improvedTitle: guide.title, steps: [], suggestions: [] };
       
       res.json(improvements);
@@ -1248,15 +1345,15 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
 
   // Get AI integrations status
   app.get("/api/integrations/ai-status", async (req, res) => {
-    const openaiConfigured = !!(process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
-    
+    const claudeConfigured = !!process.env.ANTHROPIC_API_KEY;
+
     res.json({
-      openai: {
-        configured: openaiConfigured,
-        model: "gpt-4o",
+      claude: {
+        configured: claudeConfigured,
+        model: "claude-sonnet-4-6",
       },
       translation: {
-        enabled: openaiConfigured,
+        enabled: claudeConfigured,
         supportedLanguages: 15,
       },
     });
@@ -5216,6 +5313,51 @@ Respond in JSON format: { "improvedTitle": "...", "steps": [{ "order": 1, "impro
       console.error('Error converting guide to KB article:', error);
       res.status(500).json({ message: 'Failed to convert guide to article' });
     }
+  });
+
+  // ── SSE real-time event stream ──────────────────────────────────────────────
+  // Clients connect here to receive push notifications (guide updates, new steps,
+  // workspace changes) without polling.
+  const sseClients = new Map<string, Set<Response>>();
+
+  function ssePublish(userId: string, event: string, data: unknown) {
+    const clients = sseClients.get(userId);
+    if (!clients) return;
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of Array.from(clients)) {
+      try { res.write(payload); } catch { /* client disconnected */ }
+    }
+  }
+
+  // Expose publisher so other route handlers can call it
+  (app as any)._ssePublish = ssePublish;
+
+  app.get('/api/events', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = (req as any).user;
+    const userId = user.claims.sub as string;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.flushHeaders();
+
+    // Send initial ping so the client knows the connection is live
+    res.write(`event: connected\ndata: ${JSON.stringify({ userId })}\n\n`);
+
+    if (!sseClients.has(userId)) sseClients.set(userId, new Set());
+    sseClients.get(userId)!.add(res);
+
+    // Heartbeat every 25s to keep the connection alive through proxies
+    const heartbeat = setInterval(() => {
+      try { res.write(': heartbeat\n\n'); } catch { clearInterval(heartbeat); }
+    }, 25_000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      sseClients.get(userId)?.delete(res);
+    });
   });
 
   return httpServer;

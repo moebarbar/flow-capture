@@ -1,9 +1,9 @@
-import OpenAI from "openai";
+import { anthropic } from "../lib/anthropic";
 import { db } from "../db";
-import { 
-  guideTranslations, 
-  stepTranslations, 
-  guides, 
+import {
+  guideTranslations,
+  stepTranslations,
+  guides,
   steps,
   SUPPORTED_LANGUAGES,
   type Guide,
@@ -13,11 +13,6 @@ import {
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
-
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
 
 function hashContent(content: string): string {
   return crypto.createHash('md5').update(content).digest('hex');
@@ -65,24 +60,19 @@ export async function translateGuide(
 
     const languageName = SUPPORTED_LANGUAGES.find(l => l.code === targetLocale)?.name || targetLocale;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const completion = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 500,
+      system: `You are a professional translator. Translate the following guide content to ${languageName}. Maintain the same tone and style. Return ONLY valid JSON with no extra text: { "title": "...", "description": "..." }`,
       messages: [
-        {
-          role: "system",
-          content: `You are a professional translator. Translate the following guide content to ${languageName}. 
-Maintain the same tone and style. Return JSON: { "title": "...", "description": "..." }`
-        },
         {
           role: "user",
           content: `Title: ${guide.title}\nDescription: ${guide.description || 'No description'}`
         }
       ],
-      max_tokens: 500,
-      response_format: { type: "json_object" }
     });
 
-    const content = completion.choices[0].message.content;
+    const content = completion.content[0].type === 'text' ? completion.content[0].text : null;
     const translated = content ? JSON.parse(content) : { title: guide.title, description: guide.description };
 
     const result = await db.update(guideTranslations)
@@ -92,7 +82,7 @@ Maintain the same tone and style. Return JSON: { "title": "...", "description": 
         status: 'completed',
         translatedAt: new Date(),
         sourceHash,
-        aiModel: 'gpt-4o',
+        aiModel: 'claude-sonnet-4-6',
         updatedAt: new Date()
       })
       .where(and(
@@ -160,24 +150,19 @@ export async function translateStep(
 
     const languageName = SUPPORTED_LANGUAGES.find(l => l.code === targetLocale)?.name || targetLocale;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const completion = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 300,
+      system: `You are a professional translator. Translate the following step content to ${languageName}. Maintain the same tone and style. Return ONLY valid JSON with no extra text: { "title": "...", "description": "..." }`,
       messages: [
-        {
-          role: "system",
-          content: `You are a professional translator. Translate the following step content to ${languageName}. 
-Maintain the same tone and style. Return JSON: { "title": "...", "description": "..." }`
-        },
         {
           role: "user",
           content: `Title: ${step.title || 'No title'}\nDescription: ${step.description || 'No description'}`
         }
       ],
-      max_tokens: 300,
-      response_format: { type: "json_object" }
     });
 
-    const content = completion.choices[0].message.content;
+    const content = completion.content[0].type === 'text' ? completion.content[0].text : null;
     const translated = content ? JSON.parse(content) : { title: step.title, description: step.description };
 
     const result = await db.update(stepTranslations)

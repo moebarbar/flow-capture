@@ -183,6 +183,15 @@ class CaptureStateMachine {
 
 const machine = new CaptureStateMachine();
 
+// On startup: load stored extension token so the sync manager can authenticate
+// immediately, even before the user opens the web app.
+(async () => {
+  const loaded = await syncManager.loadStoredToken();
+  if (!loaded) {
+    console.log('[FlowCapture] No stored extension token, will request one when apiBaseUrl is known');
+  }
+})();
+
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('[FlowCapture] Installed:', details.reason);
 });
@@ -333,6 +342,12 @@ async function applySessionToMachine(session) {
   // Configure SyncManager so uploads work (for both initial and recovery flows)
   if (machine.state.apiBaseUrl && machine.state.guideId) {
     syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
+    // If we don't have a token yet, try to acquire one now (user is logged in)
+    if (!syncManager.extensionToken) {
+      syncManager.requestExtensionToken().catch(() => {
+        console.warn('[FlowCapture] Could not acquire extension token at session apply');
+      });
+    }
   }
   
   // Broadcast state update to all connected tabs
@@ -1171,15 +1186,13 @@ function sleep(ms) {
 }
 
 async function createGuideOnServer() {
-  const response = await fetch(`${machine.state.apiBaseUrl}/api/workspaces/${machine.state.workspaceId}/guides`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({
-      title: 'Untitled Flow',
-      description: ''
+  const response = await fetch(`${machine.state.apiBaseUrl}/api/workspaces/${machine.state.workspaceId}/guides`,
+    syncManager.buildFetchOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Untitled Flow', description: '' })
     })
-  });
+  );
 
   if (!response.ok) {
     throw new Error('Failed to create guide');
@@ -1190,20 +1203,23 @@ async function createGuideOnServer() {
 }
 
 async function saveStepToServer(step) {
-  const response = await fetch(`${machine.state.apiBaseUrl}/api/guides/${machine.state.guideId}/steps`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({
-      title: step.title,
-      description: step.description,
-      actionType: step.actionType,
-      selector: step.selector,
-      url: step.url,
-      imageUrl: step.screenshotUrl,
-      order: step.order
+  const response = await fetch(`${machine.state.apiBaseUrl}/api/guides/${machine.state.guideId}/steps`,
+    syncManager.buildFetchOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: step.title,
+        description: step.description,
+        actionType: step.actionType,
+        selector: step.selector,
+        url: step.url,
+        imageUrl: step.screenshotUrl,
+        order: step.order,
+        tabTitle: step.tabTitle || '',
+        metadata: step.elementMetadata || {}
+      })
     })
-  });
+  );
 
   if (!response.ok) {
     throw new Error(`Step save failed: ${response.status}`);
@@ -1233,12 +1249,13 @@ async function syncStepsToServer() {
 }
 
 async function uploadScreenshot(dataUrl) {
-  const presignedResponse = await fetch(`${machine.state.apiBaseUrl}/api/uploads/request-url`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ name: `step_${Date.now()}.png`, contentType: 'image/png' })
-  });
+  const presignedResponse = await fetch(`${machine.state.apiBaseUrl}/api/uploads/request-url`,
+    syncManager.buildFetchOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `step_${Date.now()}.png`, contentType: 'image/png' })
+    })
+  );
 
   if (!presignedResponse.ok) {
     throw new Error('Failed to get upload URL');
@@ -1247,6 +1264,7 @@ async function uploadScreenshot(dataUrl) {
   const { uploadURL, objectPath } = await presignedResponse.json();
 
   const blob = dataUrlToBlob(dataUrl);
+  // GCS presigned PUT — no auth headers needed (the URL itself is signed)
   const uploadResponse = await fetch(uploadURL, {
     method: 'PUT',
     body: blob,

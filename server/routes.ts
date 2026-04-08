@@ -8,6 +8,7 @@ import { registerObjectStorageRoutes } from "./replit_integrations/object_storag
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { anthropic } from "./lib/anthropic";
+import { analyzeStepWithVision } from "./services/visionService";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { insertBlogPostSchema, users, steps, guideVersions, SUPPORTED_LANGUAGES } from "@shared/schema";
@@ -437,6 +438,26 @@ export async function registerRoutes(
       const stepData = { ...input, flowId: guideId };
       const step = await storage.createStep(stepData);
       res.status(201).json(step);
+
+      // Fire vision analysis in background — does not block response
+      if (step.imageUrl && process.env.ANTHROPIC_API_KEY) {
+        const appBaseUrl = process.env.APP_URL || `http://localhost:${process.env.PORT || 5000}`;
+        const meta = (req.body.metadata || {}) as Record<string, any>;
+        setImmediate(() => {
+          analyzeStepWithVision(step.id, step.imageUrl!, {
+            actionType: step.actionType,
+            selector: step.selector,
+            url: step.url,
+            elementText: meta.innerText || meta.textContent || null,
+            elementTag: meta.tagName || null,
+            elementRole: meta.role || null,
+            ariaLabel: meta.ariaLabel || null,
+            placeholder: meta.placeholder || null,
+            inputValue: meta.value || null,
+            pageTitle: meta.pageTitle || req.body.tabTitle || null,
+          }, appBaseUrl);
+        });
+      }
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({

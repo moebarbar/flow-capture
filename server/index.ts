@@ -75,14 +75,25 @@ app.use("/api/auth", (req, res, next) => {
   const origin = req.headers.origin;
   const referer = req.headers.referer;
 
-  // Same-origin requests (no Origin header) are fine — browsers only omit it
-  // for same-origin navigations.
+  // Same-origin requests (no Origin header) are fine
   if (!origin && !referer) return next();
 
   const requestOrigin = origin || (referer ? new URL(referer).origin : null);
 
-  if (requestOrigin && (ALLOWED_WEB_ORIGINS.has(requestOrigin) || requestOrigin.startsWith("chrome-extension://"))) {
-    return next();
+  if (!requestOrigin) return next();
+
+  // Always allow chrome-extension origins
+  if (requestOrigin.startsWith("chrome-extension://")) return next();
+
+  // Allow if in the explicit allowlist
+  if (ALLOWED_WEB_ORIGINS.has(requestOrigin)) return next();
+
+  // Allow if the origin matches the request's own host (handles Railway, any deployment)
+  const host = req.headers.host;
+  if (host) {
+    const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const selfOrigin = `${proto}://${host}`;
+    if (requestOrigin === selfOrigin) return next();
   }
 
   return res.status(403).json({ message: "CSRF check failed" });

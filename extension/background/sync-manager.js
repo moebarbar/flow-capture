@@ -31,11 +31,70 @@ class SyncManager {
     this.isOnline = true;
     this.authExpired = false;
     this.authCheckTimer = null;
+    this.extensionToken = null; // Bearer token for cross-origin auth
   }
 
   configure(apiBaseUrl, guideId) {
     this.apiBaseUrl = apiBaseUrl;
     this.guideId = guideId;
+  }
+
+  setExtensionToken(token) {
+    this.extensionToken = token;
+  }
+
+  // Build fetch options, injecting Authorization header when a token is available.
+  // Falls back to cookie-based auth when no token is set.
+  buildFetchOptions(options = {}) {
+    const headers = { ...(options.headers || {}) };
+    if (this.extensionToken) {
+      headers['Authorization'] = `Bearer ${this.extensionToken}`;
+    }
+    const opts = { ...options, headers };
+    // Only include credentials when NOT using a Bearer token to avoid CORS
+    // preflight issues on some configurations.
+    if (!this.extensionToken) {
+      opts.credentials = 'include';
+    }
+    return opts;
+  }
+
+  // Request a new extension token from the server (requires an active session cookie).
+  async requestExtensionToken() {
+    if (!this.apiBaseUrl) return null;
+    try {
+      const response = await this.fetchWithTimeout(
+        `${this.apiBaseUrl}/api/auth/extension-token`,
+        { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' } },
+        5000
+      );
+      if (!response.ok) return null;
+      const { token } = await response.json();
+      if (token) {
+        this.extensionToken = token;
+        await chrome.storage.local.set({ flowcapture_extension_token: token });
+        console.log('[SyncManager] Extension token acquired and stored');
+        return token;
+      }
+    } catch (e) {
+      console.warn('[SyncManager] Could not acquire extension token:', e.message);
+    }
+    return null;
+  }
+
+  // Load a previously stored extension token from chrome.storage.local.
+  async loadStoredToken() {
+    try {
+      const result = await chrome.storage.local.get('flowcapture_extension_token');
+      if (result.flowcapture_extension_token) {
+        this.extensionToken = result.flowcapture_extension_token;
+        console.log('[SyncManager] Loaded stored extension token');
+        return true;
+      }
+    } catch (e) {
+      console.warn('[SyncManager] Could not load stored token:', e.message);
+    }
+    return false;
   }
 
   setStatusCallback(callback) {
@@ -136,7 +195,7 @@ class SyncManager {
       order: step.order,
       tabId: step.tabId,
       timestamp: step.timestamp,
-      elementMetadata: step.elementMetadata || {}
+      metadata: step.elementMetadata || {}
     };
   }
 
@@ -238,12 +297,11 @@ class SyncManager {
 
       const response = await this.fetchWithTimeout(
         `${this.apiBaseUrl}/api/guides/${this.guideId}/steps`,
-        {
+        this.buildFetchOptions({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify(payload)
-        },
+        }),
         10000
       );
 
@@ -295,16 +353,15 @@ class SyncManager {
 
     const presignedResponse = await this.fetchWithTimeout(
       `${this.apiBaseUrl}/api/uploads/request-url`,
-      {
+      this.buildFetchOptions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          name: `step_${stepId}.png`, 
+        body: JSON.stringify({
+          name: `step_${stepId}.png`,
           contentType: 'image/png',
           size: blob.size
         })
-      },
+      }),
       5000
     );
 
@@ -314,6 +371,7 @@ class SyncManager {
 
     const { uploadURL, objectPath } = await presignedResponse.json();
 
+    // PUT to the presigned GCS URL - no auth headers needed here (it's a signed URL)
     const uploadResponse = await this.fetchWithTimeout(
       uploadURL,
       {
@@ -333,37 +391,34 @@ class SyncManager {
   }
 
   async compressScreenshot(dataUrl) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = new OffscreenCanvas(img.width, img.height);
-        const ctx = canvas.getContext('2d');
-        
-        let width = img.width;
-        let height = img.height;
-        const maxDimension = 1920;
-        
-        if (width > maxDimension || height > maxDimension) {
-          const ratio = Math.min(maxDimension / width, maxDimension / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-          canvas.width = width;
-          canvas.height = height;
-        }
-        
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        canvas.convertToBlob({ type: 'image/png', quality: 0.85 })
-          .then(blob => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          })
-          .catch(() => resolve(dataUrl));
-      };
-      img.onerror = () => resolve(dataUrl);
-      img.src = dataUrl;
-    });
+    // Service-worker-safe compression: no new Image(), no FileReader().
+    // Uses createImageBitmap() + OffscreenCanvas + arrayBuffer() + btoa().
+    try {
+      const blob = this.dataUrlToBlob(dataUrl);
+      const bitmap = await createImageBitmap(blob);
+      let { width, height } = bitmap;
+      const maxDimension = 1920;
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = new OffscreenCanvas(width, height);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      const compressed = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+      const buf = await compressed.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      // Chunk btoa to avoid call-stack overflow on large images
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      return `data:image/jpeg;base64,${btoa(binary)}`;
+    } catch (e) {
+      console.warn('[SyncManager] Screenshot compression failed, uploading original:', e.message);
+      return dataUrl;
+    }
   }
 
   async uploadLargeScreenshot(blob, stepId) {
@@ -444,15 +499,14 @@ class SyncManager {
   async uploadScreenshotDirect(blob, stepId) {
     const presignedResponse = await this.fetchWithTimeout(
       `${this.apiBaseUrl}/api/uploads/request-url`,
-      {
+      this.buildFetchOptions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          name: `step_${stepId}.png`, 
-          contentType: 'image/png' 
+        body: JSON.stringify({
+          name: `step_${stepId}.png`,
+          contentType: 'image/png'
         })
-      },
+      }),
       5000
     );
 
@@ -567,7 +621,7 @@ class SyncManager {
       try {
         const response = await this.fetchWithTimeout(
           `${this.apiBaseUrl}/api/user`,
-          { method: 'GET', credentials: 'include' },
+          this.buildFetchOptions({ method: 'GET' }),
           5000
         );
         

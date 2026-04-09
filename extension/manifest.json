@@ -31,7 +31,8 @@
     "activeTab",
     "scripting",
     "storage",
-    "tabs"
+    "tabs",
+    "sidePanel"
   ],
 
   "optional_host_permissions": [
@@ -41,7 +42,8 @@
   "host_permissions": [
     "https://*.replit.app/*",
     "https://*.replit.dev/*",
-    "https://*.repl.co/*"
+    "https://*.repl.co/*",
+    "https://*.up.railway.app/*"
   ],
 
   "externally_connectable": {
@@ -51,6 +53,7 @@
       "https://*.repl.co/*",
       "https://*.flowcapture.com/*",
       "https://*.flowcapture.app/*",
+      "https://*.up.railway.app/*",
       "http://localhost:*/*",
       "http://127.0.0.1:*/*"
     ]

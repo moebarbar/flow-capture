@@ -286,6 +286,46 @@ export async function registerRoutes(
     }
   });
 
+  // === EXTENSION CAPTURE API ===
+  // Single endpoint for the popup to call before starting a capture session.
+  // It ensures the user has a workspace, creates a fresh guide, and returns the guideId.
+  // Works with both cookie sessions and Bearer token auth (so the popup can call it directly).
+  app.post('/api/extension/start-capture', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const user = req.user as any;
+    const userId = user.claims.sub;
+    const firstName = user.claims.first_name || "My";
+
+    try {
+      // Ensure workspace exists
+      let workspace;
+      const existingWorkspaces = await storage.getWorkspacesForUser(userId);
+      if (existingWorkspaces.length > 0) {
+        workspace = existingWorkspaces[0];
+      } else {
+        const slug = `personal-${userId.slice(0, 8)}-${Date.now()}`;
+        workspace = await storage.createWorkspace({
+          name: `${firstName}'s Workspace`,
+          slug,
+          ownerId: userId,
+        });
+      }
+
+      // Create a fresh guide
+      const guide = await storage.createGuide({
+        title: 'Untitled Flow',
+        description: '',
+        workspaceId: workspace.id,
+        createdById: userId,
+      });
+
+      res.json({ guideId: guide.id, workspaceId: workspace.id });
+    } catch (err) {
+      console.error('[extension/start-capture] Error:', err);
+      res.status(500).json({ message: "Failed to start capture" });
+    }
+  });
+
   // === GUIDES ===
   app.get(api.guides.list.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

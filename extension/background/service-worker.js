@@ -463,31 +463,13 @@ async function handleMessage(message, sender) {
           !t.url.includes('chrome.google.com/webstore')
         );
         
-        const tabsWithMeta = await Promise.all(validTabs.map(async (t) => {
+        const tabsWithMeta = validTabs.map((t) => {
           let description = '';
           try {
-            const url = new URL(t.url);
-            description = url.hostname;
-            
-            const results = await chrome.scripting.executeScript({
-              target: { tabId: t.id },
-              func: () => {
-                const metaDesc = document.querySelector('meta[name="description"]');
-                return metaDesc ? metaDesc.content : null;
-              }
-            });
-            if (results?.[0]?.result) {
-              description = results[0].result.substring(0, 100);
-            }
-          } catch (e) {
-            try {
-              const url = new URL(t.url);
-              description = url.hostname;
-            } catch {
-              description = 'Unknown site';
-            }
+            description = new URL(t.url).hostname;
+          } catch {
+            description = 'Unknown site';
           }
-          
           return {
             id: t.id,
             title: t.title || 'Untitled',
@@ -499,7 +481,7 @@ async function handleMessage(message, sender) {
             isCapturing: machine.state.capturedTabs.has(t.id),
             isPending: machine.state.pendingTabs.has(t.id)
           };
-        }));
+        });
         
         return { tabs: tabsWithMeta };
       } catch (e) {
@@ -538,10 +520,15 @@ async function handleMessage(message, sender) {
         if (data.workspaceId) machine.state.workspaceId = data.workspaceId;
         if (data.apiBaseUrl) machine.state.apiBaseUrl = data.apiBaseUrl;
         if (data.requestingAppTabId) machine.state.requestingAppTabId = data.requestingAppTabId;
-        
-        const captureResult = await startCapture({ 
-          tabId: data.tabId, 
-          highlightColor: data.highlightColor 
+        // Apply extension token from popup so steps sync without requiring cookie auth
+        if (data.extensionToken) {
+          syncManager.setExtensionToken(data.extensionToken);
+          await chrome.storage.local.set({ flowcapture_extension_token: data.extensionToken });
+        }
+
+        const captureResult = await startCapture({
+          tabId: data.tabId,
+          highlightColor: data.highlightColor
         });
         
         return captureResult;
@@ -780,8 +767,7 @@ async function startCapture(config = {}) {
     }
   }
 
-  const injectedCount = await injectIntoAllTabs();
-  console.log(`[FlowCapture] Pre-injected into ${injectedCount} additional tabs (waiting for READY_FOR_CAPTURE)`);
+  const injectedCount = 0; // Only inject the selected tab — not all tabs
 
   // Send capture started message to the requesting app tab with the session nonce
   if (machine.state.requestingAppTabId && machine.state.sessionNonce) {

@@ -71,6 +71,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         finalStepCount.textContent = lastCaptureResult.stepCount;
       } else {
         showPanel(notRecordingPanel);
+        // Show settings automatically on first run (no apiBaseUrl configured)
+        if (!settings.apiBaseUrl) {
+          settingsModal.classList.remove('hidden');
+        }
       }
     } catch (e) {
       console.error('Failed to get state:', e);
@@ -198,13 +202,99 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function selectTabAndStartCapture(tabId) {
     const highlightColor = borderColorInput.value;
     await chrome.storage.local.set({ highlightColor });
-    
-    tabList.innerHTML = '<div class="tab-loading">Starting capture...</div>';
-    
+
+    const settings = await chrome.storage.local.get(['apiBaseUrl', 'flowcapture_extension_token']);
+    const storedApiBaseUrl = settings.apiBaseUrl || '';
+
+    if (!storedApiBaseUrl) {
+      tabList.innerHTML = '<div class="tab-error">Please set your Dashboard URL in Settings first.</div>';
+      return;
+    }
+
+    const loadingEl = document.createElement('div');
+    loadingEl.className = 'tab-loading';
+    loadingEl.textContent = 'Starting capture...';
+    tabList.textContent = '';
+    tabList.appendChild(loadingEl);
+
     try {
-      const result = await chrome.runtime.sendMessage({ 
+      // Step 1: Acquire a Bearer token (try stored first, then request a new one)
+      let extensionToken = settings.flowcapture_extension_token || null;
+
+      // Step 2: Create a guide on the server so we have a guideId before capture begins
+      const startHeaders = { 'Content-Type': 'application/json' };
+      if (extensionToken) startHeaders['Authorization'] = `Bearer ${extensionToken}`;
+
+      let startRes = await fetch(`${storedApiBaseUrl}/api/extension/start-capture`, {
+        method: 'POST',
+        headers: startHeaders,
+        credentials: extensionToken ? 'omit' : 'include',
+      });
+
+      // If token was stale, try refreshing it via cookie session
+      if (startRes.status === 401 && !extensionToken) {
+        tabList.innerHTML = '<div class="tab-error">Please log in to the dashboard first, then try again.</div>';
+        return;
+      }
+
+      if (startRes.status === 401 && extensionToken) {
+        // Token expired — request a new one via cookie
+        const tokenRes = await fetch(`${storedApiBaseUrl}/api/auth/extension-token`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          extensionToken = tokenData.token;
+          await chrome.storage.local.set({ flowcapture_extension_token: extensionToken });
+          // Retry start-capture with fresh token
+          startRes = await fetch(`${storedApiBaseUrl}/api/extension/start-capture`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${extensionToken}` },
+          });
+        } else {
+          tabList.innerHTML = '<div class="tab-error">Session expired. Please log in to the dashboard again.</div>';
+          return;
+        }
+      }
+
+      if (!startRes.ok) {
+        const errData = await startRes.json().catch(() => ({}));
+        tabList.innerHTML = `<div class="tab-error">Failed to create guide: ${escapeHtml(errData.message || startRes.statusText)}</div>`;
+        return;
+      }
+
+      const { guideId, workspaceId } = await startRes.json();
+
+      // Step 3: If we don't have a token yet, acquire one now
+      if (!extensionToken) {
+        try {
+          const tokenRes = await fetch(`${storedApiBaseUrl}/api/auth/extension-token`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            extensionToken = tokenData.token;
+            await chrome.storage.local.set({ flowcapture_extension_token: extensionToken });
+          }
+        } catch (e) {
+          console.warn('[Popup] Could not acquire extension token:', e.message);
+        }
+      }
+
+      const result = await chrome.runtime.sendMessage({
         type: 'SELECT_TAB_AND_START_CAPTURE',
-        data: { tabId, highlightColor }
+        data: {
+          tabId,
+          highlightColor,
+          apiBaseUrl: storedApiBaseUrl,
+          guideId,
+          workspaceId,
+          extensionToken: extensionToken || undefined,
+        }
       });
 
       if (result?.success) {
@@ -212,7 +302,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showPanel(capturingPanel);
         stepCount.textContent = '0';
         updatePauseResumeUI(false);
-        window.close();
+        // Don't call window.close() — keep popup open so user can stop capture
       } else {
         tabList.innerHTML = `<div class="tab-error">Failed to start capture: ${escapeHtml(result?.error || 'Unknown error')}</div>`;
       }

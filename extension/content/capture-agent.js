@@ -57,7 +57,8 @@
     '.replit.dev',
     '.replit.app',
     '.flowcapture.com',
-    '.flowcapture.app'
+    '.flowcapture.app',
+    '.up.railway.app'
   ];
   
   const TRUSTED_EXACT_ORIGINS = [

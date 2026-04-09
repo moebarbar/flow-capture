@@ -39,12 +39,18 @@
 
   const OVERLAY_ID = 'flowcapture-overlay';
   const DEBOUNCE_MS = 300;
-  
+  const SCROLL_DEBOUNCE_MS = 1500;
+  const DOM_CHANGE_WINDOW_MS = 600; // time after a click to watch for DOM changes
+
   let isCapturing = false;
   let isPaused = false;
   let lastElement = null;
   let lastCaptureTime = 0;
+  let lastScrollCapture = 0;
   let port = null;
+  let pendingDomChangeTimeout = null;
+  let mutationObserver = null;
+  let lastClickedElement = null;
 
   const TRUSTED_ORIGIN_SUFFIXES = [
     '.repl.co',
@@ -195,6 +201,7 @@
           break;
           
         case 'FLOWCAPTURE_GET_STATUS':
+        case 'FLOWCAPTURE_GET_STATE':
           chrome.runtime.sendMessage({ type: MessageTypes.GET_STATE }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_STATUS',
@@ -202,6 +209,24 @@
               isPaused: response?.isPaused || false,
               stepCount: response?.stepCount || 0,
               guideId: response?.guideId || null
+            }, event.origin);
+          });
+          break;
+
+        case 'FLOWCAPTURE_PAUSE_CAPTURE':
+          chrome.runtime.sendMessage({ type: MessageTypes.PAUSE_CAPTURE }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_PAUSE_RESULT',
+              success: response?.success || false
+            }, event.origin);
+          });
+          break;
+
+        case 'FLOWCAPTURE_RESUME_CAPTURE':
+          chrome.runtime.sendMessage({ type: MessageTypes.RESUME_CAPTURE }, (response) => {
+            window.postMessage({
+              type: 'FLOWCAPTURE_RESUME_RESULT',
+              success: response?.success || false
             }, event.origin);
           });
           break;
@@ -377,29 +402,102 @@
 
   function getElementMetadata(element) {
     const rect = element.getBoundingClientRect();
-    
     const innerText = getVisibleText(element);
     const fullText = (element.textContent || '').trim().slice(0, 200);
-    
+
+    // Find the nearest form and its context
+    const form = element.closest('form');
+    const formName = form
+      ? (form.getAttribute('aria-label') || form.getAttribute('name') || form.id || null)
+      : null;
+
+    // Find the nearest landmark/section for page context
+    const landmark = element.closest('main, nav, header, footer, section, article, aside, [role="main"], [role="navigation"], [role="dialog"], [role="alertdialog"]');
+    const landmarkTag = landmark ? landmark.tagName.toLowerCase() : null;
+    const landmarkRole = landmark ? (landmark.getAttribute('role') || landmarkTag) : null;
+    const landmarkLabel = landmark
+      ? (landmark.getAttribute('aria-label') || landmark.getAttribute('aria-labelledby')
+          ? document.getElementById(landmark.getAttribute('aria-labelledby'))?.textContent?.trim()
+          : null) || null
+      : null;
+
+    // Find nearest heading for section context (h1-h6 before this element)
+    let nearestHeading = null;
+    try {
+      const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+      // Find last heading that appears before element in DOM order
+      for (let i = headings.length - 1; i >= 0; i--) {
+        const h = headings[i];
+        if (h.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          nearestHeading = h.textContent?.trim().slice(0, 80) || null;
+          break;
+        }
+      }
+    } catch (_) {}
+
+    // Find associated label (for inputs)
+    let associatedLabel = null;
+    if (element.id) {
+      const labelEl = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+      if (labelEl) associatedLabel = labelEl.textContent?.trim().slice(0, 80) || null;
+    }
+    if (!associatedLabel) {
+      const parentLabel = element.closest('label');
+      if (parentLabel) {
+        associatedLabel = parentLabel.textContent?.trim().slice(0, 80) || null;
+      }
+    }
+
+    // Capture aria-describedby text
+    let ariaDescription = null;
+    const describedBy = element.getAttribute('aria-describedby');
+    if (describedBy) {
+      const descEl = document.getElementById(describedBy);
+      if (descEl) ariaDescription = descEl.textContent?.trim().slice(0, 100) || null;
+    }
+
+    // Capture selected option text for SELECT elements
+    let selectedOptionText = null;
+    if (element.tagName === 'SELECT' && element.selectedIndex >= 0) {
+      selectedOptionText = element.options[element.selectedIndex]?.text?.trim() || null;
+    }
+
+    // Capture parent context text (one level up, useful for icon buttons)
+    let parentText = null;
+    if (!innerText && element.parentElement) {
+      parentText = getVisibleText(element.parentElement)?.slice(0, 100) || null;
+    }
+
     return {
       tagName: element.tagName.toLowerCase(),
       id: element.id || null,
       classList: Array.from(element.classList || []),
-      innerText: innerText,
+      innerText,
       textContent: fullText,
       placeholder: element.getAttribute('placeholder'),
       name: element.getAttribute('name'),
       type: element.getAttribute('type'),
       href: element.getAttribute('href'),
       ariaLabel: element.getAttribute('aria-label'),
+      ariaDescription,
       role: element.getAttribute('role'),
       title: element.getAttribute('title'),
       alt: element.getAttribute('alt'),
-      value: element.value || null,
+      value: element.tagName === 'INPUT' && element.type !== 'password' ? (element.value || null) : null,
       dataTestId: element.getAttribute('data-testid'),
       isButton: element.tagName === 'BUTTON' || element.getAttribute('role') === 'button',
       isLink: element.tagName === 'A' || element.getAttribute('role') === 'link',
       isInput: ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName),
+      isContentEditable: element.isContentEditable || false,
+      associatedLabel,
+      selectedOptionText,
+      parentText,
+      formContext: formName,
+      pageSection: landmarkRole,
+      pageSectionLabel: landmarkLabel,
+      nearestHeading,
+      pageTitle: document.title,
+      pageUrl: window.location.href,
       rect: {
         top: Math.round(rect.top),
         left: Math.round(rect.left),
@@ -615,22 +713,90 @@
 
   function isInteractable(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
-    
-    const interactableTags = ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL'];
+
+    // Standard HTML interactive elements
+    const interactableTags = ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL', 'SUMMARY', 'DETAILS'];
     if (interactableTags.includes(element.tagName)) return true;
-    
+
+    // ARIA roles — extended set covering modern component libraries
     const role = element.getAttribute('role');
-    if (['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option'].includes(role)) {
-      return true;
+    const interactableRoles = [
+      'button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option',
+      'switch', 'treeitem', 'gridcell', 'columnheader', 'rowheader',
+      'combobox', 'listbox', 'spinbutton', 'slider', 'searchbox',
+      'menuitemcheckbox', 'menuitemradio', 'menubar', 'toolbar'
+    ];
+    if (role && interactableRoles.includes(role)) return true;
+
+    // contenteditable (rich text editors — Notion, Quill, Slate, etc.)
+    if (element.isContentEditable) return true;
+
+    // Inline onclick handler
+    if (element.getAttribute('onclick')) return true;
+
+    // tabindex=0 marks intentionally focusable custom elements
+    if (element.getAttribute('tabindex') === '0') return true;
+
+    // Cursor:pointer is the most reliable signal for custom clickable elements
+    try {
+      const style = window.getComputedStyle(element);
+      if (style.cursor === 'pointer') return true;
+    } catch (_) {}
+
+    // React synthetic event handlers — React attaches to fiber
+    // __reactFiberXXX or __reactInternalInstanceXXX
+    const reactKey = Object.keys(element).find(
+      k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance')
+    );
+    if (reactKey) {
+      try {
+        let fiber = element[reactKey];
+        while (fiber) {
+          const props = fiber.memoizedProps || fiber.pendingProps;
+          if (props && (props.onClick || props.onMouseDown || props.onPointerDown)) return true;
+          fiber = fiber.return;
+          if (fiber && fiber.stateNode === document) break;
+        }
+      } catch (_) {}
     }
-    
-    if (element.onclick || element.getAttribute('onclick')) return true;
-    if (element.hasAttribute('tabindex') && element.getAttribute('tabindex') !== '-1') return true;
-    
-    const style = window.getComputedStyle(element);
-    if (style.cursor === 'pointer') return true;
-    
+
+    // Vue 3: __vueParentComponent
+    if (element.__vueParentComponent || element._vei?.click) return true;
+
+    // Angular: __ngContext__ or ng-click
+    if (element.__ngContext__ || element.getAttribute('ng-click') || element.getAttribute('(click)')) return true;
+
+    // data-action, data-click, data-href are common patterns in custom UIs
+    if (
+      element.hasAttribute('data-action') ||
+      element.hasAttribute('data-click') ||
+      element.hasAttribute('data-href') ||
+      element.hasAttribute('data-url') ||
+      element.hasAttribute('data-link')
+    ) return true;
+
     return false;
+  }
+
+  /**
+   * Walk up the DOM to find the most semantically meaningful interactive ancestor.
+   * e.g. if user clicks <span> inside <button>, return the <button>.
+   * If user clicks icon inside <div role="button">, return the div.
+   */
+  function findInteractableTarget(element) {
+    if (!element) return null;
+    let current = element;
+    let depth = 0;
+    while (current && depth < 5) {
+      if (isInteractable(current)) return current;
+      // Don't walk past landmarks — they aren't the button
+      const tag = current.tagName;
+      if (['MAIN', 'NAV', 'HEADER', 'FOOTER', 'SECTION', 'ARTICLE', 'FORM', 'BODY'].includes(tag)) break;
+      current = current.parentElement;
+      depth++;
+    }
+    // Fall back to original element if nothing found up the tree
+    return isInteractable(element) ? element : null;
   }
 
   function isOverlayElement(element) {
@@ -657,35 +823,100 @@
   function startCapture() {
     isCapturing = true;
     isPaused = false;
-    
+
     if (window.FlowCaptureOverlay) {
       window.FlowCaptureOverlay.startRecording();
     }
-    
+
     injectOverlay();
+    setupMutationObserver();
   }
 
   function stopCapture() {
     isCapturing = false;
     isPaused = false;
-    
+
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+      mutationObserver = null;
+    }
+    if (pendingDomChangeTimeout) {
+      clearTimeout(pendingDomChangeTimeout);
+      pendingDomChangeTimeout = null;
+    }
+
     if (window.FlowCaptureOverlay) {
       window.FlowCaptureOverlay.stopRecording(false);
     }
-    
+
     window.postMessage({
       type: 'FLOWCAPTURE_SESSION_ENDED',
       success: true
     }, window.location.origin);
   }
 
+  // Selectors that identify sensitive inputs that must be masked in screenshots
+  const SENSITIVE_INPUT_SELECTORS = [
+    'input[type="password"]',
+    'input[autocomplete="cc-number"]',
+    'input[autocomplete="cc-csc"]',
+    'input[autocomplete="cc-exp"]',
+    'input[autocomplete="cc-exp-month"]',
+    'input[autocomplete="cc-exp-year"]',
+    'input[name*="ssn"]',
+    'input[name*="social"]',
+    'input[name*="credit"]',
+    'input[name*="card"]',
+    'input[name*="cvv"]',
+    'input[name*="cvc"]',
+    'input[id*="ssn"]',
+    'input[id*="credit"]',
+    'input[id*="card-number"]',
+  ].join(',');
+
+  const MASK_ATTR = 'data-flowcapture-mask';
+
+  // Overlay opaque rectangles over sensitive fields before a screenshot.
+  // Returns a cleanup function that removes the overlays.
+  function maskSensitiveFields() {
+    const sensitiveEls = document.querySelectorAll(SENSITIVE_INPUT_SELECTORS);
+    const masks = [];
+
+    sensitiveEls.forEach((el) => {
+      try {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const mask = document.createElement('div');
+        mask.setAttribute(MASK_ATTR, '1');
+        mask.style.cssText = `
+          position: fixed;
+          left: ${rect.left}px;
+          top: ${rect.top}px;
+          width: ${rect.width}px;
+          height: ${rect.height}px;
+          background: #1a1a1a;
+          z-index: 2147483647;
+          pointer-events: none;
+          border-radius: 3px;
+        `;
+        document.body.appendChild(mask);
+        masks.push(mask);
+      } catch (_) {}
+    });
+
+    return function removeMasks() {
+      masks.forEach((m) => { if (m.parentNode) m.remove(); });
+    };
+  }
+
   function prepareForScreenshot(data) {
     const element = data?.selector ? document.querySelector(data.selector) : null;
-    
+
     if (element) {
       element.scrollIntoView({ block: 'center', behavior: 'instant' });
     }
-    
+
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (port) {
@@ -712,10 +943,11 @@
 
   function handleMouseOver(event) {
     if (!isCapturing || isPaused) return;
-    
-    const element = event.target;
-    if (!isInteractable(element)) return;
-    if (isOverlayElement(element)) return;
+    if (isOverlayElement(event.target)) return;
+
+    // Walk up to the most meaningful interactive ancestor for the highlight
+    const element = findInteractableTarget(event.target);
+    if (!element) return;
 
     if (window.FlowCaptureOverlay) {
       window.FlowCaptureOverlay.showHighlight(element);
@@ -732,15 +964,17 @@
 
   async function handleClick(event) {
     if (!isCapturing || isPaused) return;
-    
-    const element = event.target;
-    
+
+    // Walk up to find the real interactive target (e.g. <span> inside <button>)
+    const element = findInteractableTarget(event.target) || event.target;
+
     if (isOverlayElement(element)) return;
     if (!isInteractable(element)) return;
 
     if (element === lastElement && Date.now() - lastCaptureTime < DEBOUNCE_MS) return;
     lastElement = element;
     lastCaptureTime = Date.now();
+    lastClickedElement = element;
 
     const selector = generateSelector(element);
     if (!selector) return;
@@ -772,14 +1006,22 @@
         highlightBox.style.height = `${rect.height + 8}px`;
         
         document.body.appendChild(highlightBox);
-        
+
         // Wait for the highlight to render before capturing
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       }
 
-      const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
-      if (response?.dataUrl) {
-        screenshotDataUrl = response.dataUrl;
+      // Mask sensitive fields (passwords, credit cards, etc.) before screenshot
+      const removeMasks = maskSensitiveFields();
+
+      try {
+        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        if (response?.dataUrl) {
+          screenshotDataUrl = response.dataUrl;
+        }
+      } finally {
+        // Always remove masks immediately after screenshot
+        removeMasks();
       }
     } catch (e) {
       console.log('[FlowCapture] Screenshot capture failed:', e);
@@ -826,9 +1068,9 @@
     }
   }
 
-  function handleInput(event) {
+  async function handleInput(event) {
     if (!isCapturing || isPaused) return;
-    
+
     const element = event.target;
     if (isOverlayElement(element)) return;
     if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName)) return;
@@ -839,6 +1081,49 @@
 
     const selector = generateSelector(element);
     if (!selector) return;
+
+    // Capture screenshot for input steps (same as click, but no highlight box for privacy)
+    let screenshotDataUrl = null;
+    const isPasswordField = element.type === 'password';
+
+    if (!isPasswordField) {
+      // Draw a subtle focus ring around the input field in the screenshot
+      let highlightBox = null;
+      try {
+        if (document.body) {
+          highlightBox = document.createElement('div');
+          highlightBox.style.cssText = `
+            position: fixed;
+            border: 3px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 2147483646;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
+            transition: none;
+          `;
+          const rect = element.getBoundingClientRect();
+          highlightBox.style.left = `${rect.left - 4}px`;
+          highlightBox.style.top = `${rect.top - 4}px`;
+          highlightBox.style.width = `${rect.width + 8}px`;
+          highlightBox.style.height = `${rect.height + 8}px`;
+          document.body.appendChild(highlightBox);
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        }
+
+        const removeMasks = maskSensitiveFields();
+        try {
+          const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+          if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
+        } finally {
+          removeMasks();
+        }
+      } catch (e) {
+        // Screenshot failure is non-fatal for input steps
+      } finally {
+        if (highlightBox && highlightBox.parentNode) highlightBox.remove();
+      }
+    }
 
     const actionType = 'input';
     const title = generateStepTitle(element, actionType);
@@ -854,6 +1139,7 @@
       selector: selector,
       url: window.location.href,
       pageTitle: document.title,
+      screenshotDataUrl: screenshotDataUrl,
       elementMetadata: getElementMetadata(element),
       timestamp: Date.now()
     };
@@ -870,11 +1156,253 @@
     }
   }
 
+  async function handleKeyDown(event) {
+    if (!isCapturing || isPaused) return;
+    if (isOverlayElement(event.target)) return;
+
+    const key = event.key;
+    const target = event.target;
+
+    // Enter on a form element = form submission
+    if (key === 'Enter' && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON')) {
+      // Only capture if there's an associated form (prevents capturing every Enter keystroke)
+      const form = target.closest('form');
+      if (!form && target.tagName !== 'BUTTON') return;
+
+      const now = Date.now();
+      if (now - lastCaptureTime < DEBOUNCE_MS) return;
+      lastCaptureTime = now;
+
+      let screenshotDataUrl = null;
+      try {
+        const removeMasks = maskSensitiveFields();
+        try {
+          const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+          if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
+        } finally {
+          removeMasks();
+        }
+      } catch (_) {}
+
+      const metadata = getElementMetadata(target);
+      const formLabel = form
+        ? (form.getAttribute('aria-label') || form.id || 'form')
+        : null;
+
+      const step = {
+        clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        action: 'input',
+        actionType: 'input',
+        title: formLabel ? `Submit "${formLabel}"` : 'Submit Form',
+        description: `User presses Enter to submit the ${formLabel ? `"${formLabel}" ` : ''}form.`,
+        selector: generateSelector(target),
+        url: window.location.href,
+        pageTitle: document.title,
+        screenshotDataUrl,
+        elementMetadata: { ...metadata, keyPressed: 'Enter', isFormSubmit: true },
+        timestamp: Date.now()
+      };
+
+      if (window.FlowCaptureOverlay) {
+        window.FlowCaptureOverlay.incrementStepCount();
+        window.FlowCaptureOverlay.addCapturedStep(step);
+      }
+      if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+      else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    }
+
+    // Escape key = dismissing dialog/modal/dropdown
+    if (key === 'Escape') {
+      const now = Date.now();
+      if (now - lastCaptureTime < DEBOUNCE_MS) return;
+      // Only capture Escape if there's actually a modal/dialog open
+      const dialog = document.querySelector('[role="dialog"], [role="alertdialog"], .modal, [data-modal], [aria-modal="true"]');
+      if (!dialog) return;
+      lastCaptureTime = now;
+
+      const step = {
+        clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        action: 'click',
+        actionType: 'click',
+        title: 'Dismiss Dialog',
+        description: 'User presses Escape to close the dialog.',
+        selector: null,
+        url: window.location.href,
+        pageTitle: document.title,
+        screenshotDataUrl: null,
+        elementMetadata: { keyPressed: 'Escape', pageTitle: document.title, pageUrl: window.location.href },
+        timestamp: Date.now()
+      };
+
+      if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+      else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    }
+  }
+
+  function handleScroll() {
+    if (!isCapturing || isPaused) return;
+    const now = Date.now();
+    if (now - lastScrollCapture < SCROLL_DEBOUNCE_MS) return;
+
+    // Only capture significant scrolls (more than 40% of viewport height)
+    const scrollY = window.scrollY || window.pageYOffset;
+    const viewportH = window.innerHeight;
+    // We store scroll position at capture time to compare on next scroll
+    if (!handleScroll._lastY) handleScroll._lastY = 0;
+    const delta = Math.abs(scrollY - handleScroll._lastY);
+    if (delta < viewportH * 0.4) return;
+
+    handleScroll._lastY = scrollY;
+    lastScrollCapture = now;
+
+    const direction = scrollY > (handleScroll._prevY || 0) ? 'down' : 'up';
+    handleScroll._prevY = scrollY;
+
+    const step = {
+      clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: 'scroll',
+      actionType: 'scroll',
+      title: `Scroll ${direction === 'down' ? 'Down' : 'Up'} Page`,
+      description: `User scrolls ${direction} the page.`,
+      selector: null,
+      url: window.location.href,
+      pageTitle: document.title,
+      screenshotDataUrl: null,
+      elementMetadata: { scrollY: Math.round(scrollY), scrollDirection: direction, pageTitle: document.title, pageUrl: window.location.href },
+      timestamp: Date.now()
+    };
+
+    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+  }
+
+  /**
+   * Watch for significant DOM changes after a click (modals, dropdowns, tooltips appearing).
+   * When a new dialog/dropdown appears, capture it as a contextual step.
+   */
+  function setupMutationObserver() {
+    if (mutationObserver) mutationObserver.disconnect();
+
+    mutationObserver = new MutationObserver((mutations) => {
+      if (!isCapturing || isPaused) return;
+
+      // Only care about added nodes
+      let significantChange = null;
+
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+          if (isOverlayElement(node)) continue;
+
+          const tag = node.tagName;
+          const role = node.getAttribute?.('role');
+
+          // Detect modal/dialog appearing
+          if (
+            role === 'dialog' || role === 'alertdialog' ||
+            node.getAttribute?.('aria-modal') === 'true' ||
+            node.classList?.contains('modal') ||
+            node.classList?.contains('dialog') ||
+            node.hasAttribute?.('data-modal')
+          ) {
+            significantChange = { type: 'modal', label: node.getAttribute?.('aria-label') || node.querySelector?.('h1,h2,h3')?.textContent?.trim() || 'dialog' };
+            break;
+          }
+
+          // Detect dropdown/menu appearing
+          if (
+            role === 'listbox' || role === 'menu' || role === 'combobox' ||
+            node.classList?.contains('dropdown') ||
+            node.classList?.contains('popover') ||
+            node.classList?.contains('menu')
+          ) {
+            significantChange = { type: 'dropdown', label: node.getAttribute?.('aria-label') || 'menu' };
+            break;
+          }
+
+          // Detect toast/notification appearing
+          if (
+            role === 'alert' || role === 'status' || role === 'log' ||
+            node.classList?.contains('toast') ||
+            node.classList?.contains('notification') ||
+            node.classList?.contains('snackbar') ||
+            node.classList?.contains('alert')
+          ) {
+            const text = node.textContent?.trim().slice(0, 100);
+            significantChange = { type: 'notification', label: text || 'notification' };
+            break;
+          }
+        }
+        if (significantChange) break;
+      }
+
+      if (!significantChange) return;
+
+      // Debounce — only capture DOM changes within DOM_CHANGE_WINDOW_MS after a click
+      if (Date.now() - lastCaptureTime > DOM_CHANGE_WINDOW_MS * 3) return;
+      if (pendingDomChangeTimeout) clearTimeout(pendingDomChangeTimeout);
+
+      pendingDomChangeTimeout = setTimeout(async () => {
+        let screenshotDataUrl = null;
+        try {
+          const removeMasks = maskSensitiveFields();
+          try {
+            const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+            if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
+          } finally {
+            removeMasks();
+          }
+        } catch (_) {}
+
+        const typeLabels = { modal: 'Dialog Opens', dropdown: 'Menu Opens', notification: 'Notification Appears' };
+        const typeDescriptions = {
+          modal: `A dialog "${significantChange.label}" appears after the previous action.`,
+          dropdown: `A dropdown menu appears after the previous action.`,
+          notification: `A notification appears: "${significantChange.label}".`
+        };
+
+        const step = {
+          clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          action: 'click',
+          actionType: 'click',
+          title: typeLabels[significantChange.type] || 'UI Change',
+          description: typeDescriptions[significantChange.type] || 'The UI changed after the previous action.',
+          selector: null,
+          url: window.location.href,
+          pageTitle: document.title,
+          screenshotDataUrl,
+          elementMetadata: { domChange: significantChange, pageTitle: document.title, pageUrl: window.location.href },
+          timestamp: Date.now()
+        };
+
+        if (window.FlowCaptureOverlay) {
+          window.FlowCaptureOverlay.incrementStepCount();
+          window.FlowCaptureOverlay.addCapturedStep(step);
+        }
+        if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+        else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+      }, 300);
+    });
+
+    mutationObserver.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true
+    });
+  }
+
   function setupEventListeners() {
     document.addEventListener('mouseover', handleMouseOver, true);
     document.addEventListener('mouseout', handleMouseOut, true);
     document.addEventListener('click', handleClick, true);
     document.addEventListener('input', handleInput, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    // SELECT elements fire 'change' not 'input' — capture dropdown selections too
+    document.addEventListener('change', (event) => {
+      if (event.target?.tagName === 'SELECT') {
+        handleInput(event);
+      }
+    }, true);
   }
 
   function setupNavigationListeners() {

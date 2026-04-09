@@ -1390,19 +1390,293 @@
     });
   }
 
+  // ─── Drag & Drop ─────────────────────────────────────────────────────────────
+  let dragSource = null;
+  function handleDragStart(event) {
+    if (!isCapturing || isPaused) return;
+    dragSource = event.target;
+  }
+
+  async function handleDrop(event) {
+    if (!isCapturing || isPaused) return;
+    if (isOverlayElement(event.target)) return;
+
+    const now = Date.now();
+    if (now - lastCaptureTime < DEBOUNCE_MS) return;
+    lastCaptureTime = now;
+
+    let screenshotDataUrl = null;
+    try {
+      const removeMasks = maskSensitiveFields();
+      try {
+        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
+      } finally { removeMasks(); }
+    } catch (_) {}
+
+    const sourceLabel = dragSource ? getVisibleText(dragSource).slice(0, 60) : null;
+    const targetLabel = getVisibleText(event.target).slice(0, 60);
+
+    const step = {
+      clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: 'click', actionType: 'click',
+      title: sourceLabel ? `Drag "${sourceLabel}" to ${targetLabel || 'target'}` : 'Drag and Drop Item',
+      description: `User drags${sourceLabel ? ` "${sourceLabel}"` : ' an item'} and drops it${targetLabel ? ` onto "${targetLabel}"` : ''}.`,
+      selector: generateSelector(event.target),
+      url: window.location.href, pageTitle: document.title,
+      screenshotDataUrl,
+      elementMetadata: { ...getElementMetadata(event.target), isDragDrop: true, dragSourceText: sourceLabel, pageTitle: document.title, pageUrl: window.location.href },
+      timestamp: Date.now()
+    };
+    dragSource = null;
+    if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
+    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+  }
+
+  // ─── File Upload ──────────────────────────────────────────────────────────────
+  async function handleFileChange(event) {
+    if (!isCapturing || isPaused) return;
+    const input = event.target;
+    if (input.tagName !== 'INPUT' || input.type !== 'file') return;
+    if (!input.files || input.files.length === 0) return;
+    if (isOverlayElement(input)) return;
+
+    const now = Date.now();
+    if (now - lastCaptureTime < DEBOUNCE_MS) return;
+    lastCaptureTime = now;
+
+    const fileNames = Array.from(input.files).map(f => f.name).join(', ').slice(0, 80);
+    const fieldLabel = getElementLabel(input, getElementMetadata(input)) || 'file';
+
+    let screenshotDataUrl = null;
+    try {
+      const removeMasks = maskSensitiveFields();
+      try {
+        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
+      } finally { removeMasks(); }
+    } catch (_) {}
+
+    const step = {
+      clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: 'input', actionType: 'input',
+      title: `Upload File via "${fieldLabel}"`,
+      description: `User uploads ${input.files.length > 1 ? `${input.files.length} files` : `"${fileNames}"`} using the "${fieldLabel}" file input.`,
+      selector: generateSelector(input),
+      url: window.location.href, pageTitle: document.title,
+      screenshotDataUrl,
+      elementMetadata: { ...getElementMetadata(input), isFileUpload: true, fileNames, fileCount: input.files.length, pageTitle: document.title, pageUrl: window.location.href },
+      timestamp: Date.now()
+    };
+    if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
+    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+  }
+
+  // ─── Clipboard (Copy/Paste) ───────────────────────────────────────────────────
+  async function handlePaste(event) {
+    if (!isCapturing || isPaused) return;
+    if (isOverlayElement(event.target)) return;
+    const target = event.target;
+    if (!['INPUT', 'TEXTAREA'].includes(target.tagName) && !target.isContentEditable) return;
+
+    const now = Date.now();
+    if (now - lastCaptureTime < 800) return; // longer debounce for paste
+    lastCaptureTime = now;
+
+    const fieldLabel = getElementLabel(target, getElementMetadata(target)) || target.tagName.toLowerCase();
+    const text = event.clipboardData?.getData('text')?.slice(0, 50) || '';
+
+    const step = {
+      clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: 'input', actionType: 'input',
+      title: `Paste into "${fieldLabel}"`,
+      description: `User pastes${text ? ` "${text}${text.length >= 50 ? '...' : ''}"` : ' content'} into the "${fieldLabel}" field.`,
+      selector: generateSelector(target),
+      url: window.location.href, pageTitle: document.title,
+      screenshotDataUrl: null,
+      elementMetadata: { ...getElementMetadata(target), isPaste: true, pastedTextPreview: text, pageTitle: document.title, pageUrl: window.location.href },
+      timestamp: Date.now()
+    };
+    if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
+    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+  }
+
+  // ─── Right-click / Context Menu ───────────────────────────────────────────────
+  async function handleContextMenu(event) {
+    if (!isCapturing || isPaused) return;
+    if (isOverlayElement(event.target)) return;
+    const element = findInteractableTarget(event.target) || event.target;
+
+    const now = Date.now();
+    if (now - lastCaptureTime < DEBOUNCE_MS) return;
+    lastCaptureTime = now;
+
+    let screenshotDataUrl = null;
+    let highlightBox = null;
+    try {
+      if (document.body) {
+        highlightBox = document.createElement('div');
+        highlightBox.style.cssText = `position:fixed;border:3px solid #8b5cf6;background:rgba(139,92,246,0.15);border-radius:4px;pointer-events:none;z-index:2147483646;`;
+        const rect = element.getBoundingClientRect();
+        highlightBox.style.left = `${rect.left - 4}px`; highlightBox.style.top = `${rect.top - 4}px`;
+        highlightBox.style.width = `${rect.width + 8}px`; highlightBox.style.height = `${rect.height + 8}px`;
+        document.body.appendChild(highlightBox);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      }
+      const removeMasks = maskSensitiveFields();
+      try {
+        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
+      } finally { removeMasks(); }
+    } catch (_) {} finally {
+      if (highlightBox?.parentNode) highlightBox.remove();
+    }
+
+    const label = getElementLabel(element, getElementMetadata(element)) || 'element';
+    const step = {
+      clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: 'click', actionType: 'click',
+      title: `Right-click "${label}"`,
+      description: `User right-clicks on "${label}" to open a context menu.`,
+      selector: generateSelector(element),
+      url: window.location.href, pageTitle: document.title,
+      screenshotDataUrl,
+      elementMetadata: { ...getElementMetadata(element), isRightClick: true, pageTitle: document.title, pageUrl: window.location.href },
+      timestamp: Date.now()
+    };
+    if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
+    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+  }
+
+  // ─── Focus on complex widgets (date pickers, sliders, etc.) ──────────────────
+  let lastFocusedElement = null;
+  let lastFocusTime = 0;
+  function handleFocusIn(event) {
+    if (!isCapturing || isPaused) return;
+    if (isOverlayElement(event.target)) return;
+    const el = event.target;
+    // Only capture focus on non-standard complex widgets
+    const role = el.getAttribute('role');
+    const complexRoles = ['slider', 'spinbutton', 'combobox', 'listbox', 'tree', 'grid', 'treegrid', 'radiogroup'];
+    if (!complexRoles.includes(role) && el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return;
+    if (el === lastFocusedElement) return;
+    lastFocusedElement = el;
+    lastFocusTime = Date.now();
+  }
+
+  async function handleFocusOut(event) {
+    if (!isCapturing || isPaused) return;
+    if (isOverlayElement(event.target)) return;
+    const el = event.target;
+    if (el !== lastFocusedElement) return;
+
+    const role = el.getAttribute('role');
+    const complexRoles = ['slider', 'spinbutton'];
+    if (!complexRoles.includes(role)) { lastFocusedElement = null; return; }
+
+    // Only capture if user spent time on widget and value changed
+    if (Date.now() - lastFocusTime < 500) { lastFocusedElement = null; return; }
+
+    const now = Date.now();
+    if (now - lastCaptureTime < DEBOUNCE_MS) { lastFocusedElement = null; return; }
+    lastCaptureTime = now;
+    lastFocusedElement = null;
+
+    const value = el.getAttribute('aria-valuenow') || el.getAttribute('aria-valuetext') || el.value || '';
+    const label = el.getAttribute('aria-label') || el.getAttribute('title') || role;
+
+    const step = {
+      clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      action: 'input', actionType: 'input',
+      title: `Set "${label}" to ${value}`,
+      description: `User sets the "${label}" ${role} to ${value || 'a value'}.`,
+      selector: generateSelector(el),
+      url: window.location.href, pageTitle: document.title,
+      screenshotDataUrl: null,
+      elementMetadata: { ...getElementMetadata(el), widgetValue: value, pageTitle: document.title, pageUrl: window.location.href },
+      timestamp: Date.now()
+    };
+    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+  }
+
+  // ─── Shadow DOM support ───────────────────────────────────────────────────────
+  // Shadow DOM hosts are invisible to regular event listeners unless we pierce them.
+  // We use event delegation: clicks bubble up through shadow roots to the document in
+  // composed event paths. We re-read event.composedPath() to find the real target.
+  function getRealTarget(event) {
+    try {
+      const path = event.composedPath();
+      if (path && path.length > 0) return path[0];
+    } catch (_) {}
+    return event.target;
+  }
+
+  // Override existing handlers to use composedPath for Shadow DOM
+  const _origHandleClick = handleClick;
+  handleClick = async function(event) {
+    // Swap real target from composed path before delegating
+    try {
+      const realTarget = getRealTarget(event);
+      if (realTarget !== event.target) {
+        Object.defineProperty(event, 'target', { value: realTarget, configurable: true });
+      }
+    } catch (_) {}
+    return _origHandleClick(event);
+  };
+
+  // ─── iframe bridging ──────────────────────────────────────────────────────────
+  // Content scripts run in iframes too (all_frames: false in manifest, but we can
+  // listen for postMessage from child frames to capture steps happening in iframes).
+  function setupIframeBridge() {
+    window.addEventListener('message', (event) => {
+      if (!isCapturing || isPaused) return;
+      if (event.data?.type !== 'FLOWCAPTURE_IFRAME_STEP') return;
+      // Forward iframe steps to the service worker
+      const step = event.data.step;
+      if (!step) return;
+      if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
+      else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    });
+
+    // Also emit our own steps to parent window (if we're in an iframe)
+    if (window !== window.top) {
+      const _origSend = function(step) {
+        try { window.parent.postMessage({ type: 'FLOWCAPTURE_IFRAME_STEP', step }, '*'); } catch (_) {}
+      };
+      // Patch the step emission functions to also forward to parent
+      const origPortPost = port ? port.postMessage.bind(port) : null;
+      if (port) {
+        const origPost = port.postMessage.bind(port);
+        port.postMessage = function(msg) {
+          if (msg?.type === MessageTypes.STEP_CAPTURED) _origSend(msg.data);
+          return origPost(msg);
+        };
+      }
+    }
+  }
+
   function setupEventListeners() {
     document.addEventListener('mouseover', handleMouseOver, true);
     document.addEventListener('mouseout', handleMouseOut, true);
     document.addEventListener('click', handleClick, true);
     document.addEventListener('input', handleInput, true);
     document.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    // SELECT elements fire 'change' not 'input' — capture dropdown selections too
+    document.addEventListener('dragstart', handleDragStart, true);
+    document.addEventListener('drop', handleDrop, true);
     document.addEventListener('change', (event) => {
-      if (event.target?.tagName === 'SELECT') {
-        handleInput(event);
-      }
+      if (event.target?.tagName === 'SELECT') handleInput(event);
+      if (event.target?.tagName === 'INPUT' && event.target?.type === 'file') handleFileChange(event);
     }, true);
+    document.addEventListener('paste', handlePaste, true);
+    document.addEventListener('contextmenu', handleContextMenu, true);
+    document.addEventListener('focusin', handleFocusIn, true);
+    document.addEventListener('focusout', handleFocusOut, true);
+    window.addEventListener('scroll', handleScroll, { passive: true });
   }
 
   function setupNavigationListeners() {
@@ -1501,6 +1775,7 @@
     setupEventListeners();
     setupMessageListener();
     setupNavigationListeners();
+    setupIframeBridge();
     connectPort();
 
     try {

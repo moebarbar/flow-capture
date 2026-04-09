@@ -9,6 +9,7 @@ import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { anthropic } from "./lib/anthropic";
 import { analyzeStepWithVision } from "./services/visionService";
+import { runGuideIntelligence } from "./services/guideIntelligenceService";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { insertBlogPostSchema, users, steps, guideVersions, SUPPORTED_LANGUAGES } from "@shared/schema";
@@ -443,7 +444,18 @@ export async function registerRoutes(
       if (step.imageUrl && process.env.ANTHROPIC_API_KEY) {
         const appBaseUrl = process.env.APP_URL || `http://localhost:${process.env.PORT || 5000}`;
         const meta = (req.body.metadata || {}) as Record<string, any>;
-        setImmediate(() => {
+        setImmediate(async () => {
+          // Fetch previous step titles for workflow chain context
+          let previousStepTitles: string[] = [];
+          try {
+            const prevSteps = await storage.getStepsByGuide(guideId);
+            previousStepTitles = prevSteps
+              .filter(s => s.id !== step.id && s.order < step.order)
+              .sort((a, b) => a.order - b.order)
+              .slice(-5) // last 5 steps for context
+              .map(s => s.title || 'Untitled step');
+          } catch (_) {}
+
           analyzeStepWithVision(step.id, step.imageUrl!, {
             actionType: step.actionType,
             selector: step.selector,
@@ -452,10 +464,22 @@ export async function registerRoutes(
             elementTag: meta.tagName || null,
             elementRole: meta.role || null,
             ariaLabel: meta.ariaLabel || null,
+            associatedLabel: meta.associatedLabel || null,
             placeholder: meta.placeholder || null,
             inputValue: meta.value || null,
             pageTitle: meta.pageTitle || req.body.tabTitle || null,
-          }, appBaseUrl);
+            nearestHeading: meta.nearestHeading || null,
+            pageSection: meta.pageSection || null,
+            formContext: meta.formContext || null,
+            isDragDrop: meta.isDragDrop || false,
+            isFileUpload: meta.isFileUpload || false,
+            isPaste: meta.isPaste || false,
+            isRightClick: meta.isRightClick || false,
+            isFormSubmit: meta.isFormSubmit || false,
+            domChange: meta.domChange || null,
+            fileNames: meta.fileNames || null,
+            pastedTextPreview: meta.pastedTextPreview || null,
+          }, appBaseUrl, previousStepTitles);
         });
       }
     } catch (err) {
@@ -1827,16 +1851,21 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       
       const { captureService } = await import("./services/captureService");
       const session = await captureService.stopSession(guideId, userId);
-      
+
       if (!session) {
         return res.status(404).json({ message: "No active capture session found" });
       }
-      
+
       res.json({
         stepsCreated: session.eventsReceived,
-        duration: session.stoppedAt ? 
+        duration: session.stoppedAt ?
           (session.stoppedAt.getTime() - session.startedAt.getTime()) / 1000 : 0,
       });
+
+      // Fire guide-level intelligence analysis in background after capture stops
+      if (process.env.ANTHROPIC_API_KEY) {
+        setImmediate(() => runGuideIntelligence(guideId));
+      }
     } catch (error) {
       console.error("Stop capture error:", error);
       res.status(500).json({ message: "Failed to stop capture session" });

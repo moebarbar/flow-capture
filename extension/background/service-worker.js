@@ -1335,11 +1335,13 @@ async function uploadScreenshot(dataUrl) {
 }
 
 /**
- * Crop a full-page screenshot to show the clicked element with context padding.
+ * Crop a full-page screenshot tightly around the clicked element, then overlay
+ * a click-indicator (ripple + dot) so it's obvious where the user clicked.
  * rect is in CSS pixels; dpr scales it to physical pixels in the captured image.
  */
 async function cropScreenshotToElement(dataUrl, rect, dpr) {
-  const PADDING_CSS = 80; // extra padding around the element in CSS pixels
+  // Keep padding small so the element fills the frame and the action is obvious
+  const PADDING_CSS = 40;
 
   const blob = dataUrlToBlob(dataUrl);
   const bitmap = await createImageBitmap(blob);
@@ -1358,9 +1360,9 @@ async function cropScreenshotToElement(dataUrl, rect, dpr) {
     return dataUrl; // fallback: element not visible in screenshot
   }
 
-  // Scale down so output stays under 1200px wide (saves storage, fast to render)
-  const MAX_OUT_WIDTH = 1200;
-  const scale = cropW > MAX_OUT_WIDTH ? MAX_OUT_WIDTH / cropW : 1;
+  // Scale so output is ~800px wide (tight zoom, loads fast, looks sharp)
+  const TARGET_WIDTH = 800;
+  const scale = cropW > TARGET_WIDTH ? TARGET_WIDTH / cropW : 1;
   const outW = Math.round(cropW * scale);
   const outH = Math.round(cropH * scale);
 
@@ -1368,6 +1370,41 @@ async function cropScreenshotToElement(dataUrl, rect, dpr) {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(bitmap, pLeft, pTop, cropW, cropH, 0, 0, outW, outH);
   bitmap.close();
+
+  // ── Click indicator ──────────────────────────────────────────────────────────
+  // Compute the element center position in the output canvas
+  const elemCenterXPhys = (rect.left + rect.width  / 2) * dpr;
+  const elemCenterYPhys = (rect.top  + rect.height / 2) * dpr;
+  const cx = Math.round((elemCenterXPhys - pLeft) * scale);
+  const cy = Math.round((elemCenterYPhys - pTop ) * scale);
+
+  // Outer ring (ripple)
+  const rippleR = Math.round(Math.max(18, Math.min(rect.width, rect.height) * dpr * scale * 0.55));
+  ctx.beginPath();
+  ctx.arc(cx, cy, rippleR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+  ctx.lineWidth = Math.max(2, rippleR * 0.18);
+  ctx.stroke();
+
+  // Middle ring
+  const midR = Math.round(rippleR * 0.6);
+  ctx.beginPath();
+  ctx.arc(cx, cy, midR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
+  ctx.lineWidth = Math.max(1.5, midR * 0.15);
+  ctx.stroke();
+
+  // Solid center dot
+  const dotR = Math.max(4, Math.round(midR * 0.35));
+  ctx.beginPath();
+  ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+  ctx.fillStyle = '#ef4444';
+  ctx.fill();
+
+  // ── Subtle dim border to frame the crop ─────────────────────────────────────
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, outW - 1, outH - 1);
 
   const compressed = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 });
   const buf = await compressed.arrayBuffer();

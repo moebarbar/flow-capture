@@ -823,13 +823,14 @@ async function stopCapture() {
     let uploaded = 0;
     for (const step of steps) {
       try {
-        // Upload screenshot if we have a local data URL
+        // Upload screenshot to GCS; fall back to inline data URL if upload fails
         let imageUrl = step.screenshotUrl || null;
         if (!imageUrl && step.screenshotDataUrl) {
           try {
             imageUrl = await uploadScreenshot(step.screenshotDataUrl);
           } catch (e) {
-            console.warn('[FlowCapture] Screenshot upload failed for step', step.order, e.message);
+            console.warn('[FlowCapture] GCS upload failed, storing screenshot inline:', e.message);
+            imageUrl = step.screenshotDataUrl; // store base64 data URL directly in DB
           }
         }
         // Save step to server

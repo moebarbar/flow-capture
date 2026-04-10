@@ -4,7 +4,7 @@
  */
 
 import { MessageTypes, PortNames, CaptureStates, WebAppMessageTypes } from '../shared/messages.js';
-import { saveSession, clearSession, savePendingSteps, getPendingSteps } from '../shared/storage.js';
+import { saveSession, clearSession, savePendingSteps, getPendingSteps, clearPendingSteps } from '../shared/storage.js';
 import { syncManager, SyncStatus } from './sync-manager.js';
 
 class CaptureStateMachine {
@@ -183,12 +183,18 @@ class CaptureStateMachine {
 
 const machine = new CaptureStateMachine();
 
-// On startup: load stored extension token so the sync manager can authenticate
-// immediately, even before the user opens the web app.
+// On startup: restore auth token and any steps that survived a service worker restart.
 (async () => {
-  const loaded = await syncManager.loadStoredToken();
-  if (!loaded) {
-    console.log('[FlowCapture] No stored extension token, will request one when apiBaseUrl is known');
+  await syncManager.loadStoredToken();
+
+  // Recover steps saved during a capture session that was interrupted by SW termination
+  const pending = await getPendingSteps();
+  if (pending && pending.length > 0) {
+    console.log(`[FlowCapture] Recovered ${pending.length} pending steps from storage`);
+    for (const step of pending) {
+      machine.state.steps.push(step);
+      machine.state.stepCounter = Math.max(machine.state.stepCounter, step.order || 0);
+    }
   }
 })();
 
@@ -811,15 +817,37 @@ async function stopCapture() {
 
   await broadcastToAllTabs(MessageTypes.STOP_CAPTURE);
 
+  // BATCH UPLOAD: now that capture is done, upload screenshots + save steps to server
   if (steps.length > 0 && apiBaseUrl && guideId) {
-    try {
-      const flushResult = await syncManager.flush();
-      console.log('[FlowCapture] Sync flush complete:', flushResult);
-    } catch (e) {
-      console.error('[FlowCapture] Sync flush failed:', e);
+    console.log(`[FlowCapture] Batch uploading ${steps.length} steps...`);
+    let uploaded = 0;
+    for (const step of steps) {
+      try {
+        // Upload screenshot if we have a local data URL
+        let imageUrl = step.screenshotUrl || null;
+        if (!imageUrl && step.screenshotDataUrl) {
+          try {
+            imageUrl = await uploadScreenshot(step.screenshotDataUrl);
+          } catch (e) {
+            console.warn('[FlowCapture] Screenshot upload failed for step', step.order, e.message);
+          }
+        }
+        // Save step to server
+        await saveStepToServer({ ...step, screenshotUrl: imageUrl });
+        uploaded++;
+        // Broadcast progress so the editor can show a progress indicator
+        machine.ports.forEach(port => {
+          try { port.postMessage({ type: 'UPLOAD_PROGRESS', data: { uploaded, total: steps.length } }); } catch {}
+        });
+      } catch (e) {
+        console.error('[FlowCapture] Failed to save step', step.order, e.message);
+      }
     }
+    console.log(`[FlowCapture] Batch upload complete: ${uploaded}/${steps.length} steps saved`);
   }
 
+  // Clear local pending steps now that they're on the server
+  await clearPendingSteps();
   syncManager.stopPeriodicSync();
   machine.transition(CaptureStates.IDLE);
 
@@ -907,22 +935,14 @@ async function handleStepCaptured(stepData, tabId) {
     }
   }
   
-  if (stepData.screenshotDataUrl) {
+  // LOCAL-FIRST: capture screenshot now, store in memory. No uploads during capture.
+  let localScreenshotDataUrl = stepData.screenshotDataUrl || null;
+  if (!localScreenshotDataUrl && targetTabId) {
     try {
-      screenshotUrl = await uploadScreenshot(stepData.screenshotDataUrl);
-    } catch (e) {
-      console.error('[FlowCapture] Screenshot upload failed:', e);
-    }
-  } else if (targetTabId) {
-    try {
-      await prepareScreenshotAndCapture(targetTabId, stepData.selector);
-      
       const screenshot = await captureScreenshot(targetTabId);
-      if (screenshot.dataUrl) {
-        screenshotUrl = await uploadScreenshot(screenshot.dataUrl);
-      }
+      localScreenshotDataUrl = screenshot.dataUrl || null;
     } catch (e) {
-      console.error('[FlowCapture] Screenshot capture failed:', e);
+      console.warn('[FlowCapture] Screenshot capture skipped:', e.message);
     }
   }
 
@@ -936,24 +956,24 @@ async function handleStepCaptured(stepData, tabId) {
     tabUrl: tabContext?.url || stepData.url,
     tabTitle: tabContext?.title || '',
     url: stepData.url,
-    screenshotUrl,
-    screenshotDataUrl: null,
+    screenshotUrl: null,           // will be set during batch upload at stop
+    screenshotDataUrl: localScreenshotDataUrl,
     elementMetadata: stepData.elementMetadata || {},
     timestamp: stepData.timestamp || Date.now(),
-    tabId: tabId || machine.state.activeTabId,
     title: stepData.title || `Step ${machine.state.stepCounter}`,
     description: stepData.description || ''
   });
 
-  console.log('[FlowCapture] Step captured:', step.order, step.selector);
+  console.log('[FlowCapture] Step stored locally:', step.order, step.selector);
 
-  if (machine.state.apiBaseUrl && machine.state.guideId) {
-    step.screenshotDataUrl = screenshotUrl ? null : stepData.screenshotDataUrl;
-    syncManager.enqueueStep(step);
-  }
+  // Persist all steps to chrome.storage so they survive service worker termination
+  await savePendingSteps(machine.state.steps.map(s => ({
+    ...s,
+    screenshotDataUrl: s.screenshotDataUrl // keep data URLs in storage
+  })));
 
-  await broadcastToAllTabs('STEP_ADDED', { ...step });
-  
+  await broadcastToAllTabs('STEP_ADDED', { ...step, screenshotDataUrl: null });
+
   machine.broadcastStateUpdate();
 
   return { success: true, stepCount: machine.state.steps.length, step };

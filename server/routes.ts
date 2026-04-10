@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { setupAuth, registerAuthRoutes, createExtensionToken } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, createExtensionToken, isAuthenticated } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
@@ -290,8 +290,7 @@ export async function registerRoutes(
   // Single endpoint for the popup to call before starting a capture session.
   // It ensures the user has a workspace, creates a fresh guide, and returns the guideId.
   // Works with both cookie sessions and Bearer token auth (so the popup can call it directly).
-  app.post('/api/extension/start-capture', async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+  app.post('/api/extension/start-capture', isAuthenticated, async (req, res) => {
     const user = req.user as any;
     const userId = user.claims.sub;
     const firstName = user.claims.first_name || "My";
@@ -462,8 +461,7 @@ export async function registerRoutes(
     res.json(steps);
   });
 
-  app.post(api.steps.create.path, async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+  app.post(api.steps.create.path, isAuthenticated, async (req, res) => {
     const user = req.user as any;
     const userId = user.claims.sub;
     const guideId = Number(req.params.guideId);
@@ -1815,9 +1813,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // === CAPTURE ENDPOINTS ===
   
   // Start a capture session for a guide
-  app.post("/api/guides/:id/capture/start", async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+  app.post("/api/guides/:id/capture/start", isAuthenticated, async (req, res) => {
     try {
       const guideId = Number(req.params.id);
       const userId = (req.user as any).claims.sub;

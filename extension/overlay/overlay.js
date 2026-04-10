@@ -71,13 +71,12 @@
         box-shadow: 0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1);
         user-select: none;
         opacity: 0;
-        transform: translateY(10px);
-        transition: opacity 0.2s, transform 0.2s;
+        display: none;
       }
-      
+
       .control-panel.visible {
         opacity: 1;
-        transform: translateY(0);
+        display: flex;
       }
       
       .status {
@@ -219,16 +218,14 @@
         pointer-events: auto;
         box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
         opacity: 0;
-        transform: translateY(20px) scale(0.95);
-        transition: opacity 0.3s, transform 0.3s;
+        display: none;
         overflow: hidden;
-        display: flex;
         flex-direction: column;
       }
-      
+
       .preview-panel.visible {
         opacity: 1;
-        transform: translateY(0) scale(1);
+        display: flex;
       }
       
       .preview-panel.collapsed {
@@ -310,18 +307,6 @@
         border-radius: 12px;
         overflow: hidden;
         border: 1px solid rgba(255,255,255,0.08);
-        animation: slideIn 0.3s ease-out;
-      }
-      
-      @keyframes slideIn {
-        from {
-          opacity: 0;
-          transform: translateY(-10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
       }
       
       .step-card-header {
@@ -579,16 +564,39 @@
   function stopRecording(userInitiated = false) {
     isRecording = false;
     isPaused = false;
-    
-    controlPanel.classList.remove('visible');
-    previewPanel.classList.remove('visible');
     hideHighlight();
-    
-    cleanupBlobUrls(capturedSteps);
-    capturedSteps = [];
-    
+
     if (userInitiated) {
       chrome.runtime.sendMessage({ type: 'STOP_CAPTURE' }).catch(() => {});
+    }
+
+    // Show a brief "Finished" state on the control panel instead of hiding it.
+    // This keeps the user informed that capture completed successfully.
+    if (controlPanel) {
+      const statusText = shadow.querySelector('.status-text');
+      const statusDot = shadow.querySelector('.status-dot');
+      const stepCountEl = shadow.querySelector('.step-count');
+      if (statusText) statusText.textContent = 'Finished';
+      if (statusDot) {
+        statusDot.style.animation = 'none';
+        statusDot.style.background = '#22c55e';
+        statusDot.style.boxShadow = '0 0 8px rgba(34,197,94,0.6)';
+      }
+      // Hide the pause/stop buttons after capture ends
+      const pauseBtn = shadow.querySelector('.btn-pause, .btn-resume');
+      const stopBtn = shadow.querySelector('.btn-stop');
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      if (stopBtn) stopBtn.style.display = 'none';
+
+      // Auto-hide the overlay after 4 seconds so it doesn't clutter the screen
+      setTimeout(() => {
+        if (!isRecording && controlPanel) {
+          controlPanel.classList.remove('visible');
+          previewPanel.classList.remove('visible');
+          cleanupBlobUrls(capturedSteps);
+          capturedSteps = [];
+        }
+      }, 4000);
     }
   }
 

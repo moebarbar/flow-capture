@@ -981,37 +981,24 @@
     const selector = generateSelector(element);
     if (!selector) return;
 
-    // Create persistent highlight box that will appear in the screenshot
-    let highlightBox = null;
-    let screenshotDataUrl = null;
-    
-    try {
-      // Only create highlight if document.body is available
-      if (document.body) {
-        highlightBox = document.createElement('div');
-        highlightBox.id = 'flowcapture-screenshot-highlight';
-        highlightBox.style.cssText = `
-          position: fixed;
-          border: 3px solid #ef4444;
-          background: rgba(239, 68, 68, 0.15);
-          border-radius: 4px;
-          pointer-events: none;
-          z-index: 2147483646;
-          box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3);
-          transition: none;
-        `;
-        
-        const rect = element.getBoundingClientRect();
-        highlightBox.style.left = `${rect.left - 4}px`;
-        highlightBox.style.top = `${rect.top - 4}px`;
-        highlightBox.style.width = `${rect.width + 8}px`;
-        highlightBox.style.height = `${rect.height + 8}px`;
-        
-        document.body.appendChild(highlightBox);
+    // Capture element metadata NOW (before async ops) so the rect is correct
+    // even if the element is removed from DOM after the click (SPA navigation, etc.)
+    const elementMetadata = getElementMetadata(element);
+    const actionType = 'click';
+    const title = generateStepTitle(element, actionType);
+    const description = generateStepDescription(element, actionType);
 
-        // Wait for the highlight to render before capturing
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      }
+    let screenshotDataUrl = null;
+
+    try {
+      // Hide all FlowCapture UI elements so they don't appear in the screenshot
+      const overlayEl = document.getElementById('flowcapture-overlay');
+      const panelEl = document.getElementById('flowcapture-side-panel-host');
+      if (overlayEl) overlayEl.style.visibility = 'hidden';
+      if (panelEl) panelEl.style.visibility = 'hidden';
+
+      // Wait two frames for the browser to repaint without the overlay
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       // Mask sensitive fields (passwords, credit cards, etc.) before screenshot
       const removeMasks = maskSensitiveFields();
@@ -1022,26 +1009,16 @@
           screenshotDataUrl = response.dataUrl;
         }
       } finally {
-        // Always remove masks immediately after screenshot
         removeMasks();
       }
+
+      // Restore FlowCapture UI
+      if (overlayEl) overlayEl.style.visibility = '';
+      if (panelEl) panelEl.style.visibility = '';
     } catch (e) {
       console.log('[FlowCapture] Screenshot capture failed:', e);
-    } finally {
-      // Always clean up the highlight, even if errors occur
-      if (highlightBox && highlightBox.parentNode) {
-        highlightBox.remove();
-      }
-      // Also clean up any orphaned highlights from previous captures
-      const orphanedHighlight = document.getElementById('flowcapture-screenshot-highlight');
-      if (orphanedHighlight) {
-        orphanedHighlight.remove();
-      }
     }
 
-    const actionType = 'click';
-    const title = generateStepTitle(element, actionType);
-    const description = generateStepDescription(element, actionType);
     const clientStepId = `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const step = {
@@ -1054,7 +1031,7 @@
       url: window.location.href,
       pageTitle: document.title,
       screenshotDataUrl: screenshotDataUrl,
-      elementMetadata: getElementMetadata(element),
+      elementMetadata: elementMetadata,
       timestamp: Date.now()
     };
 
@@ -1279,16 +1256,20 @@
   }
 
   /**
-   * Watch for significant DOM changes after a click (modals, dropdowns, tooltips appearing).
-   * When a new dialog/dropdown appears, capture it as a contextual step.
+   * MutationObserver is disabled: it caused every click to be recorded twice
+   * because most modern SPAs open a dropdown/tooltip/popover on click, which
+   * the observer mistook for a separate navigation event and added a 2nd step.
    */
   function setupMutationObserver() {
-    if (mutationObserver) mutationObserver.disconnect();
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+      mutationObserver = null;
+    }
+    return; // disabled
 
+    // Dead code below kept for reference only
     mutationObserver = new MutationObserver((mutations) => {
       if (!isCapturing || isPaused) return;
-
-      // Only care about added nodes
       let significantChange = null;
 
       for (const mutation of mutations) {

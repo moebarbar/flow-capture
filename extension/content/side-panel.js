@@ -144,7 +144,6 @@
       justify-content: center;
       pointer-events: auto;
       box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
-      transition: background 0.2s, left 0.3s;
     }
 
     .toggle-tab:hover {
@@ -172,7 +171,6 @@
       flex-direction: column;
       pointer-events: auto;
       transform: translateX(0);
-      transition: transform 0.3s ease, width 0.3s ease;
     }
 
     .panel-container.collapsed {

@@ -915,9 +915,32 @@ async function stopCapture() {
   };
 }
 
+// Deduplication: track recently processed clientStepIds to reject duplicates
+// (multiple code paths can both deliver the same step within milliseconds)
+const _recentStepIds = new Map(); // clientStepId -> timestamp
+const _STEP_DEDUP_TTL_MS = 5000;
+
+function _isRecentDuplicate(clientStepId) {
+  if (!clientStepId) return false;
+  const now = Date.now();
+  // Evict expired entries
+  for (const [id, ts] of _recentStepIds) {
+    if (now - ts > _STEP_DEDUP_TTL_MS) _recentStepIds.delete(id);
+  }
+  if (_recentStepIds.has(clientStepId)) return true;
+  _recentStepIds.set(clientStepId, now);
+  return false;
+}
+
 async function handleStepCaptured(stepData, tabId) {
   if (machine.state.status !== CaptureStates.CAPTURING) {
     return { success: false, error: 'Not capturing' };
+  }
+
+  // Reject duplicate deliveries of the same step
+  if (_isRecentDuplicate(stepData?.clientStepId)) {
+    console.log('[FlowCapture] Duplicate step rejected:', stepData?.clientStepId);
+    return { success: true, duplicate: true, stepCount: machine.state.steps.length };
   }
 
   let screenshotUrl = null;

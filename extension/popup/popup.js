@@ -1,3 +1,5 @@
+const DEFAULT_API_URL = 'https://flow-capture-production.up.railway.app';
+
 document.addEventListener('DOMContentLoaded', async () => {
   const notRecordingPanel = document.getElementById('not-recording');
   const capturingPanel = document.getElementById('capturing');
@@ -58,8 +60,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateActivePreset(settings.highlightColor);
       }
       
-      if (settings.apiBaseUrl) {
-        apiUrlInput.value = settings.apiBaseUrl;
+      // Pre-fill with stored URL or the default production URL
+      apiUrlInput.value = settings.apiBaseUrl || DEFAULT_API_URL;
+      if (!settings.apiBaseUrl) {
+        await chrome.storage.local.set({ apiBaseUrl: DEFAULT_API_URL });
       }
 
       if (state?.isCapturing) {
@@ -71,10 +75,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         finalStepCount.textContent = lastCaptureResult.stepCount;
       } else {
         showPanel(notRecordingPanel);
-        // Show settings automatically on first run (no apiBaseUrl configured)
-        if (!settings.apiBaseUrl) {
-          settingsModal.classList.remove('hidden');
-        }
       }
     } catch (e) {
       console.error('Failed to get state:', e);
@@ -210,12 +210,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await chrome.storage.local.set({ highlightColor });
 
     const settings = await chrome.storage.local.get(['apiBaseUrl', 'flowcapture_extension_token']);
-    const storedApiBaseUrl = settings.apiBaseUrl || '';
-
-    if (!storedApiBaseUrl) {
-      tabList.innerHTML = '<div class="tab-error">Please set your Dashboard URL in Settings first.</div>';
-      return;
-    }
+    const storedApiBaseUrl = settings.apiBaseUrl || DEFAULT_API_URL;
 
     const loadingEl = document.createElement('div');
     loadingEl.className = 'tab-loading';
@@ -366,12 +361,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     if (apiBaseUrl && lastCaptureResult?.guideId) {
-      // Open the editor directly
       chrome.tabs.create({ url: `${apiBaseUrl}/guides/${lastCaptureResult.guideId}/edit` });
-    } else if (apiBaseUrl) {
-      chrome.tabs.create({ url: apiBaseUrl });
     } else {
-      alert('Please configure your Dashboard URL in Settings first.');
+      chrome.tabs.create({ url: apiBaseUrl || DEFAULT_API_URL });
     }
   });
 
@@ -403,7 +395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (apiBaseUrl) {
       chrome.tabs.create({ url: apiBaseUrl });
     } else {
-      alert('Please configure your Dashboard URL in Settings first.');
+      chrome.tabs.create({ url: DEFAULT_API_URL });
       settingsModal.classList.remove('hidden');
     }
   });

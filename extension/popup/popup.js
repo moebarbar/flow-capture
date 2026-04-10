@@ -178,10 +178,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         tabItem.dataset.tabId = tab.id;
         tabItem.dataset.testid = `tab-item-${tab.id}`;
         
-        const favicon = tab.favIconUrl 
-          ? `<img src="${escapeHtml(tab.favIconUrl)}" class="tab-favicon" onerror="this.style.display='none'"/>`
+        const favicon = tab.favIconUrl
+          ? `<img src="${escapeHtml(tab.favIconUrl)}" class="tab-favicon"/>`
           : '<div class="tab-favicon-placeholder"></div>';
-        
+
         tabItem.innerHTML = `
           ${favicon}
           <div class="tab-info">
@@ -191,6 +191,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           ${tab.active ? '<span class="tab-active-badge">Active</span>' : ''}
         `;
         
+        // Hide broken favicons without an inline onerror (blocked by CSP)
+        const faviconImg = tabItem.querySelector('.tab-favicon');
+        if (faviconImg) {
+          faviconImg.addEventListener('error', () => { faviconImg.style.display = 'none'; });
+        }
+
         tabItem.addEventListener('click', () => selectTabAndStartCapture(tab.id));
         tabList.appendChild(tabItem);
       });
@@ -265,24 +271,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      const { guideId, workspaceId } = await startRes.json();
+      const startData = await startRes.json();
+      const { guideId, workspaceId } = startData;
 
-      // Step 3: If we don't have a token yet, acquire one now
-      if (!extensionToken) {
-        try {
-          const tokenRes = await fetch(`${storedApiBaseUrl}/api/auth/extension-token`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-          });
-          if (tokenRes.ok) {
-            const tokenData = await tokenRes.json();
-            extensionToken = tokenData.token;
-            await chrome.storage.local.set({ flowcapture_extension_token: extensionToken });
-          }
-        } catch (e) {
-          console.warn('[Popup] Could not acquire extension token:', e.message);
-        }
+      // Server returns extensionToken directly — no second round-trip needed
+      if (startData.extensionToken) {
+        extensionToken = startData.extensionToken;
+        await chrome.storage.local.set({ flowcapture_extension_token: extensionToken });
       }
 
       const result = await chrome.runtime.sendMessage({

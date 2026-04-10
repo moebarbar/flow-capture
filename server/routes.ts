@@ -318,7 +318,8 @@ export async function registerRoutes(
         createdById: userId,
       });
 
-      res.json({ guideId: guide.id, workspaceId: workspace.id });
+      const extensionToken = createExtensionToken(userId);
+      res.json({ guideId: guide.id, workspaceId: workspace.id, extensionToken });
     } catch (err) {
       console.error('[extension/start-capture] Error:', err);
       res.status(500).json({ message: "Failed to start capture" });

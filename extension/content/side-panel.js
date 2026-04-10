@@ -821,11 +821,23 @@
       togglePanel();
     });
 
-    btnStartStop?.addEventListener('click', (e) => {
+    btnStartStop?.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (isCapturing) {
         sendMessage('STOP_CAPTURE');
       } else {
+        // Check permissions first — if not granted, show the popup instead
+        try {
+          const permRes = await chrome.runtime.sendMessage({ type: 'CHECK_PERMISSIONS' });
+          if (!permRes?.hasPermission) {
+            // Can't request permissions from content script user gesture in all browsers.
+            // Instead, open the extension popup via keyboard shortcut hint.
+            alert('FlowCapture needs site access.\nClick the FlowCapture icon in the browser toolbar to grant permissions.');
+            return;
+          }
+        } catch (e) {
+          // If message fails, proceed anyway
+        }
         sendMessage('START_CAPTURE');
       }
     });

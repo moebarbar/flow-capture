@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRoute } from "wouter";
 import { useGuide, useUpdateGuide } from "@/hooks/use-guides";
 import { useSteps, useCreateStep, useUpdateStep, useReorderSteps, useDeleteStep } from "@/hooks/use-steps";
+import { api } from "@shared/routes";
 import { useCollections, useMoveFlowToCollection } from "@/hooks/use-collections";
 import { useWorkspace } from "@/hooks/use-workspaces";
 import { useGenerateDescription } from "@/hooks/use-ai";
@@ -22,11 +23,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Save, ArrowLeft, Wand2, MoreHorizontal, Trash2, 
+  Save, ArrowLeft, Wand2, MoreHorizontal, Trash2,
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
   Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play, X,
-  ClipboardList, GraduationCap, Library, HelpCircle
+  ClipboardList, GraduationCap, Library, HelpCircle, History, RotateCcw
 } from "lucide-react";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
@@ -72,6 +73,7 @@ export default function GuideEditor() {
   const [redactionDialogOpen, setRedactionDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [kbConvertDialogOpen, setKbConvertDialogOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [captureToken, setCaptureToken] = useState<string | null>(null);
   const [captureSessionNonce, setCaptureSessionNonce] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export default function GuideEditor() {
   });
 
   // Function to send session to extension via postMessage (for recovery/sync)
-  const sendSessionToExtension = (session: { token: string; guideId: number; expiresAt: string; apiBaseUrl?: string; workspaceId?: number }) => {
+  const sendSessionToExtension = (session: { token: string; guideId: number; expiresAt: string; apiBaseUrl?: string; workspaceId?: number; extensionToken?: string }) => {
     // Use window.origin for security - only same-origin pages can receive this message
     // Include complete payload so recovery scenarios can fully configure state
     window.postMessage({ 
@@ -195,15 +197,16 @@ export default function GuideEditor() {
         expiresAt: data.expiresAt,
         apiBaseUrl: window.location.origin,
         workspaceId: guide?.workspaceId,
+        extensionToken: data.extensionToken, // Bearer token so extension can sync without cookies
       };
-      
+
       // CRITICAL: First send SET_SESSION to establish session persistence in background FSM
       // This ensures the canonical session saving path is used for reconnects
       sendSessionToExtension(session);
-      
+
       // Then open tab selector so user can pick which tab to capture
       startCaptureSessionWithTabSelector(session);
-      
+
       // Also store in localStorage as fallback for session recovery
       localStorage.setItem('flowcapture_session', JSON.stringify(session));
       
@@ -231,7 +234,7 @@ export default function GuideEditor() {
       localStorage.removeItem('flowcapture_session');
       
       refetchCaptureStatus();
-      queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+      queryClient.invalidateQueries({ queryKey: [api.steps.list.path, guideId] });
       toast({ 
         title: "Capture Complete", 
         description: `Captured ${data.stepsCreated} steps` 
@@ -259,7 +262,7 @@ export default function GuideEditor() {
       localStorage.removeItem('flowcapture_session');
       
       refetchCaptureStatus();
-      queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+      queryClient.invalidateQueries({ queryKey: [api.steps.list.path, guideId] });
       toast({ 
         title: "Capture Cancelled", 
         description: data.stepsDeleted > 0 
@@ -336,7 +339,7 @@ export default function GuideEditor() {
         setIsPaused(false);
         localStorage.removeItem('flowcapture_session');
         refetchCaptureStatus();
-        queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+        queryClient.invalidateQueries({ queryKey: [api.steps.list.path, guideId] });
         if (event.data.success) {
           toast({ 
             title: "Capture Complete", 
@@ -370,7 +373,7 @@ export default function GuideEditor() {
         setCaptureToken(null);
         localStorage.removeItem('flowcapture_session');
         refetchCaptureStatus();
-        queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
+        queryClient.invalidateQueries({ queryKey: [api.steps.list.path, guideId] });
         toast({ 
           title: "Capture Complete", 
           description: "The capture session ended. Your captured steps have been saved.",
@@ -424,21 +427,33 @@ export default function GuideEditor() {
           console.log('Ignoring completion with invalid session nonce (possible spoof attempt)');
           return;
         }
-        // Capture completed - refresh steps and show toast
+        // Capture completed - refresh steps and trigger AI description generation
         console.log('Capture complete from extension:', event.data);
         setCaptureToken(null);
         setCaptureSessionNonce(null);
         setIsPaused(false);
         localStorage.removeItem('flowcapture_session');
         refetchCaptureStatus();
-        queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId, 'steps'] });
-        toast({ 
-          title: "Capture Complete", 
-          description: event.data.stepCount 
-            ? `Captured ${event.data.stepCount} steps` 
-            : "Your captured steps have been saved.",
-          variant: "default" 
+        queryClient.invalidateQueries({ queryKey: [api.steps.list.path, guideId] });
+        toast({
+          title: "Capture Complete",
+          description: event.data.stepCount
+            ? `Captured ${event.data.stepCount} steps. Generating AI descriptions…`
+            : "Your captured steps have been saved. Generating AI descriptions…",
+          variant: "default",
         });
+        // Auto-generate AI descriptions for all steps that lack one
+        fetch(`/api/guides/${guideId}/generate-all-descriptions`, {
+          method: 'POST',
+          credentials: 'include',
+        })
+          .then((r) => r.json())
+          .then((result) => {
+            if (result.updated > 0) {
+              queryClient.invalidateQueries({ queryKey: [api.steps.list.path, guideId] });
+            }
+          })
+          .catch((err) => console.warn('Batch description generation failed:', err));
       }
     };
 
@@ -1018,16 +1033,25 @@ export default function GuideEditor() {
           >
             <EyeOff className="h-4 w-4 xl:mr-2" /> <span className="hidden xl:inline">Redact</span>
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setKbConvertDialogOpen(true)}
             data-testid="button-publish-to-kb"
             className="hidden xl:flex"
           >
             <BookOpen className="h-4 w-4 xl:mr-2" /> <span className="hidden xl:inline">Publish to KB</span>
           </Button>
-          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVersionHistoryOpen(true)}
+            data-testid="button-version-history"
+            className="hidden xl:flex"
+          >
+            <History className="h-4 w-4 xl:mr-2" /> <span className="hidden xl:inline">History</span>
+          </Button>
+
           {/* Mobile dropdown for additional options */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1053,6 +1077,9 @@ export default function GuideEditor() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setKbConvertDialogOpen(true)} data-testid="menu-publish-kb">
                 <BookOpen className="h-4 w-4 mr-2" /> Publish to KB
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setVersionHistoryOpen(true)} data-testid="menu-version-history">
+                <History className="h-4 w-4 mr-2" /> Version History
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShareDialogOpen(true)} data-testid="menu-share">
@@ -1960,6 +1987,13 @@ export default function GuideEditor() {
         onOpenChange={setShowPermissionDialog} 
       />
 
+      {/* Version History Dialog */}
+      <VersionHistoryDialog
+        guideId={guideId}
+        open={versionHistoryOpen}
+        onOpenChange={setVersionHistoryOpen}
+      />
+
       {/* Cancel Capture Confirmation Dialog */}
       <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
         <AlertDialogContent>
@@ -1987,6 +2021,121 @@ export default function GuideEditor() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// ── Version History Dialog ─────────────────────────────────────────────────
+interface GuideVersion {
+  id: number;
+  versionNumber: number;
+  title: string;
+  createdAt: string;
+  snapshot: unknown;
+}
+
+function VersionHistoryDialog({
+  guideId,
+  open,
+  onOpenChange,
+}: {
+  guideId: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+
+  const { data: versions = [], isLoading } = useQuery<GuideVersion[]>({
+    queryKey: ['/api/guides/:guideId/versions', guideId],
+    queryFn: () => fetch(`/api/guides/${guideId}/versions`, { credentials: 'include' }).then(r => r.json()),
+    enabled: open && guideId > 0,
+  });
+
+  const saveVersionMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('POST', `/api/guides/${guideId}/versions`, { label: `Snapshot ${new Date().toLocaleString()}` }).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/guides/:guideId/versions', guideId] });
+      toast({ title: 'Version saved' });
+    },
+    onError: () => toast({ title: 'Failed to save version', variant: 'destructive' }),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (versionId: number) =>
+      apiRequest('POST', `/api/guides/${guideId}/versions/${versionId}/restore`, {}).then(r => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/guides', guideId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/guides/:guideId/steps', guideId] });
+      toast({ title: 'Version restored' });
+      onOpenChange(false);
+    },
+    onError: () => toast({ title: 'Failed to restore version', variant: 'destructive' }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-5 w-5" /> Version History
+          </DialogTitle>
+          <DialogDescription>Save and restore snapshots of this guide</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <Button
+            onClick={() => saveVersionMutation.mutate()}
+            disabled={saveVersionMutation.isPending}
+            className="w-full"
+            size="sm"
+          >
+            {saveVersionMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            Save Current Version
+          </Button>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : versions.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No versions saved yet. Click "Save Current Version" to create one.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {versions.map((v) => (
+                <div
+                  key={v.id}
+                  className="flex items-center justify-between gap-2 p-3 rounded-lg border border-border hover:bg-muted/50"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      v{v.versionNumber} — {v.title || 'Untitled'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(v.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => restoreMutation.mutate(v.id)}
+                    disabled={restoreMutation.isPending}
+                    data-testid={`button-restore-version-${v.id}`}
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" /> Restore
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

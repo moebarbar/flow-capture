@@ -342,8 +342,15 @@ async function applySessionToMachine(session) {
   // Configure SyncManager so uploads work (for both initial and recovery flows)
   if (machine.state.apiBaseUrl && machine.state.guideId) {
     syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
-    // If we don't have a token yet, try to acquire one now (user is logged in)
-    if (!syncManager.extensionToken) {
+
+    // Apply extension token immediately if the server included it in the session payload.
+    // This avoids async token acquisition races and cross-origin cookie issues.
+    if (session.extensionToken) {
+      syncManager.setExtensionToken(session.extensionToken);
+      await chrome.storage.local.set({ flowcapture_extension_token: session.extensionToken });
+      console.log('[FlowCapture] Extension token applied from session payload');
+    } else if (!syncManager.extensionToken) {
+      // Fallback: try to acquire token via cookie (may fail cross-origin if SameSite not None)
       syncManager.requestExtensionToken().catch(() => {
         console.warn('[FlowCapture] Could not acquire extension token at session apply');
       });

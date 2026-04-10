@@ -505,7 +505,8 @@
         width: Math.round(rect.width),
         height: Math.round(rect.height),
         centerX: Math.round(rect.left + rect.width / 2),
-        centerY: Math.round(rect.top + rect.height / 2)
+        centerY: Math.round(rect.top + rect.height / 2),
+        devicePixelRatio: window.devicePixelRatio || 1
       }
     };
   }

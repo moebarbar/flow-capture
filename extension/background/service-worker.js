@@ -946,6 +946,20 @@ async function handleStepCaptured(stepData, tabId) {
     }
   }
 
+  // Crop to element bounds so screenshots show the relevant area, not the entire page
+  const elementRect = stepData.elementMetadata?.rect;
+  if (localScreenshotDataUrl && elementRect && elementRect.width > 0 && elementRect.height > 0) {
+    try {
+      localScreenshotDataUrl = await cropScreenshotToElement(
+        localScreenshotDataUrl,
+        elementRect,
+        elementRect.devicePixelRatio || 1
+      );
+    } catch (e) {
+      console.warn('[FlowCapture] Screenshot crop failed, keeping full screenshot:', e.message);
+    }
+  }
+
   machine.incrementTabStepCount(targetTabId);
 
   const step = machine.addStep({
@@ -1262,11 +1276,16 @@ async function syncStepsToServer() {
 }
 
 async function uploadScreenshot(dataUrl) {
+  // Detect mime type from data URL (may be jpeg after crop, or png for full-page fallback)
+  const mimeMatch = dataUrl.match(/^data:([^;]+);/);
+  const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+
   const presignedResponse = await fetch(`${machine.state.apiBaseUrl}/api/uploads/request-url`,
     syncManager.buildFetchOptions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: `step_${Date.now()}.png`, contentType: 'image/png' })
+      body: JSON.stringify({ name: `step_${Date.now()}.${ext}`, contentType: mimeType })
     })
   );
 
@@ -1281,7 +1300,7 @@ async function uploadScreenshot(dataUrl) {
   const uploadResponse = await fetch(uploadURL, {
     method: 'PUT',
     body: blob,
-    headers: { 'Content-Type': 'image/png' }
+    headers: { 'Content-Type': mimeType }
   });
 
   if (!uploadResponse.ok) {
@@ -1289,6 +1308,51 @@ async function uploadScreenshot(dataUrl) {
   }
 
   return `/objects/${objectPath}`;
+}
+
+/**
+ * Crop a full-page screenshot to show the clicked element with context padding.
+ * rect is in CSS pixels; dpr scales it to physical pixels in the captured image.
+ */
+async function cropScreenshotToElement(dataUrl, rect, dpr) {
+  const PADDING_CSS = 80; // extra padding around the element in CSS pixels
+
+  const blob = dataUrlToBlob(dataUrl);
+  const bitmap = await createImageBitmap(blob);
+
+  // Convert CSS pixel bounds → physical pixel bounds in the screenshot
+  const pLeft   = Math.max(0, Math.round((rect.left   - PADDING_CSS) * dpr));
+  const pTop    = Math.max(0, Math.round((rect.top    - PADDING_CSS) * dpr));
+  const pRight  = Math.min(bitmap.width,  Math.round((rect.left + rect.width  + PADDING_CSS) * dpr));
+  const pBottom = Math.min(bitmap.height, Math.round((rect.top  + rect.height + PADDING_CSS) * dpr));
+
+  const cropW = pRight - pLeft;
+  const cropH = pBottom - pTop;
+
+  if (cropW <= 0 || cropH <= 0) {
+    bitmap.close();
+    return dataUrl; // fallback: element not visible in screenshot
+  }
+
+  // Scale down so output stays under 1200px wide (saves storage, fast to render)
+  const MAX_OUT_WIDTH = 1200;
+  const scale = cropW > MAX_OUT_WIDTH ? MAX_OUT_WIDTH / cropW : 1;
+  const outW = Math.round(cropW * scale);
+  const outH = Math.round(cropH * scale);
+
+  const canvas = new OffscreenCanvas(outW, outH);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, pLeft, pTop, cropW, cropH, 0, 0, outW, outH);
+  bitmap.close();
+
+  const compressed = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 });
+  const buf = await compressed.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return `data:image/jpeg;base64,${btoa(binary)}`;
 }
 
 function dataUrlToBlob(dataUrl) {

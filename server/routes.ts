@@ -12,8 +12,9 @@ import { analyzeStepWithVision } from "./services/visionService";
 import { runGuideIntelligence } from "./services/guideIntelligenceService";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
+import { getAppBaseUrl } from "./config";
 import { insertBlogPostSchema, users, steps, guideVersions, SUPPORTED_LANGUAGES } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import helmet from "helmet";
@@ -83,6 +84,16 @@ export async function registerRoutes(
   app.use('/api/chat', aiLimiter);
   app.use('/api/image/generate', aiLimiter);
 
+  // Health check — used by Railway and the extension's online detection
+  app.get('/api/health', async (_req, res) => {
+    try {
+      await db.execute(sql`SELECT 1`);
+      res.json({ status: 'ok' });
+    } catch {
+      res.status(503).json({ status: 'degraded', database: 'unreachable' });
+    }
+  });
+
   // Setup Replit Auth
   await setupAuth(app);
   registerAuthRoutes(app);
@@ -99,13 +110,11 @@ export async function registerRoutes(
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
     
     try {
-      const { ObjectStorageService } = await import("./replit_integrations/object_storage/objectStorage");
-      const objectStorage = new ObjectStorageService();
-      
+      const { objectStorageService } = await import("./replit_integrations/object_storage/objectStorage");
+
       // Get presigned URL for upload
-      const uploadURL = await objectStorage.getObjectEntityUploadURL();
-      const objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
-      
+      const { uploadURL, objectPath } = await objectStorageService.createUploadTarget();
+
       // Return the upload URL and path for client to use
       res.json({
         uploadURL,
@@ -803,7 +812,7 @@ export async function registerRoutes(
       return res.json({ enabled: false, hasPassword: false, shareUrl: null });
     }
     
-    const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}`;
+    const baseUrl = getAppBaseUrl(req);
     res.json({
       id: share.id,
       enabled: share.enabled,
@@ -842,7 +851,7 @@ export async function registerRoutes(
       }
     }
     
-    const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}`;
+    const baseUrl = getAppBaseUrl(req);
     
     if (existingShare) {
       const updated = await storage.updateGuideShare(existingShare.id, {
@@ -1100,7 +1109,7 @@ export async function registerRoutes(
       });
     }
     
-    const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000'}`;
+    const baseUrl = getAppBaseUrl(req);
     const embedUrl = `${baseUrl}/embed/${share.shareToken}`;
     const embedCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allow="fullscreen" style="border-radius: 8px; border: 1px solid #e5e7eb;"></iframe>`;
     
@@ -2109,7 +2118,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         customerId = customer.id;
       }
 
-      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      const baseUrl = getAppBaseUrl(req);
       const session = await stripeService.createCheckoutSession(
         customerId,
         priceId,
@@ -2135,7 +2144,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(400).json({ message: 'No billing account found' });
       }
 
-      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      const baseUrl = getAppBaseUrl(req);
       const session = await stripeService.createCustomerPortalSession(
         dbUser.stripeCustomerId,
         `${baseUrl}/settings`
@@ -2191,7 +2200,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       if (!dbUser) return res.status(404).json({ message: 'User not found' });
 
       const additionalSeats = parseInt(req.body.additionalSeats) || 0;
-      const baseUrl = `https://${process.env.REPLIT_DOMAINS?.split(',')[0]}`;
+      const baseUrl = getAppBaseUrl(req);
       
       const session = await billingService.createProCheckoutSession(
         userId,
@@ -2268,7 +2277,9 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
       const users = await storage.getAllUsers(limit, offset);
-      res.json({ data: users });
+      // Strip credential material before sending over the wire
+      const safeUsers = users.map(({ passwordHash, ...rest }: any) => rest);
+      res.json({ data: safeUsers });
     } catch (error) {
       console.error('Admin users error:', error);
       res.status(500).json({ message: 'Failed to get users' });

@@ -1,8 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
+import { logFeatureSummary } from "./config";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
 import { emailService } from "./services/emailService";
 
@@ -13,15 +13,6 @@ declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
   }
-}
-
-// Initialize Stripe — only if STRIPE_SECRET_KEY is present
-async function initStripe() {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.log('STRIPE_SECRET_KEY not set, skipping Stripe initialization');
-    return;
-  }
-  console.log('Stripe configured');
 }
 
 // Build the explicit allowlist of web-app origins.
@@ -187,8 +178,7 @@ app.use((req, res, next) => {
     }
   });
 
-  // Initialize Stripe before registering routes
-  await initStripe();
+  logFeatureSummary(log);
 
   await registerRoutes(httpServer, app);
 
@@ -212,7 +202,6 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);

@@ -5,8 +5,17 @@ import { getUncachableStripeClient } from '../stripeClient';
 import { stripeService } from '../stripeService';
 import Stripe from 'stripe';
 
-const STRIPE_BASE_PRICE = 2300;
-const STRIPE_SEAT_PRICE = 700;
+// Canonical pricing model: Pro = $23/mo base + $7/mo per additional seat
+export const STRIPE_BASE_PRICE = 2300;
+export const STRIPE_SEAT_PRICE = 700;
+
+// Stable lookup keys used to resolve prices in Stripe (see scripts/seed-products.ts)
+export const PRO_BASE_LOOKUP_KEY = 'flowcapture_pro_base';
+export const PRO_SEAT_LOOKUP_KEY = 'flowcapture_pro_seat';
+
+const PRICE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+type ProPriceIds = { basePriceId: string | null; seatPriceId: string | null };
 
 export class BillingService {
   async getOrCreateStripeCustomer(userId: string, email: string, name?: string): Promise<string> {
@@ -41,28 +50,75 @@ export class BillingService {
     }
   }
 
-  async getProPriceIds(): Promise<{ basePriceId: string | null; seatPriceId: string | null }> {
-    const result = await db.execute(sql`
-      SELECT p.id as product_id, pr.id as price_id, pr.unit_amount, p.metadata
-      FROM stripe.products p
-      JOIN stripe.prices pr ON pr.product = p.id
-      WHERE p.active = true AND pr.active = true
-      ORDER BY pr.unit_amount ASC
-    `);
+  private proPriceCache: { value: ProPriceIds; expiresAt: number } | null = null;
 
+  /**
+   * Resolve the Pro base + seat price IDs.
+   * Priority: explicit env vars → Stripe lookup keys → amount match (legacy accounts).
+   */
+  async getProPriceIds(): Promise<ProPriceIds> {
+    if (process.env.STRIPE_BASE_PRICE_ID) {
+      return {
+        basePriceId: process.env.STRIPE_BASE_PRICE_ID,
+        seatPriceId: process.env.STRIPE_SEAT_PRICE_ID || null,
+      };
+    }
+
+    if (this.proPriceCache && this.proPriceCache.expiresAt > Date.now()) {
+      return this.proPriceCache.value;
+    }
+
+    const stripe = await getUncachableStripeClient();
     let basePriceId: string | null = null;
     let seatPriceId: string | null = null;
 
-    for (const row of result.rows) {
-      const r = row as any;
-      if (r.unit_amount === STRIPE_BASE_PRICE) {
-        basePriceId = r.price_id;
-      } else if (r.unit_amount === STRIPE_SEAT_PRICE) {
-        seatPriceId = r.price_id;
+    const byLookupKey = await stripe.prices.list({
+      lookup_keys: [PRO_BASE_LOOKUP_KEY, PRO_SEAT_LOOKUP_KEY],
+      active: true,
+      limit: 10,
+    });
+    for (const price of byLookupKey.data) {
+      if (price.lookup_key === PRO_BASE_LOOKUP_KEY) basePriceId = price.id;
+      if (price.lookup_key === PRO_SEAT_LOOKUP_KEY) seatPriceId = price.id;
+    }
+
+    // Fallback for Stripe accounts seeded before lookup keys existed
+    if (!basePriceId || !seatPriceId) {
+      const allPrices = await stripe.prices.list({ active: true, limit: 100 });
+      for (const price of allPrices.data) {
+        if (price.recurring?.interval !== 'month') continue;
+        if (!basePriceId && price.unit_amount === STRIPE_BASE_PRICE) basePriceId = price.id;
+        if (!seatPriceId && price.unit_amount === STRIPE_SEAT_PRICE) seatPriceId = price.id;
       }
     }
 
-    return { basePriceId, seatPriceId };
+    const value = { basePriceId, seatPriceId };
+    this.proPriceCache = { value, expiresAt: Date.now() + PRICE_CACHE_TTL_MS };
+    return value;
+  }
+
+  /** Find the app user a Stripe subscription belongs to. */
+  private async resolveUserId(subscription: Stripe.Subscription): Promise<string | null> {
+    if (subscription.metadata?.userId) return subscription.metadata.userId;
+
+    const customerId =
+      typeof subscription.customer === 'string'
+        ? subscription.customer
+        : subscription.customer.id;
+
+    const [bySubscription] = await db
+      .select({ userId: userSubscriptions.userId })
+      .from(userSubscriptions)
+      .where(eq(userSubscriptions.stripeCustomerId, customerId))
+      .limit(1);
+    if (bySubscription) return bySubscription.userId;
+
+    const [byUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.stripeCustomerId, customerId))
+      .limit(1);
+    return byUser?.id ?? null;
   }
 
   async createProCheckoutSession(
@@ -192,19 +248,59 @@ export class BillingService {
     return members[0]?.count || 1;
   }
 
-  async handleSubscriptionUpdated(subscription: Stripe.Subscription) {
-    const userId = subscription.metadata?.userId;
-    if (!userId) return;
+  // userSubscriptions.status enum: active | inactive | trialing | past_due | canceled | unpaid
+  private mapSubscriptionStatus(status: Stripe.Subscription.Status): string {
+    switch (status) {
+      case 'active':
+      case 'trialing':
+      case 'past_due':
+      case 'canceled':
+      case 'unpaid':
+        return status;
+      default:
+        // incomplete, incomplete_expired, paused
+        return 'inactive';
+    }
+  }
 
-    const status = subscription.status as any;
-    const baseItem = subscription.items.data[0];
+  async handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+    const userId = await this.resolveUserId(subscription);
+    if (!userId) {
+      console.warn(`Stripe webhook: no app user found for subscription ${subscription.id}`);
+      return;
+    }
+
+    if (subscription.status === 'canceled') {
+      return this.handleSubscriptionDeleted(subscription);
+    }
+
+    const customerId =
+      typeof subscription.customer === 'string'
+        ? subscription.customer
+        : subscription.customer.id;
+
+    const { basePriceId, seatPriceId } = await this.getProPriceIds()
+      .catch(() => ({ basePriceId: null, seatPriceId: null } as ProPriceIds));
+
+    const items = subscription.items.data;
+    const baseItem = items.find((i) => i.price.id === basePriceId) ?? items[0];
+    const seatItem = items.find(
+      (i) =>
+        i !== baseItem &&
+        (i.price.id === seatPriceId || i.price.unit_amount === STRIPE_SEAT_PRICE)
+    );
+    const seatQuantity = 1 + (seatItem?.quantity ?? 0);
+
     const sub = subscription as any;
 
     await this.createOrUpdateSubscription(userId, {
+      stripeCustomerId: customerId,
       stripeSubscriptionId: subscription.id,
       stripeBasePriceId: baseItem?.price.id,
+      stripeSeatPriceId: seatItem?.price.id ?? null,
+      seatQuantity,
       plan: 'pro',
-      status,
+      status: this.mapSubscriptionStatus(subscription.status) as any,
       currentPeriodStart: sub.current_period_start ? new Date(sub.current_period_start * 1000) : undefined,
       currentPeriodEnd: sub.current_period_end ? new Date(sub.current_period_end * 1000) : undefined,
       cancelAtPeriodEnd: subscription.cancel_at_period_end
@@ -212,8 +308,11 @@ export class BillingService {
   }
 
   async handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-    const userId = subscription.metadata?.userId;
-    if (!userId) return;
+    const userId = await this.resolveUserId(subscription);
+    if (!userId) {
+      console.warn(`Stripe webhook: no app user found for subscription ${subscription.id}`);
+      return;
+    }
 
     await this.createOrUpdateSubscription(userId, {
       plan: 'free',
@@ -221,6 +320,16 @@ export class BillingService {
       stripeSubscriptionId: null,
       seatQuantity: 1
     });
+  }
+
+  async handlePaymentFailed(customerId: string) {
+    await db.update(userSubscriptions)
+      .set({ status: 'past_due' as any, updatedAt: new Date() })
+      .where(eq(userSubscriptions.stripeCustomerId, customerId));
+
+    await db.update(users)
+      .set({ subscriptionStatus: 'past_due' as any, updatedAt: new Date() })
+      .where(eq(users.stripeCustomerId, customerId));
   }
 
   async getUserPlan(userId: string): Promise<{ plan: string; seatQuantity: number; limits: { maxWorkspaces: number; maxUsers: number } }> {

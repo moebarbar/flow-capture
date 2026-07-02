@@ -1,42 +1,32 @@
 import type { Express } from "express";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { isAuthenticated } from "../auth/replitAuth";
+import {
+  objectStorageService,
+  isObjectStorageConfigured,
+  ObjectNotFoundError,
+} from "./objectStorage";
 
 /**
- * Register object storage routes for file uploads.
+ * Object storage routes.
  *
- * This provides example routes for the presigned URL upload flow:
- * 1. POST /api/uploads/request-url - Get a presigned URL for uploading
- * 2. The client then uploads directly to the presigned URL
+ * Upload flow:
+ * 1. POST /api/uploads/request-url (authenticated) → presigned PUT URL + objectPath
+ * 2. Client PUTs the file directly to the presigned URL
+ * 3. Client stores objectPath (e.g. "/objects/uploads/<uuid>") in the DB
  *
- * IMPORTANT: These are example routes. Customize based on your use case:
- * - Add authentication middleware for protected uploads
- * - Add file metadata storage (save to database after upload)
- * - Add ACL policies for access control
+ * Serving: GET /objects/* streams from the bucket. Paths are unguessable UUIDs
+ * and screenshots must render on public share/embed pages, so reads are public.
  */
 export function registerObjectStorageRoutes(app: Express): void {
-  const objectStorageService = new ObjectStorageService();
-
-  /**
-   * Request a presigned URL for file upload.
-   *
-   * Request body (JSON):
-   * {
-   *   "name": "filename.jpg",
-   *   "size": 12345,
-   *   "contentType": "image/jpeg"
-   * }
-   *
-   * Response:
-   * {
-   *   "uploadURL": "https://storage.googleapis.com/...",
-   *   "objectPath": "/objects/uploads/uuid"
-   * }
-   *
-   * IMPORTANT: The client should NOT send the file to this endpoint.
-   * Send JSON metadata only, then upload the file directly to uploadURL.
-   */
-  app.post("/api/uploads/request-url", async (req, res) => {
+  app.post("/api/uploads/request-url", isAuthenticated, async (req, res) => {
     try {
+      if (!isObjectStorageConfigured()) {
+        return res.status(503).json({
+          error:
+            "Object storage is not configured. Set GCS_BUCKET and GCS_SERVICE_ACCOUNT_JSON.",
+        });
+      }
+
       const { name, size, contentType } = req.body;
 
       if (!name) {
@@ -45,10 +35,8 @@ export function registerObjectStorageRoutes(app: Express): void {
         });
       }
 
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-
-      // Extract object path from the presigned URL for later reference
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const { uploadURL, objectPath } =
+        await objectStorageService.createUploadTarget();
 
       res.json({
         uploadURL,
@@ -62,25 +50,21 @@ export function registerObjectStorageRoutes(app: Express): void {
     }
   });
 
-  /**
-   * Serve uploaded objects.
-   *
-   * GET /objects/:objectPath(*)
-   *
-   * This serves files from object storage. For public files, no auth needed.
-   * For protected files, add authentication middleware and ACL checks.
-   */
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {
-      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
-      await objectStorageService.downloadObject(objectFile, res);
+      if (!isObjectStorageConfigured()) {
+        return res.status(404).json({ error: "Object not found" });
+      }
+      const objectFile = await objectStorageService.getObjectEntityFile(
+        req.path
+      );
+      await objectStorageService.downloadObject(objectFile, res, 86400);
     } catch (error) {
-      console.error("Error serving object:", error);
       if (error instanceof ObjectNotFoundError) {
         return res.status(404).json({ error: "Object not found" });
       }
+      console.error("Error serving object:", error);
       return res.status(500).json({ error: "Failed to serve object" });
     }
   });
 }
-

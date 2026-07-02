@@ -2,7 +2,7 @@ import { db } from '../db';
 import { stepVoiceovers, steps, guides } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
-import { objectStorageClient } from '../replit_integrations/object_storage';
+import { objectStorageService, isObjectStorageConfigured } from '../replit_integrations/object_storage';
 
 const VOICES = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] as const;
 type Voice = typeof VOICES[number];
@@ -95,41 +95,24 @@ export class VoiceoverService {
       });
 
       const audioBuffer = Buffer.from(await response.arrayBuffer());
-      
-      const privateDir = process.env.PRIVATE_OBJECT_DIR;
-      if (!privateDir) {
-        throw new Error('Object storage not configured: PRIVATE_OBJECT_DIR environment variable is missing');
+
+      if (!isObjectStorageConfigured()) {
+        throw new Error('Object storage not configured: set GCS_BUCKET and GCS_SERVICE_ACCOUNT_JSON');
       }
-      
-      const bucketName = privateDir.split('/')[1];
-      if (!bucketName) {
-        throw new Error('Object storage not configured: Invalid PRIVATE_OBJECT_DIR format');
-      }
-      
-      const objectPath = `${privateDir}/voiceovers/${guideId}/${stepId}_${locale}_${voice}_${Date.now()}.mp3`;
-      const objectName = objectPath.split('/').slice(2).join('/');
-      
+
+      const key = `voiceovers/${guideId}/${stepId}_${locale}_${voice}_${Date.now()}.mp3`;
+
       let audioUrl: string;
       try {
-        const bucket = objectStorageClient.bucket(bucketName);
-        const file = bucket.file(objectName);
-        
-        await file.save(audioBuffer, {
-          contentType: 'audio/mpeg',
-          metadata: {
-            guideId: guideId.toString(),
-            stepId: stepId.toString(),
-            locale,
-            voice
-          }
+        await objectStorageService.saveObject(key, audioBuffer, 'audio/mpeg', {
+          guideId: guideId.toString(),
+          stepId: stepId.toString(),
+          locale,
+          voice
         });
 
-        const [signedUrl] = await file.getSignedUrl({
-          action: 'read',
-          expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-        });
-        
-        audioUrl = signedUrl;
+        // Serve through our own /objects route — stable URL, no signed-URL expiry
+        audioUrl = `/objects/${key}`;
       } catch (storageError: any) {
         console.error('Object storage error:', storageError);
         throw new Error(`Failed to upload audio to object storage: ${storageError.message}`);

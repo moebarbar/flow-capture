@@ -2,21 +2,14 @@ import { db } from "../db";
 import { captureSessions, steps, guides } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
 import crypto from "crypto";
-import { objectStorageClient } from "../replit_integrations/object_storage/objectStorage";
+import { objectStorageService, isObjectStorageConfigured } from "../replit_integrations/object_storage/objectStorage";
 
 const SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutes
-
-// Check if object storage is properly configured
-function isObjectStorageConfigured(): boolean {
-  return !!process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-}
 
 // Helper to upload base64 image to object storage
 async function uploadScreenshot(base64Data: string, guideId: number): Promise<string | null> {
   try {
-    // Get bucket name from environment
-    const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-    if (!bucketId) {
+    if (!isObjectStorageConfigured()) {
       console.warn('Object storage not configured - screenshots will not be saved');
       return null;
     }
@@ -24,23 +17,12 @@ async function uploadScreenshot(base64Data: string, guideId: number): Promise<st
     // Remove data URL prefix if present
     const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Content, 'base64');
-    
-    // Generate unique filename
-    const filename = `captures/guide-${guideId}/${crypto.randomUUID()}.png`;
-    
-    const bucket = objectStorageClient.bucket(bucketId);
-    const file = bucket.file(filename);
-    
-    await file.save(buffer, {
-      contentType: 'image/png',
-      metadata: {
-        cacheControl: 'public, max-age=31536000',
-      },
-    });
-    
-    console.log(`Screenshot uploaded: ${filename}`);
-    // Return the object path that can be served via our objects endpoint
-    return `/objects/${filename}`;
+
+    const key = `captures/guide-${guideId}/${crypto.randomUUID()}.png`;
+    const objectPath = await objectStorageService.saveObject(key, buffer, 'image/png');
+
+    console.log(`Screenshot uploaded: ${key}`);
+    return objectPath;
   } catch (e) {
     console.error('Failed to upload screenshot:', e);
     return null;
@@ -117,15 +99,12 @@ export const captureService = {
       ));
 
     // Delete screenshots from object storage
-    const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-    if (bucketId) {
+    if (isObjectStorageConfigured()) {
       for (const step of stepsToDelete) {
         if (step.imageUrl && step.imageUrl.startsWith('/objects/')) {
-          try {
-            const objectPath = step.imageUrl.replace('/objects/', '');
-            const bucket = objectStorageClient.bucket(bucketId);
-            await bucket.file(objectPath).delete().catch(() => {});
-          } catch (e) {
+          const key = step.imageUrl.replace('/objects/', '');
+          const deleted = await objectStorageService.deleteObject(key);
+          if (!deleted) {
             console.warn('Failed to delete screenshot:', step.imageUrl);
           }
         }

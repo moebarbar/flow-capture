@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
+import { useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
+import { useActiveWorkspace } from "@/hooks/use-active-workspace";
 import { useCollections, useCreateCollection, useDeleteCollection } from "@/hooks/use-collections";
 import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ const COLLECTION_ICONS = [
 ];
 
 function CollectionsContent() {
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
+  const { workspaces, isLoading: workspacesLoading, workspaceId } = useActiveWorkspace();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
   const { isCollapsed } = useSidebarState();
@@ -65,7 +66,6 @@ function CollectionsContent() {
     }
   }, [workspaces, workspacesLoading, isEnsuring, ensureDefaultWorkspace]);
 
-  const workspaceId = workspaces?.[0]?.id;
   const { data: collections, isLoading } = useCollections(workspaceId);
   const { mutate: createCollection, isPending: isCreating } = useCreateCollection();
   const { mutate: deleteCollection, isPending: isDeleting } = useDeleteCollection();

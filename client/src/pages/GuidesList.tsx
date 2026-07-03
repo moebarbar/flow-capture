@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
+import { useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
+import { useActiveWorkspace } from "@/hooks/use-active-workspace";
 import { useGuides, useCreateGuide, useUpdateGuide, useDeleteGuide } from "@/hooks/use-guides";
 import { useCollections } from "@/hooks/use-collections";
 import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
@@ -149,7 +150,7 @@ function FlowCard({ guide, viewMode, workspaceId, onShare, onCollection, onPubli
 }
 
 function GuidesListContent() {
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
+  const { workspaces, isLoading: workspacesLoading, workspaceId } = useActiveWorkspace();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const ensuredRef = useRef(false);
   const { isCollapsed } = useSidebarState();
@@ -162,7 +163,6 @@ function GuidesListContent() {
     }
   }, [workspaces, workspacesLoading, isEnsuring, ensureDefaultWorkspace]);
 
-  const workspaceId = workspaces?.[0]?.id;
   const { data: guides, isLoading } = useGuides({ workspaceId });
   const { data: collections } = useCollections(workspaceId);
   const { mutate: createGuide, isPending: isCreating } = useCreateGuide();

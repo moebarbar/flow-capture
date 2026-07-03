@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Sidebar, SidebarProvider, useSidebarState, MobileMenuTrigger } from "@/components/Sidebar";
-import { useWorkspaces } from "@/hooks/use-workspaces";
+import { useActiveWorkspace } from "@/hooks/use-active-workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,8 +56,7 @@ const AUTOMATION_ACTIONS = [
 ];
 
 function IntegrationsPageContent() {
-  const { data: workspaces } = useWorkspaces();
-  const workspaceId = workspaces?.[0]?.id;
+  const { workspaceId } = useActiveWorkspace();
   const { isCollapsed } = useSidebarState();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("integrations");

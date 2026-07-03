@@ -265,6 +265,12 @@ export async function registerRoutes(
     const userId = user.claims.sub;
 
     try {
+      // Enforce plan limits (free = 1 workspace)
+      if (!await billingService.canAddWorkspace(userId)) {
+        return res.status(402).json({
+          message: "Your plan's workspace limit has been reached. Upgrade to Pro for unlimited workspaces.",
+        });
+      }
       const input = api.workspaces.create.input.parse({ ...req.body, ownerId: userId });
       const workspace = await storage.createWorkspace(input);
       res.status(201).json(workspace);

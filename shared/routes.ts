@@ -21,6 +21,10 @@ export const updateStepInputSchema = insertStepSchema.partial().omit({ flowId: t
 export type CreateStepInput = z.infer<typeof createStepInputSchema>;
 export type UpdateStepInput = z.infer<typeof updateStepInputSchema>;
 
+// ownerId is derived from the session server-side, so the client omits it.
+export type CreateWorkspaceRequest = Omit<z.infer<typeof insertWorkspaceSchema>, 'ownerId'>;
+export type UpdateWorkspaceRequest = Partial<CreateWorkspaceRequest>;
+
 // ============================================
 // SHARED ERROR SCHEMAS
 // ============================================

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useWorkspaces, useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
+import { useEnsureDefaultWorkspace } from "@/hooks/use-workspaces";
+import { useActiveWorkspace } from "@/hooks/use-active-workspace";
 import { useGuides, useCreateGuide } from "@/hooks/use-guides";
 import { useExtensionDetection } from "@/hooks/use-extension-detection";
 import { Sidebar, useSidebarState, MobileMenuTrigger, SidebarProvider } from "@/components/Sidebar";
@@ -24,7 +25,7 @@ interface AnalyticsData {
 }
 
 function DashboardContent() {
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
+  const { workspaces, isLoading: workspacesLoading, workspaceId } = useActiveWorkspace();
   const { mutate: ensureDefaultWorkspace, isPending: isEnsuring } = useEnsureDefaultWorkspace();
   const { isExtensionInstalled, permissionStatus, requestPermissions } = useExtensionDetection();
   const [showLauncherModal, setShowLauncherModal] = useState(false);
@@ -38,7 +39,6 @@ function DashboardContent() {
     }
   }, [workspaces, workspacesLoading, isEnsuring, ensureDefaultWorkspace]);
 
-  const workspaceId = workspaces?.[0]?.id;
   const { data: guides, isLoading } = useGuides({ workspaceId });
   const { mutate: createGuide, isPending: isCreating } = useCreateGuide();
   

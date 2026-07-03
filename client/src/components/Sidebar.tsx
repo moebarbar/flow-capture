@@ -1,12 +1,23 @@
 import { useState, useEffect, useCallback, memo, createContext, useContext } from "react";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles, Moon, Sun, Users, Menu, X, Plug, FileText, FolderOpen } from "lucide-react";
+import { LayoutDashboard, BookOpen, Settings, LogOut, Plus, ChevronDown, ChevronLeft, ChevronRight, BarChart3, LayoutTemplate, Cog, Sparkles, Moon, Sun, Users, Menu, X, Plug, FileText, FolderOpen, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useWorkspaces } from "@/hooks/use-workspaces";
+import { useCreateWorkspace } from "@/hooks/use-workspaces";
+import { useActiveWorkspace } from "@/hooks/use-active-workspace";
 import { useTheme } from "@/components/ThemeProvider";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -182,15 +193,36 @@ const NavItem = memo(function NavItem({
 export const Sidebar = memo(function Sidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
-  const { data: workspaces } = useWorkspaces();
+  const { workspaces, workspace: activeWorkspace, setActiveWorkspaceId } = useActiveWorkspace();
   const { isCollapsed, isMobileOpen, toggle, closeMobile } = useSidebarState();
   const { resolvedTheme, setTheme } = useTheme();
+  const { toast } = useToast();
+  const { mutate: createWorkspace, isPending: isCreatingWorkspace } = useCreateWorkspace();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
 
   const toggleTheme = useCallback(() => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   }, [resolvedTheme, setTheme]);
 
-  const activeWorkspace = workspaces?.[0];
+  const handleCreateWorkspace = () => {
+    const name = newWorkspaceName.trim();
+    if (!name) return;
+    const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now().toString(36)}`;
+    createWorkspace(
+      { name, slug },
+      {
+        onSuccess: (ws: any) => {
+          setActiveWorkspaceId(ws.id);
+          setNewWorkspaceName("");
+          setCreateOpen(false);
+          toast({ title: "Workspace created", description: name });
+        },
+        onError: (err: any) =>
+          toast({ title: "Could not create workspace", description: err.message, variant: "destructive" }),
+      }
+    );
+  };
 
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -232,18 +264,56 @@ export const Sidebar = memo(function Sidebar() {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="start">
             <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-            {workspaces?.map((ws) => (
-              <DropdownMenuItem key={ws.id} className="cursor-pointer">
-                {ws.name}
+            {workspaces.map((ws) => (
+              <DropdownMenuItem
+                key={ws.id}
+                className="cursor-pointer justify-between"
+                onClick={() => setActiveWorkspaceId(ws.id)}
+              >
+                <span className="truncate">{ws.name}</span>
+                {activeWorkspace?.id === ws.id && <Check className="h-4 w-4 text-primary shrink-0" />}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 cursor-pointer text-primary">
+            <DropdownMenuItem
+              className="gap-2 cursor-pointer text-primary"
+              onSelect={(e) => {
+                e.preventDefault();
+                setCreateOpen(true);
+              }}
+            >
               <Plus className="h-4 w-4" /> Create Workspace
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create workspace</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="new-workspace-name">Workspace name</Label>
+            <Input
+              id="new-workspace-name"
+              value={newWorkspaceName}
+              onChange={(e) => setNewWorkspaceName(e.target.value)}
+              placeholder="e.g. Marketing Team"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreateWorkspace();
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateWorkspace} disabled={!newWorkspaceName.trim() || isCreatingWorkspace}>
+              {isCreatingWorkspace ? "Creating…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Navigation */}
       <div className={cn("flex-1 py-4 space-y-1 overflow-y-auto", isCollapsed && !isMobileOpen ? "px-2" : "px-3")}>

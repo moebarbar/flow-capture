@@ -3,7 +3,7 @@ import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { db } from "../db";
 import { authTokens, emailSettings, users } from "@shared/schema";
-import { eq, and, isNull, gt } from "drizzle-orm";
+import { eq, and, isNull, gt, sql } from "drizzle-orm";
 
 // Token expiry times (in milliseconds)
 const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
@@ -321,14 +321,24 @@ class EmailService {
       return { success: false, message: "Invalid or expired reset link" };
     }
 
-    // Hash new password
+    // Hash new password. Bumping token_version revokes every outstanding
+    // extension bearer token; deleting sessions logs out all active web
+    // sessions — so a compromise can't survive a password reset.
     const passwordHash = await bcrypt.hash(newPassword, 12);
 
-    // Update password
     await db
       .update(users)
-      .set({ passwordHash, updatedAt: new Date() })
+      .set({
+        passwordHash,
+        tokenVersion: sql`${users.tokenVersion} + 1`,
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, userId));
+
+    // Invalidate all server-side sessions for this user
+    await db.execute(
+      sql`DELETE FROM sessions WHERE sess->'passport'->'user'->'claims'->>'sub' = ${userId}`
+    );
 
     // Mark token as used
     await this.markTokenUsed(tokenId);

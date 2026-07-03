@@ -3,6 +3,7 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import crypto from "crypto";
+import { authStorage } from "./storage";
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -33,12 +34,12 @@ export function getSession() {
   });
 }
 
-// --- Extension token helpers (HMAC-signed, no DB required) ---
+// --- Extension token helpers (HMAC-signed; revocable via tokenVersion) ---
 const EXTENSION_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export function createExtensionToken(userId: string): string {
+export function createExtensionToken(userId: string, tokenVersion: number = 0): string {
   const payload = Buffer.from(
-    JSON.stringify({ sub: userId, exp: Date.now() + EXTENSION_TOKEN_TTL_MS })
+    JSON.stringify({ sub: userId, tv: tokenVersion, exp: Date.now() + EXTENSION_TOKEN_TTL_MS })
   ).toString("base64url");
   const sig = crypto
     .createHmac("sha256", process.env.SESSION_SECRET!)
@@ -47,7 +48,16 @@ export function createExtensionToken(userId: string): string {
   return `${payload}.${sig}`;
 }
 
-export function verifyExtensionToken(token: string): { userId: string } | null {
+// Mint a token stamped with the user's current token version (so it survives
+// until the next logout/password reset). Use this instead of createExtensionToken.
+export async function issueExtensionToken(userId: string): Promise<string> {
+  const version = (await authStorage.getTokenVersion(userId)) ?? 0;
+  return createExtensionToken(userId, version);
+}
+
+// Verifies signature + expiry only (no DB). Returns the claimed token version so
+// the caller can check it against the user's current version for revocation.
+export function verifyExtensionToken(token: string): { userId: string; tokenVersion: number } | null {
   try {
     const dotIdx = token.lastIndexOf(".");
     if (dotIdx === -1) return null;
@@ -64,7 +74,7 @@ export function verifyExtensionToken(token: string): { userId: string } | null {
       return null;
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (Date.now() > data.exp) return null;
-    return { userId: data.sub };
+    return { userId: data.sub, tokenVersion: typeof data.tv === "number" ? data.tv : 0 };
   } catch {
     return null;
   }
@@ -87,7 +97,7 @@ export async function setupAuth(app: Express) {
   });
 }
 
-export const isAuthenticated: RequestHandler = (req, res, next) => {
+export const isAuthenticated: RequestHandler = async (req, res, next) => {
   // 1. Try session-based auth (web app)
   const sessionUser = req.user as any;
   if (req.isAuthenticated() && sessionUser?.claims?.sub) {
@@ -100,6 +110,12 @@ export const isAuthenticated: RequestHandler = (req, res, next) => {
     const token = authHeader.slice(7);
     const result = verifyExtensionToken(token);
     if (result) {
+      // Enforce revocation: the token's version must match the user's current
+      // version (bumped on logout/password reset).
+      const currentVersion = await authStorage.getTokenVersion(result.userId);
+      if (currentVersion === null || currentVersion !== result.tokenVersion) {
+        return res.status(401).json({ message: "Token revoked" });
+      }
       // Attach a minimal user object so downstream handlers work uniformly
       (req as any).user = { claims: { sub: result.userId } };
       return next();

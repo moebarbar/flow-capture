@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar, pgEnum } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, timestamp, varchar, pgEnum } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "canceled", "past_due", "trialing", "inactive"]);
@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").default("user").notNull(),
   emailVerifiedAt: timestamp("email_verified_at"), // null = not verified
+  // Bumped on logout/password-reset to revoke outstanding extension bearer tokens
+  tokenVersion: integer("token_version").default(0).notNull(),
   stripeCustomerId: varchar("stripe_customer_id"),
   stripeSubscriptionId: varchar("stripe_subscription_id"),
   subscriptionStatus: subscriptionStatusEnum("subscription_status").default("inactive"),

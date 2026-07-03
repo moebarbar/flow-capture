@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { setupAuth, registerAuthRoutes, createExtensionToken, isAuthenticated } from "./replit_integrations/auth";
+import { setupAuth, registerAuthRoutes, createExtensionToken, issueExtensionToken, isAuthenticated } from "./replit_integrations/auth";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
@@ -349,7 +349,7 @@ export async function registerRoutes(
         createdById: userId,
       });
 
-      const extensionToken = createExtensionToken(userId);
+      const extensionToken = await issueExtensionToken(userId);
       res.json({ guideId: guide.id, workspaceId: workspace.id, extensionToken });
     } catch (err) {
       console.error('[extension/start-capture] Error:', err);
@@ -1958,7 +1958,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       
       // Also issue an extension token so the extension can authenticate API calls
       // via Bearer header without relying on cross-origin cookie transport.
-      const extensionToken = createExtensionToken(userId);
+      const extensionToken = await issueExtensionToken(userId);
 
       res.json({
         token: result.token,

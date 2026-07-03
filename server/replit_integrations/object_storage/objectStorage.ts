@@ -218,9 +218,23 @@ export class ObjectStorageService {
       const [metadata] = await file.getMetadata();
       const aclPolicy = await getObjectAclPolicy(file);
       const isPublic = aclPolicy?.visibility !== "private";
+
+      // Prevent stored-XSS: an attacker who uploads text/html or SVG must not
+      // have it served inline same-origin. Only known-safe media renders inline;
+      // everything else is neutralized and forced to download.
+      const rawType = (metadata.contentType || "application/octet-stream").toLowerCase();
+      const INLINE_SAFE = new Set([
+        "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp",
+        "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "video/mp4", "video/webm",
+      ]);
+      const isInlineSafe = INLINE_SAFE.has(rawType);
+      const contentType = isInlineSafe ? rawType : "application/octet-stream";
+
       res.set({
-        "Content-Type": metadata.contentType || "application/octet-stream",
+        "Content-Type": contentType,
         "Content-Length": metadata.size,
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": isInlineSafe ? "inline" : "attachment",
         "Cache-Control": `${
           isPublic ? "public" : "private"
         }, max-age=${cacheTtlSec}`,

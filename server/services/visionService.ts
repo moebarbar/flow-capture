@@ -2,6 +2,7 @@ import { anthropic } from "../lib/anthropic";
 import { db } from "../db";
 import { steps, guides } from "@shared/schema";
 import { eq, asc } from "drizzle-orm";
+import { safeFetch } from "../lib/ssrf";
 
 interface StepContext {
   actionType: string;
@@ -39,8 +40,11 @@ interface VisionAnalysis {
 
 async function fetchImageAsBase64(imageUrl: string, appBaseUrl: string): Promise<string | null> {
   try {
-    const fullUrl = imageUrl.startsWith('http') ? imageUrl : `${appBaseUrl}${imageUrl}`;
-    const response = await fetch(fullUrl);
+    // Relative paths resolve to our own object storage; absolute URLs (rare —
+    // only if a step's imageUrl was set to an external URL) are SSRF-validated.
+    const isRelative = !imageUrl.startsWith('http');
+    const fullUrl = isRelative ? `${appBaseUrl}${imageUrl}` : imageUrl;
+    const response = isRelative ? await fetch(fullUrl) : await safeFetch(fullUrl);
     if (!response.ok) return null;
     const buffer = await response.arrayBuffer();
     return Buffer.from(buffer).toString('base64');

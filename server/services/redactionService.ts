@@ -91,6 +91,11 @@ export const redactionService = {
     return savedRegions;
   },
 
+  async getRegion(id: number): Promise<typeof redactionRegions.$inferSelect | undefined> {
+    const [region] = await db.select().from(redactionRegions).where(eq(redactionRegions.id, id));
+    return region;
+  },
+
   async getRegionsByStep(stepId: number): Promise<typeof redactionRegions.$inferSelect[]> {
     return db.select()
       .from(redactionRegions)

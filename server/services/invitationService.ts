@@ -102,10 +102,8 @@ export class InvitationService {
     token: string,
     invitationId: number
   ) {
-    const baseUrl = process.env.REPLIT_DOMAINS 
-      ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}`
-      : 'http://localhost:5000';
-    
+    const { getAppBaseUrl } = await import('../config');
+    const baseUrl = getAppBaseUrl();
     const acceptUrl = `${baseUrl}/invite/accept?token=${token}&id=${invitationId}`;
     
     const htmlContent = `

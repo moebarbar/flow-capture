@@ -152,7 +152,18 @@ class MicrosoftTeamsProvider implements IntegrationProvider {
       return { success: false, message: 'Webhook URL is required', error: 'missing_webhook_url' };
     }
 
-    if (!webhookUrl.includes('webhook.office.com') && !webhookUrl.includes('microsoft.com')) {
+    let teamsHost: string;
+    try {
+      const parsed = new URL(webhookUrl);
+      teamsHost = parsed.hostname.toLowerCase();
+      if (parsed.protocol !== 'https:') throw new Error('scheme');
+    } catch {
+      return { success: false, message: 'Invalid Microsoft Teams webhook URL', error: 'invalid_url_format' };
+    }
+    const teamsAllowed = teamsHost === 'webhook.office.com' ||
+      teamsHost.endsWith('.webhook.office.com') ||
+      teamsHost.endsWith('.microsoft.com');
+    if (!teamsAllowed) {
       return { success: false, message: 'Invalid Microsoft Teams webhook URL format', error: 'invalid_url_format' };
     }
 

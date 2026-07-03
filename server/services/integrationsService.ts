@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import crypto from "crypto";
+import { safeFetch, assertSafeUrl } from "../lib/ssrf";
 
 export interface AutomationAction {
   type: string;
@@ -63,6 +64,10 @@ class IntegrationsService {
   // === WEBHOOKS ===
 
   async createWebhook(data: InsertWebhook): Promise<Webhook> {
+    // Reject webhooks pointing at internal/private addresses (SSRF)
+    if (data.url) {
+      await assertSafeUrl(data.url);
+    }
     const secret = crypto.randomBytes(32).toString('hex');
     const [webhook] = await db.insert(webhooks).values({ ...data, secret }).returning();
     return webhook;
@@ -118,7 +123,7 @@ class IntegrationsService {
         'X-Webhook-Id': webhook.id.toString()
       };
 
-      const response = await fetch(webhook.url, {
+      const response = await safeFetch(webhook.url, {
         method: 'POST',
         headers,
         body: payloadStr
@@ -313,8 +318,8 @@ class IntegrationsService {
   private async executeWebhookAction(config: Record<string, unknown>, context: TriggerContext): Promise<void> {
     const url = config.url as string;
     if (!url) throw new Error('Webhook URL is required');
-    
-    await fetch(url, {
+
+    await safeFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...context, timestamp: new Date().toISOString() })

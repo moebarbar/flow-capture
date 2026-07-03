@@ -3,4 +3,15 @@ dist
 .DS_Store
 server/public
 vite.config.ts.*
-*.tar.gz.claude/
+*.tar.gz
+.claude/
+
+# Secrets — never commit
+.env
+.env.*
+*.pem
+*.key
+# GCP / service-account keys (e.g. plannedia-b825475c926a.json)
+*-service-account*.json
+plannedia-*.json
+gcp-*.json

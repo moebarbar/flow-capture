@@ -30,6 +30,7 @@ import {
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, sql, ilike, or } from "drizzle-orm";
 import { authStorage } from "./replit_integrations/auth/storage";
+import { sanitizeRichHtml } from "./lib/sanitize";
 
 export interface IStorage {
   // Users
@@ -1083,10 +1084,12 @@ export class DatabaseStorage implements IStorage {
     return result[0]?.count ?? 0;
   }
 
-  async markNotificationRead(id: number): Promise<void> {
+  async markNotificationRead(id: number, userId?: string): Promise<void> {
     await db.update(notifications)
       .set({ isRead: true, readAt: new Date() })
-      .where(eq(notifications.id, id));
+      .where(userId
+        ? and(eq(notifications.id, id), eq(notifications.userId, userId))
+        : eq(notifications.id, id));
   }
 
   async markAllNotificationsRead(userId: string): Promise<void> {
@@ -1263,6 +1266,10 @@ export class DatabaseStorage implements IStorage {
 
   // Knowledge Base Article methods
   async createKbArticle(article: InsertKbArticle): Promise<KbArticle> {
+    // Sanitize user-authored HTML — rendered via dangerouslySetInnerHTML on public pages
+    if (article.content !== undefined) {
+      article = { ...article, content: sanitizeRichHtml(article.content) };
+    }
     const [newArticle] = await db.insert(kbArticles).values(article).returning();
     // Update category article count
     if (article.categoryId) {
@@ -1322,6 +1329,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateKbArticle(id: number, article: Partial<InsertKbArticle>): Promise<KbArticle> {
+    // Sanitize user-authored HTML on every update path
+    if (article.content !== undefined) {
+      article = { ...article, content: sanitizeRichHtml(article.content) };
+    }
     const [updated] = await db.update(kbArticles)
       .set({ ...article, updatedAt: new Date() })
       .where(eq(kbArticles.id, id))

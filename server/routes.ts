@@ -39,6 +39,20 @@ export async function registerRoutes(
     frameguard: false,
   }));
 
+  // Clickjacking protection: deny framing of the whole app EXCEPT the public
+  // embed surfaces, which are meant to be iframed by third parties. Applied to
+  // both API responses and the SPA HTML (served by the catch-all).
+  app.use((req, res, next) => {
+    const framable = req.path.includes('/embed') || req.path.startsWith('/api/embed');
+    if (framable) {
+      res.setHeader('Content-Security-Policy', "frame-ancestors *");
+    } else {
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+      res.setHeader('Content-Security-Policy', "frame-ancestors 'self'");
+    }
+    next();
+  });
+
   // Rate limiting for auth endpoints (strict)
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -79,10 +93,15 @@ export async function registerRoutes(
   // Apply general API rate limiting
   app.use('/api', apiLimiter);
 
-  // Apply AI rate limiting to expensive operations
+  // Apply AI rate limiting to expensive operations (real route paths — the
+  // previous /api/chat and /api/image/generate mounts matched no routes).
   app.use('/api/ai', aiLimiter);
-  app.use('/api/chat', aiLimiter);
-  app.use('/api/image/generate', aiLimiter);
+  app.use('/api/generate-image', aiLimiter);
+  app.use('/api/conversations/:conversationId/messages', aiLimiter);
+  app.use('/api/guides/:guideId/translate', aiLimiter);
+  app.use('/api/guides/:guideId/voiceovers', aiLimiter);
+  app.use('/api/guides/:guideId/generate-all-descriptions', aiLimiter);
+  app.use('/api/steps/:stepId/voiceover', aiLimiter);
 
   // Health check — used by Railway and the extension's online detection
   app.get('/api/health', async (_req, res) => {
@@ -171,8 +190,11 @@ export async function registerRoutes(
           });
           targetWorkspaceId = newWorkspace.id;
         }
+      } else if (!await canAccessWorkspace(userId, targetWorkspaceId)) {
+        // A workspaceId was supplied — the caller must be a member of it
+        return res.status(403).json({ message: "Access denied" });
       }
-      
+
       // Create the flow/guide
       const guide = await storage.createGuide({
         title: title || 'Untitled Flow',
@@ -543,10 +565,18 @@ export async function registerRoutes(
 
   app.put(api.steps.update.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
+      const stepId = Number(req.params.id);
+      const existing = await storage.getStep(stepId);
+      if (!existing) return res.status(404).json({ message: "Step not found" });
+      if (!await canManageGuideShare(userId, existing.flowId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
       const input = api.steps.update.input.parse(req.body);
-      const step = await storage.updateStep(Number(req.params.id), input);
+      const step = await storage.updateStep(stepId, input);
       res.json(step);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -561,13 +591,38 @@ export async function registerRoutes(
 
   app.delete(api.steps.delete.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    await storage.deleteStep(Number(req.params.id));
+    const userId = (req.user as any).claims.sub;
+    const stepId = Number(req.params.id);
+    const existing = await storage.getStep(stepId);
+    if (!existing) return res.status(404).json({ message: "Step not found" });
+    if (!await canManageGuideShare(userId, existing.flowId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    await storage.deleteStep(stepId);
     res.status(204).send();
   });
 
   app.post(api.steps.reorder.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const { stepIds } = req.body;
+    if (!Array.isArray(stepIds) || stepIds.some((id) => typeof id !== 'number')) {
+      return res.status(400).json({ message: "stepIds must be an array of numbers" });
+    }
+
+    // Verify every step belongs to a guide the user can manage
+    const stepRecords = await Promise.all(stepIds.map((id: number) => storage.getStep(id)));
+    const guideIds = new Set<number>();
+    for (const s of stepRecords) {
+      if (!s) return res.status(404).json({ message: "Step not found" });
+      guideIds.add(s.flowId);
+    }
+    for (const gid of Array.from(guideIds)) {
+      if (!await canManageGuideShare(userId, gid)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
     await storage.reorderSteps(stepIds);
     res.status(200).send();
   });
@@ -575,15 +630,23 @@ export async function registerRoutes(
   // === FOLDERS ===
   app.get(api.folders.list.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const workspaceId = Number(req.query.workspaceId);
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
     const folders = await storage.getFoldersByWorkspace(workspaceId);
     res.json(folders);
   });
 
   app.post(api.folders.create.path, async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     try {
       const input = api.folders.create.input.parse(req.body);
+      if (!await canAccessWorkspace(userId, input.workspaceId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const folder = await storage.createFolder(input);
       res.status(201).json(folder);
     } catch (err) {
@@ -789,8 +852,16 @@ export async function registerRoutes(
     const members = await storage.getWorkspaceMembers(guide.workspaceId);
     const member = members.find(m => m.userId === userId);
     if (member && ['owner', 'admin', 'editor'].includes(member.role)) return true;
-    
+
     return false;
+  }
+
+  // Authorize managing a redaction region by its id (region → guide → editor+)
+  async function canManageRedactionRegion(userId: string, regionId: number): Promise<{ ok: boolean; notFound?: boolean }> {
+    const { redactionService } = await import("./services/redactionService");
+    const region = await redactionService.getRegion(regionId);
+    if (!region) return { ok: false, notFound: true };
+    return { ok: await canManageGuideShare(userId, region.flowId) };
   }
   
   // Get share settings for a guide (owner/editor only)
@@ -1249,9 +1320,14 @@ Write a clear, accurate description for this step.`
   // Called automatically by the frontend after capture completes.
   app.post("/api/guides/:guideId/generate-all-descriptions", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
 
     const guideId = Number(req.params.guideId);
     if (!guideId) return res.status(400).json({ message: "Invalid guide ID" });
+
+    if (!await canManageGuideShare(userId, guideId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
 
     try {
       const allSteps = await storage.getStepsByGuide(guideId);
@@ -1380,7 +1456,7 @@ Return ONLY valid JSON with no extra text: { "title": "...", "description": "...
       }
 
       // Authorization: Check if user owns the guide's workspace
-      const userId = (req.user as any).id;
+      const userId = (req.user as any).claims.sub;
       const workspace = await storage.getWorkspace(guide.workspaceId);
       if (!workspace) {
         return res.status(404).json({ message: "Workspace not found" });
@@ -1455,9 +1531,13 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // Get translations for a guide
   app.get("/api/guides/:guideId/translations", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
       const guideId = Number(req.params.guideId);
+      if (!await canAccessGuide(userId, guideId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const { getGuideTranslations, getStepTranslations } = await import("./services/translationService");
       
       const guideTranslations = await getGuideTranslations(guideId);
@@ -1500,7 +1580,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const userId = (req.user as any).id;
+      const userId = (req.user as any).claims.sub;
       const workspace = await storage.getWorkspace(guide.workspaceId);
       if (!workspace) {
         return res.status(404).json({ message: "Workspace not found" });
@@ -1531,7 +1611,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const userId = (req.user as any).id;
+      const userId = (req.user as any).claims.sub;
       const workspace = await storage.getWorkspace(guide.workspaceId);
       if (!workspace) {
         return res.status(404).json({ message: "Workspace not found" });
@@ -1561,11 +1641,15 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // Get voiceovers for a guide
   app.get("/api/guides/:guideId/voiceovers", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
       const guideId = Number(req.params.guideId);
+      if (!await canAccessGuide(userId, guideId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const locale = req.query.locale as string || 'en';
-      
+
       const { voiceoverService } = await import("./services/voiceoverService");
       const voiceovers = await voiceoverService.getGuideVoiceovers(guideId, locale);
       res.json(voiceovers);
@@ -1593,7 +1677,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const userId = (req.user as any).id;
+      const userId = (req.user as any).claims.sub;
       const workspace = await storage.getWorkspace(guide.workspaceId);
       if (!workspace) {
         return res.status(404).json({ message: "Workspace not found" });
@@ -1634,7 +1718,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const userId = (req.user as any).id;
+      const userId = (req.user as any).claims.sub;
       const workspace = await storage.getWorkspace(guide.workspaceId);
       if (!workspace) {
         return res.status(404).json({ message: "Workspace not found" });
@@ -1660,9 +1744,15 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // Get redaction regions for a step
   app.get("/api/steps/:stepId/redactions", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
       const stepId = Number(req.params.stepId);
+      const step = await storage.getStep(stepId);
+      if (!step) return res.status(404).json({ message: "Step not found" });
+      if (!await canAccessGuide(userId, step.flowId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const { redactionService } = await import("./services/redactionService");
       const regions = await redactionService.getRegionsByStep(stepId);
       res.json(regions);
@@ -1675,9 +1765,13 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // Get all redaction regions for a guide
   app.get("/api/guides/:guideId/redactions", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
       const guideId = Number(req.params.guideId);
+      if (!await canAccessGuide(userId, guideId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const { redactionService } = await import("./services/redactionService");
       const regions = await redactionService.getRegionsByGuide(guideId);
       res.json(regions);
@@ -1704,7 +1798,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const userId = (req.user as any).id;
+      const userId = (req.user as any).claims.sub;
       const workspace = await storage.getWorkspace(guide.workspaceId);
       if (!workspace) {
         return res.status(404).json({ message: "Workspace not found" });
@@ -1742,17 +1836,11 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(404).json({ message: "Guide not found" });
       }
       
-      const userId = (req.user as any).id;
-      const workspace = await storage.getWorkspace(guide.workspaceId);
-      if (!workspace) {
-        return res.status(404).json({ message: "Workspace not found" });
-      }
-      const members = await storage.getWorkspaceMembers(guide.workspaceId);
-      const isMember = members.some(m => m.userId === userId);
-      if (workspace.ownerId !== userId && !isMember) {
+      const userId = (req.user as any).claims.sub;
+      if (!await canManageGuideShare(userId, step.flowId)) {
         return res.status(403).json({ message: "Access denied" });
       }
-      
+
       const { redactionService } = await import("./services/redactionService");
       const region = await redactionService.createRegion({
         stepId,
@@ -1774,11 +1862,15 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // Update a redaction region
   app.patch("/api/redactions/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
       const id = Number(req.params.id);
+      const authz = await canManageRedactionRegion(userId, id);
+      if (authz.notFound) return res.status(404).json({ message: "Region not found" });
+      if (!authz.ok) return res.status(403).json({ message: "Access denied" });
+
       const update = req.body;
-      
       const { redactionService } = await import("./services/redactionService");
       const updated = await redactionService.updateRegion(id, update);
       res.json(updated);
@@ -1791,10 +1883,14 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // Delete a redaction region
   app.delete("/api/redactions/:id", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
       const id = Number(req.params.id);
-      
+      const authz = await canManageRedactionRegion(userId, id);
+      if (authz.notFound) return res.status(404).json({ message: "Region not found" });
+      if (!authz.ok) return res.status(403).json({ message: "Access denied" });
+
       const { redactionService } = await import("./services/redactionService");
       await redactionService.deleteRegion(id);
       res.status(204).send();
@@ -1807,10 +1903,14 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // Toggle a redaction region enabled/disabled
   app.post("/api/redactions/:id/toggle", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
-    
+    const userId = (req.user as any).claims.sub;
+
     try {
       const id = Number(req.params.id);
-      
+      const authz = await canManageRedactionRegion(userId, id);
+      if (authz.notFound) return res.status(404).json({ message: "Region not found" });
+      if (!authz.ok) return res.status(403).json({ message: "Access denied" });
+
       const { redactionService } = await import("./services/redactionService");
       const updated = await redactionService.toggleRegion(id);
       res.json(updated);
@@ -2296,7 +2396,9 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       }
 
       const updatedUser = await storage.updateUserRole(id, role);
-      res.json(updatedUser);
+      // Strip credential material before responding
+      const { passwordHash, ...safeUser } = updatedUser as any;
+      res.json(safeUser);
     } catch (error) {
       console.error('Admin update user error:', error);
       res.status(500).json({ message: 'Failed to update user' });
@@ -2999,6 +3101,10 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       const input = api.extension.syncCapture.input.parse(req.body);
       const { workspaceId, title, steps } = input;
 
+      if (!await canAccessWorkspace(userId, workspaceId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
       const guideTitle = title || `Captured Workflow - ${new Date().toLocaleDateString()}`;
       const guide = await storage.createGuide({
         workspaceId,
@@ -3054,8 +3160,9 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // === ANALYTICS API ===
   app.get('/api/analytics', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const workspaceId = req.query.workspaceId ? Number(req.query.workspaceId) : undefined;
-    
+
     const emptyAnalytics = {
       totalViews: 0,
       totalGuides: 0,
@@ -3071,6 +3178,10 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
     
     if (!workspaceId) {
       return res.json(emptyAnalytics);
+    }
+
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     try {
@@ -3231,6 +3342,10 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       return res.status(400).json({ message: "workspaceId is required" });
     }
 
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     try {
       const guide = await storage.createGuideFromTemplate(templateId, workspaceId, userId);
       res.status(201).json(guide);
@@ -3243,7 +3358,12 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // === WORKSPACE SETTINGS API ===
   app.get('/api/workspaces/:id/settings', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const workspaceId = Number(req.params.id);
+
+    if (!await canAccessWorkspace(userId, workspaceId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
 
     try {
       const settings = await storage.getWorkspaceSettings(workspaceId);
@@ -3267,7 +3387,13 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
 
   app.patch('/api/workspaces/:id/settings', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const workspaceId = Number(req.params.id);
+
+    const access = await checkWorkspaceAccess(userId, workspaceId, ['owner', 'admin']);
+    if (!access.allowed) {
+      return res.status(403).json({ message: "Only workspace owners and admins can change settings" });
+    }
 
     try {
       const settings = await storage.updateWorkspaceSettings(workspaceId, req.body);
@@ -3290,14 +3416,29 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         return res.status(400).json({ message: 'Email is required' });
       }
 
+      // Only owner/admin may invite; only an owner may grant the owner role
+      const access = await checkWorkspaceAccess(userId, workspaceId, ['owner', 'admin']);
+      if (!access.allowed) {
+        return res.status(403).json({ message: "Only workspace owners and admins can invite members" });
+      }
+      const requestedRole = role || 'editor';
+      if (!['owner', 'admin', 'editor', 'viewer'].includes(requestedRole)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      if (requestedRole === 'owner' && access.role !== 'owner') {
+        return res.status(403).json({ message: "Only an owner can grant the owner role" });
+      }
+
       const invitation = await invitationService.createInvitation(
         workspaceId,
         email,
         userId,
-        role || 'editor'
+        requestedRole
       );
 
-      res.status(201).json({ success: true, invitation });
+      // Never return the invite token in the API response — it's emailed to the invitee
+      const { token, tokenHash, ...safeInvitation } = invitation as any;
+      res.status(201).json({ success: true, invitation: safeInvitation });
     } catch (err: any) {
       console.error("Create invitation error:", err);
       if (err.message.startsWith('UPGRADE_REQUIRED:') || err.message.startsWith('SEAT_LIMIT:')) {
@@ -3309,9 +3450,13 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
 
   app.get('/api/workspaces/:id/invitations', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const workspaceId = Number(req.params.id);
 
     try {
+      const access = await checkWorkspaceAccess(userId, workspaceId, ['owner', 'admin']);
+      if (!access.allowed) return res.status(403).json({ message: "Access denied" });
+
       const invitations = await invitationService.getWorkspaceInvitations(workspaceId);
       res.json(invitations);
     } catch (err) {
@@ -3422,11 +3567,15 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
 
   app.get('/api/guides/:guideId/assignments', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const guideId = parseInt(req.params.guideId);
 
     try {
       const guide = await storage.getGuide(guideId);
       if (!guide) return res.status(404).json({ message: 'Guide not found' });
+      if (!await canAccessGuide(userId, guideId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
 
       const assignments = await storage.getAssignmentsByGuide(guideId);
       res.json({ data: assignments });
@@ -3717,9 +3866,15 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
   // --- Step Comments ---
   app.get('/api/steps/:stepId/comments', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const stepId = parseInt(req.params.stepId);
 
     try {
+      const step = await storage.getStep(stepId);
+      if (!step) return res.status(404).json({ message: "Step not found" });
+      if (!await canAccessGuide(userId, step.flowId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const comments = await storage.getCommentsByStep(stepId);
       res.json({ data: comments });
     } catch (error) {
@@ -3729,9 +3884,13 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
 
   app.get('/api/guides/:guideId/comments', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const guideId = parseInt(req.params.guideId);
 
     try {
+      if (!await canAccessGuide(userId, guideId)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
       const comments = await storage.getCommentsByGuide(guideId);
       res.json({ data: comments });
     } catch (error) {
@@ -3890,10 +4049,11 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
 
   app.post('/api/notifications/:id/read', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
+    const userId = (req.user as any).claims.sub;
     const notificationId = parseInt(req.params.id);
 
     try {
-      await storage.markNotificationRead(notificationId);
+      await storage.markNotificationRead(notificationId, userId);
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: 'Failed to mark notification read' });
@@ -4566,6 +4726,14 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
       
       if (!guideShare || !guideShare.enabled) {
         return res.status(404).json({ message: "Demo not available" });
+      }
+
+      // Password-protected guides must not leak content through the demo endpoint
+      if (guideShare.passwordHash) {
+        return res.status(403).json({
+          message: "This guide is password-protected. Use the share link instead.",
+          passwordProtected: true,
+        });
       }
 
       const guide = await storage.getGuide(guideShare.flowId);

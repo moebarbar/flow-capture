@@ -7,6 +7,29 @@ import { MessageTypes, PortNames, CaptureStates, WebAppMessageTypes } from '../s
 import { saveSession, clearSession, savePendingSteps, getPendingSteps, clearPendingSteps } from '../shared/storage.js';
 import { syncManager, SyncStatus } from './sync-manager.js';
 
+// The extension token is a bearer credential; it must only ever be sent to a
+// trusted API origin. A page-supplied apiBaseUrl was previously trusted
+// verbatim, letting a malicious site exfiltrate the token. Pin the allowlist.
+const TRUSTED_API_ORIGINS = [
+  'https://flow-capture-production.up.railway.app',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+  'http://0.0.0.0:5000'
+];
+const DEFAULT_API_ORIGIN = TRUSTED_API_ORIGINS[0];
+
+// Returns a trusted origin for `candidate`, or the default. Never returns an
+// untrusted/attacker-controlled origin.
+function resolveApiBaseUrl(candidate) {
+  if (typeof candidate === 'string' && candidate) {
+    try {
+      const origin = new URL(candidate).origin;
+      if (TRUSTED_API_ORIGINS.includes(origin)) return origin;
+    } catch { /* fall through */ }
+  }
+  return DEFAULT_API_ORIGIN;
+}
+
 class CaptureStateMachine {
   constructor() {
     this.state = {
@@ -339,7 +362,7 @@ async function applySessionToMachine(session) {
   machine.state.captureToken = session.token || null;
   machine.state.guideId = session.guideId || null;
   machine.state.expiresAt = session.expiresAt || null;
-  machine.state.apiBaseUrl = session.apiBaseUrl || machine.state.apiBaseUrl || '';
+  machine.state.apiBaseUrl = resolveApiBaseUrl(session.apiBaseUrl || machine.state.apiBaseUrl);
   machine.state.workspaceId = session.workspaceId || machine.state.workspaceId || null;
   
   // Persist session to storage
@@ -531,7 +554,7 @@ async function handleMessage(message, sender) {
         
         if (data.guideId) machine.state.guideId = data.guideId;
         if (data.workspaceId) machine.state.workspaceId = data.workspaceId;
-        if (data.apiBaseUrl) machine.state.apiBaseUrl = data.apiBaseUrl;
+        if (data.apiBaseUrl) machine.state.apiBaseUrl = resolveApiBaseUrl(data.apiBaseUrl);
         if (data.requestingAppTabId) machine.state.requestingAppTabId = data.requestingAppTabId;
         // Apply extension token from popup so steps sync without requiring cookie auth
         if (data.extensionToken) {
@@ -662,11 +685,20 @@ async function handleMessage(message, sender) {
 
 async function handleExternalMessage(message, sender) {
   const { type, data } = message;
-  const origin = sender.origin || sender.url || '';
+  const origin = sender.origin || (sender.url ? new URL(sender.url).origin : '');
+
+  // Only the trusted app origin may drive capture from a web page. This blocks
+  // a malicious site (e.g. an attacker-registered *.up.railway.app subdomain)
+  // from starting a session and exfiltrating the extension token.
+  const senderTrusted = TRUSTED_API_ORIGINS.includes(origin);
 
   switch (type) {
     case 'START_CAPTURE_SESSION':
-      machine.state.apiBaseUrl = data?.apiBaseUrl || origin;
+      if (!senderTrusted) {
+        console.warn('[FlowCapture] Rejected START_CAPTURE_SESSION from untrusted origin:', origin);
+        return { success: false, error: 'Untrusted origin' };
+      }
+      machine.state.apiBaseUrl = resolveApiBaseUrl(data?.apiBaseUrl || origin);
       machine.state.guideId = data?.guideId || null;
       machine.state.workspaceId = data?.workspaceId || null;
       

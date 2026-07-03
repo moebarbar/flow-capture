@@ -52,41 +52,19 @@
   let mutationObserver = null;
   let lastClickedElement = null;
 
-  const TRUSTED_ORIGIN_SUFFIXES = [
-    '.repl.co',
-    '.replit.dev',
-    '.replit.app',
-    '.flowcapture.com',
-    '.flowcapture.app',
-    '.up.railway.app'
-  ];
-  
+  // Exact-origin allowlist only. Suffix matching on shared hosting
+  // (*.up.railway.app, *.replit.*) let any attacker-registered subdomain drive
+  // capture and exfiltrate the session/extension token — so it was removed.
   const TRUSTED_EXACT_ORIGINS = [
+    'https://flow-capture-production.up.railway.app',
     'http://localhost:5000',
-    'http://0.0.0.0:5000',
-    'https://repl.co',
-    'https://replit.dev',
-    'https://replit.app',
-    'https://flowcapture.com',
-    'https://flowcapture.app'
+    'http://127.0.0.1:5000',
+    'http://0.0.0.0:5000'
   ];
 
   function isOriginTrusted(origin) {
     if (!origin || typeof origin !== 'string') return false;
-    if (TRUSTED_EXACT_ORIGINS.includes(origin)) return true;
-    
-    try {
-      const url = new URL(origin);
-      if (url.protocol === 'https:') {
-        return TRUSTED_ORIGIN_SUFFIXES.some(suffix => url.hostname.endsWith(suffix));
-      }
-      if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '0.0.0.0')) {
-        return true;
-      }
-    } catch {
-      return false;
-    }
-    return false;
+    return TRUSTED_EXACT_ORIGINS.includes(origin);
   }
 
   function connectPort() {
@@ -484,7 +462,9 @@
       role: element.getAttribute('role'),
       title: element.getAttribute('title'),
       alt: element.getAttribute('alt'),
-      value: element.tagName === 'INPUT' && element.type !== 'password' ? (element.value || null) : null,
+      // Never capture the typed value of password/sensitive fields (they were
+      // masked in the screenshot but the raw value still leaked via metadata).
+      value: element.tagName === 'INPUT' && !isSensitiveField(element) ? (element.value || null) : null,
       dataTestId: element.getAttribute('data-testid'),
       isButton: element.tagName === 'BUTTON' || element.getAttribute('role') === 'button',
       isLink: element.tagName === 'A' || element.getAttribute('role') === 'link',
@@ -513,7 +493,8 @@
 
   function getVisibleText(element) {
     if (element.tagName === 'INPUT') {
-      return element.placeholder || element.value || '';
+      // Only the placeholder is safe to surface — the value may be a secret.
+      return element.placeholder || '';
     }
     if (element.tagName === 'IMG') {
       return element.alt || '';
@@ -875,6 +856,18 @@
     'input[id*="credit"]',
     'input[id*="card-number"]',
   ].join(',');
+
+  // True for password/credit-card/SSN-style fields whose values must never be
+  // captured into screenshots OR step metadata.
+  function isSensitiveField(element) {
+    if (!element || element.tagName !== 'INPUT') return false;
+    if (element.type === 'password') return true;
+    try {
+      return element.matches(SENSITIVE_INPUT_SELECTORS);
+    } catch {
+      return false;
+    }
+  }
 
   const MASK_ATTR = 'data-flowcapture-mask';
 
@@ -1469,7 +1462,9 @@
     lastCaptureTime = now;
 
     const fieldLabel = getElementLabel(target, getElementMetadata(target)) || target.tagName.toLowerCase();
-    const text = event.clipboardData?.getData('text')?.slice(0, 50) || '';
+    // Do not record pasted content for sensitive fields (passwords, card data).
+    const sensitive = isSensitiveField(target);
+    const text = sensitive ? '' : (event.clipboardData?.getData('text')?.slice(0, 50) || '');
 
     const step = {
       clientStepId: `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

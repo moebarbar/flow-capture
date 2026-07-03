@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import crypto from "crypto";
 import { emailService } from "../../services/emailService";
+import { getAppBaseUrl } from "../../config";
 
 // Validation schemas
 const registerSchema = z.object({
@@ -208,7 +209,8 @@ export function registerAuthRoutes(app: Express): void {
         return res.json({ message: "If an account exists with this email, you will receive a password reset link" });
       }
 
-      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      // Use the trusted APP_URL, not the client-controlled Host header (link poisoning)
+      const baseUrl = getAppBaseUrl(req);
       await emailService.sendPasswordResetEmail(user.email!, user.id, baseUrl);
 
       res.json({ message: "If an account exists with this email, you will receive a password reset link" });
@@ -280,7 +282,8 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(400).json({ message: "Email already verified" });
       }
 
-      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      // Use the trusted APP_URL, not the client-controlled Host header (link poisoning)
+      const baseUrl = getAppBaseUrl(req);
       await emailService.sendVerificationEmail(user.email, user.id, baseUrl);
 
       res.json({ message: "Verification email sent" });

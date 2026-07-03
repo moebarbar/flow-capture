@@ -52,12 +52,21 @@ app.use((req, res, next) => {
 });
 
 // CSRF protection for state-changing auth endpoints.
-// Strategy: verify Origin header on all POST/PUT/PATCH/DELETE to /api/auth/*.
-// This protects against cross-origin cookie-based CSRF attacks (especially when
-// sameSite=none is required for the Chrome extension in production).
-// Bearer-token requests from the extension are exempt since they don't use cookies.
-app.use("/api/auth", (req, res, next) => {
+// Strategy: verify the Origin/Referer on ALL state-changing /api requests.
+// This protects against cross-origin cookie-based CSRF (session cookies are
+// sameSite=none in production so the extension can use them). Bearer-token
+// requests are exempt — an attacker's page can't forge the Authorization header.
+// Public server-to-server / cross-origin endpoints are explicitly exempted.
+const CSRF_EXEMPT_PREFIXES = [
+  "/api/stripe/webhook", // Stripe server-to-server, signature-verified
+  "/api/analytics/track", // public beacon, no auth/cookies of value
+];
+app.use("/api", (req, res, next) => {
   if (["GET", "OPTIONS", "HEAD"].includes(req.method)) return next();
+
+  // req.path here is relative to the /api mount, so re-derive the full path
+  const fullPath = req.baseUrl + req.path;
+  if (CSRF_EXEMPT_PREFIXES.some((p) => fullPath.startsWith(p))) return next();
 
   // Bearer-token requests are not CSRF-vulnerable (attacker can't forge them)
   const authHeader = req.headers.authorization;
@@ -69,8 +78,12 @@ app.use("/api/auth", (req, res, next) => {
   // Same-origin requests (no Origin header) are fine
   if (!origin && !referer) return next();
 
-  const requestOrigin = origin || (referer ? new URL(referer).origin : null);
-
+  let requestOrigin: string | null = null;
+  try {
+    requestOrigin = origin || (referer ? new URL(referer).origin : null);
+  } catch {
+    return res.status(403).json({ message: "CSRF check failed" });
+  }
   if (!requestOrigin) return next();
 
   // Always allow chrome-extension origins
@@ -158,7 +171,13 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        // Redact credential-bearing fields before logging; never log tokens/hashes
+        const SENSITIVE = ["token", "extensionToken", "passwordHash", "password", "secret"];
+        const redacted = JSON.stringify(capturedJsonResponse, (key, value) =>
+          SENSITIVE.includes(key) && value ? "[redacted]" : value,
+        );
+        const preview = redacted.length > 500 ? `${redacted.slice(0, 500)}…` : redacted;
+        logLine += ` :: ${preview}`;
       }
 
       log(logLine);

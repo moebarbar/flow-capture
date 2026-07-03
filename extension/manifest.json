@@ -40,20 +40,12 @@
   ],
 
   "host_permissions": [
-    "https://*.replit.app/*",
-    "https://*.replit.dev/*",
-    "https://*.repl.co/*",
-    "https://*.up.railway.app/*"
+    "https://flow-capture-production.up.railway.app/*"
   ],
 
   "externally_connectable": {
     "matches": [
-      "https://*.replit.dev/*",
-      "https://*.replit.app/*",
-      "https://*.repl.co/*",
-      "https://*.flowcapture.com/*",
-      "https://*.flowcapture.app/*",
-      "https://*.up.railway.app/*",
+      "https://flow-capture-production.up.railway.app/*",
       "http://localhost:*/*",
       "http://127.0.0.1:*/*"
     ]

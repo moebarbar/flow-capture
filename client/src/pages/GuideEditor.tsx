@@ -27,8 +27,13 @@ import {
   GripVertical, Image as ImageIcon, CheckCircle, ExternalLink, Sparkles, Upload,
   Share2, Copy, Lock, Eye, EyeOff, Download, Code, FileText, Languages, Volume2,
   Video, Square, Loader2, Settings, LayoutGrid, Plus, BookOpen, FolderOpen, Pause, Play, X,
-  ClipboardList, GraduationCap, Library, HelpCircle, History, RotateCcw
+  ClipboardList, GraduationCap, Library, HelpCircle, History, RotateCcw,
+  MessageSquare, Users, SlidersHorizontal
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { StepComments } from "@/components/StepComments";
+import { StepAssignmentPanel } from "@/components/StepAssignmentPanel";
+import { ApprovalWorkflowPanel } from "@/components/ApprovalWorkflowPanel";
 import { TranslationDialog } from "@/components/TranslationDialog";
 import { VoiceoverPanel } from "@/components/VoiceoverPanel";
 import { RedactionPanel } from "@/components/RedactionPanel";
@@ -745,6 +750,13 @@ export default function GuideEditor() {
   // Current thumbnail - use coverImageUrl or fall back to first step screenshot
   const currentThumbnail = guide?.coverImageUrl || sortedSteps[0]?.imageUrl || null;
 
+  // Self-contained placeholder for a step with no screenshot yet — avoids an
+  // external runtime dependency (placehold.co) and works offline / under CSP.
+  const stepPlaceholder = (label: string) =>
+    `data:image/svg+xml,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#f3f4f6"/><text x="400" y="300" font-family="system-ui,sans-serif" font-size="28" fill="#a3a3a3" text-anchor="middle" dominant-baseline="middle">${label}</text></svg>`
+    )}`;
+
   const handleAddStep = () => {
     if (isCreatingStep) return;
     const newOrder = (sortedSteps?.length || 0) + 1;
@@ -753,7 +765,7 @@ export default function GuideEditor() {
       order: newOrder,
       title: "New Step",
       actionType: "click",
-      imageUrl: `https://placehold.co/800x600/f3f4f6/a3a3a3?text=Step+${newOrder}`
+      imageUrl: stepPlaceholder(`Step ${newOrder}`)
     }, {
       onSuccess: (newStep) => {
         setSelectedStepId(newStep.id);
@@ -776,7 +788,7 @@ export default function GuideEditor() {
       order: newOrder,
       title: "New Step",
       actionType: "click",
-      imageUrl: `https://placehold.co/800x600/f3f4f6/a3a3a3?text=Step+${displayNumber}`
+      imageUrl: stepPlaceholder(`Step ${displayNumber}`)
     }, {
       onSuccess: (newStep) => {
         const beforeIds = currentSteps.slice(0, afterIndex + 1).map(s => s.id);
@@ -1110,8 +1122,29 @@ export default function GuideEditor() {
           >
             <Settings className="h-4 w-4" />
           </Button>
-          <Button size="sm" className="bg-brand-600 hover:bg-brand-700">
-            <Save className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Publish</span>
+          <Button
+            size="sm"
+            className="bg-brand-600 hover:bg-brand-700"
+            onClick={() => {
+              const nextStatus = guide?.status === "published" ? "draft" : "published";
+              updateGuide(
+                { id: guideId, status: nextStatus },
+                {
+                  onSuccess: () =>
+                    toast({
+                      title: nextStatus === "published" ? "Guide published" : "Moved to draft",
+                    }),
+                  onError: () =>
+                    toast({ title: "Failed to update status", variant: "destructive" }),
+                }
+              );
+            }}
+            data-testid="button-publish-guide"
+          >
+            <Save className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">
+              {guide?.status === "published" ? "Unpublish" : "Publish"}
+            </span>
           </Button>
         </div>
       </header>
@@ -1292,7 +1325,14 @@ export default function GuideEditor() {
 
         {/* Center: Main Canvas */}
         <div className="flex-1 bg-muted/30 p-4 sm:p-6 lg:p-8 flex items-center justify-center overflow-auto relative">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
+          {/* Inline SVG noise texture — self-contained (no external asset dependency) */}
+          <div
+            className="absolute inset-0 opacity-20 pointer-events-none"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")",
+            }}
+          />
           
           {selectedStep ? (
             <motion.div 
@@ -1379,15 +1419,9 @@ export default function GuideEditor() {
                   className="hidden"
                   data-testid="input-upload-screenshot"
                 />
-                
-                {/* Simulated Annotation Overlay */}
-                {selectedStep.selector && (
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-12 border-4 border-brand-500 rounded-lg shadow-[0_0_0_1000px_rgba(0,0,0,0.5)]">
-                    <div className="absolute -top-10 left-0 bg-brand-500 text-white px-3 py-1 rounded text-sm font-bold shadow-lg">
-                      Click here
-                    </div>
-                  </div>
-                )}
+                {/* The real click indicator is baked into the captured screenshot
+                    by the extension (cropped + annotated), so no synthetic overlay
+                    is drawn here. User-added annotations render below. */}
               </div>
             </motion.div>
           ) : sortedSteps.length === 0 ? (
@@ -1474,79 +1508,127 @@ export default function GuideEditor() {
           )}
         </div>
 
-        {/* Right Panel: Properties */}
-        <div className="w-80 border-l border-border bg-card p-6 flex flex-col shrink-0 overflow-y-auto">
-          {selectedStep ? (
-            <div className="space-y-6">
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Step Title</label>
-                <Input 
-                  value={selectedStep.title || ""} 
-                  onChange={(e) => updateStep({ id: selectedStep.id, guideId, title: e.target.value })}
-                  placeholder="e.g. Click the 'Sign Up' button"
-                />
-              </div>
+        {/* Right Panel: Properties / Comments / Assignments / Approvals */}
+        <div className="w-80 border-l border-border bg-card flex flex-col shrink-0 overflow-hidden">
+          <Tabs defaultValue="properties" className="flex-1 flex flex-col min-h-0">
+            <TabsList className="grid grid-cols-4 mx-3 mt-3">
+              <TabsTrigger value="properties" title="Properties"><SlidersHorizontal className="h-4 w-4" /></TabsTrigger>
+              <TabsTrigger value="comments" title="Comments"><MessageSquare className="h-4 w-4" /></TabsTrigger>
+              <TabsTrigger value="assign" title="Assignments"><Users className="h-4 w-4" /></TabsTrigger>
+              <TabsTrigger value="approve" title="Approvals"><CheckCircle className="h-4 w-4" /></TabsTrigger>
+            </TabsList>
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground block">Description</label>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 px-2 text-brand-600 hover:text-brand-700 hover:bg-brand-50"
-                    onClick={handleAiMagic}
-                    disabled={isGenerating}
-                  >
-                    <Wand2 className="h-3 w-3 mr-1" /> 
-                    {isGenerating ? "Magic..." : "AI Improve"}
-                  </Button>
-                </div>
-                <Textarea 
-                  value={selectedStep.description || ""}
-                  onChange={(e) => updateStep({ id: selectedStep.id, guideId, description: e.target.value })}
-                  placeholder="Add more details about this step..."
-                  className="min-h-[120px] resize-none"
-                />
-              </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <TabsContent value="properties" className="mt-0">
+                {selectedStep ? (
+                  <div className="space-y-6">
+                    <div>
+                      <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Step Title</label>
+                      <Input
+                        value={selectedStep.title || ""}
+                        onChange={(e) => updateStep({ id: selectedStep.id, guideId, title: e.target.value })}
+                        placeholder="e.g. Click the 'Sign Up' button"
+                      />
+                    </div>
 
-              <div>
-                <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Action Type</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['click', 'input', 'scroll'].map(type => (
-                    <button
-                      key={type}
-                      onClick={() => updateStep({ id: selectedStep.id, guideId, actionType: type as any })}
-                      className={cn(
-                        "px-3 py-2 rounded-md text-sm border transition-all capitalize",
-                        selectedStep.actionType === type 
-                          ? "bg-brand-50 border-brand-200 text-brand-700 font-medium" 
-                          : "bg-background border-border hover:bg-muted"
-                      )}
-                    >
-                      {type}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-semibold uppercase text-muted-foreground block">Description</label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-brand-600 hover:text-brand-700 hover:bg-brand-50"
+                          onClick={handleAiMagic}
+                          disabled={isGenerating}
+                        >
+                          <Wand2 className="h-3 w-3 mr-1" />
+                          {isGenerating ? "Magic..." : "AI Improve"}
+                        </Button>
+                      </div>
+                      <Textarea
+                        value={selectedStep.description || ""}
+                        onChange={(e) => updateStep({ id: selectedStep.id, guideId, description: e.target.value })}
+                        placeholder="Add more details about this step..."
+                        className="min-h-[120px] resize-none"
+                      />
+                    </div>
 
-              <div className="pt-6 border-t border-border mt-auto">
-                 <Button 
-                  variant="outline" 
-                  className="w-full border-destructive/20 text-destructive hover:bg-destructive/10"
-                  onClick={() => {
-                    deleteStep({ id: selectedStep.id, guideId });
-                    setSelectedStepId(null);
-                  }}
-                 >
-                   <Trash2 className="h-4 w-4 mr-2" /> Delete Step
-                 </Button>
-              </div>
+                    <div>
+                      <label className="text-xs font-semibold uppercase text-muted-foreground mb-2 block">Action Type</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['click', 'input', 'scroll'].map(type => (
+                          <button
+                            key={type}
+                            onClick={() => updateStep({ id: selectedStep.id, guideId, actionType: type as any })}
+                            className={cn(
+                              "px-3 py-2 rounded-md text-sm border transition-all capitalize",
+                              selectedStep.actionType === type
+                                ? "bg-brand-50 border-brand-200 text-brand-700 font-medium"
+                                : "bg-background border-border hover:bg-muted"
+                            )}
+                          >
+                            {type}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-6 border-t border-border">
+                      <Button
+                        variant="outline"
+                        className="w-full border-destructive/20 text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          deleteStep({ id: selectedStep.id, guideId });
+                          setSelectedStepId(null);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" /> Delete Step
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm py-12">
+                    Select a step to view properties
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="comments" className="mt-0">
+                {selectedStep ? (
+                  <StepComments stepId={selectedStep.id} guideId={guideId} />
+                ) : (
+                  <div className="text-center text-muted-foreground text-sm py-12">
+                    Select a step to view comments
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="assign" className="mt-0">
+                {selectedStep && guide?.workspaceId ? (
+                  <StepAssignmentPanel stepId={selectedStep.id} guideId={guideId} workspaceId={guide.workspaceId} />
+                ) : (
+                  <div className="text-center text-muted-foreground text-sm py-12">
+                    Select a step to manage assignments
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="approve" className="mt-0">
+                {guide?.workspaceId ? (
+                  <ApprovalWorkflowPanel
+                    guideId={guideId}
+                    workspaceId={guide.workspaceId}
+                    guideTitle={guide.title || "Untitled"}
+                    currentStatus={guide.status || "draft"}
+                  />
+                ) : (
+                  <div className="text-center text-muted-foreground text-sm py-12">
+                    Loading…
+                  </div>
+                )}
+              </TabsContent>
             </div>
-          ) : (
-            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-              Select a step to view properties
-            </div>
-          )}
+          </Tabs>
         </div>
       </div>
 

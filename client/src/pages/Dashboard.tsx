@@ -68,11 +68,10 @@ function DashboardContent() {
     }
     
     createGuide(
-      { 
+      {
         workspaceId,
         title: "Untitled Flow",
-        status: "draft",
-        createdById: "current-user"
+        status: "draft"
       },
       {
         onSuccess: (newGuide) => {
@@ -87,11 +86,10 @@ function DashboardContent() {
     if (!workspaceId) return;
     
     createGuide(
-      { 
+      {
         workspaceId,
         title: "Untitled Flow",
-        status: "draft",
-        createdById: "current-user"
+        status: "draft"
       },
       {
         onSuccess: (newGuide) => {

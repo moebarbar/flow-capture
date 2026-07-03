@@ -171,7 +171,7 @@ export default function AcceptInvitation() {
             </CardDescription>
           </CardHeader>
           <CardFooter className="justify-center">
-            <Button onClick={() => window.location.href = '/api/login'}>
+            <Button onClick={() => window.location.href = '/auth'}>
               Sign In
             </Button>
           </CardFooter>

@@ -126,10 +126,10 @@ export default function LandingPage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <Button variant="ghost" asChild className="hidden sm:inline-flex">
-              <a href="/api/login" data-testid="link-nav-login">Log in</a>
+              <a href="/auth" data-testid="link-nav-login">Log in</a>
             </Button>
             <Button asChild size="sm" className="rounded-full px-3 sm:px-6 bg-brand-600 text-white shadow-lg shadow-brand-500/25">
-              <a href="/api/login" data-testid="link-nav-get-started">
+              <a href="/auth" data-testid="link-nav-get-started">
                 <span className="hidden sm:inline">Get Started</span>
                 <span className="sm:hidden">Start Capturing</span>
                 <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
@@ -1160,7 +1160,7 @@ export default function LandingPage() {
                   </li>
                 </ul>
                 <Button size="lg" variant="outline" className="w-full rounded-full" asChild>
-                  <a href="/api/login" data-testid="button-pricing-free">Get Started Free</a>
+                  <a href="/auth" data-testid="button-pricing-free">Get Started Free</a>
                 </Button>
               </Card>
             </motion.div>
@@ -1221,7 +1221,7 @@ export default function LandingPage() {
                   Bonus: Screenshot Studio for enhanced visuals
                 </div>
                 <Button size="lg" className="w-full rounded-full bg-brand-600 text-white" asChild>
-                  <a href="/api/login" data-testid="button-pricing-pro">Start Pro Trial</a>
+                  <a href="/auth" data-testid="button-pricing-pro">Start Pro Trial</a>
                 </Button>
               </Card>
             </motion.div>
@@ -1331,7 +1331,7 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
               <Button size="lg" className="rounded-full text-lg h-14 px-8 bg-white text-brand-700 shadow-xl transition-all" asChild>
-                <a href="/api/login" data-testid="button-cta-final">Start Free Today <ArrowRight className="ml-2 h-5 w-5" /></a>
+                <a href="/auth" data-testid="button-cta-final">Start Free Today <ArrowRight className="ml-2 h-5 w-5" /></a>
               </Button>
               <Button size="lg" variant="outline" className="rounded-full text-lg h-14 px-8 border-2 border-white/30 text-white bg-white/10 backdrop-blur-sm" asChild>
                 <a href="#enterprise" data-testid="button-cta-enterprise">Contact Sales</a>

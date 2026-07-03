@@ -75,8 +75,9 @@ export function useGuide(id: number) {
 
 export function useCreateGuide() {
   const queryClient = useQueryClient();
+  // createdById is derived server-side from the session, never sent by the client
   return useMutation({
-    mutationFn: async (data: InsertGuide) => {
+    mutationFn: async (data: Omit<InsertGuide, "createdById">) => {
       const res = await fetch(api.guides.create.path, {
         method: api.guides.create.method,
         headers: { "Content-Type": "application/json" },

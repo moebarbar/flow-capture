@@ -96,40 +96,17 @@ export const DEFAULT_SCREENSHOT_OPTIONS = {
   highlightElement: true
 };
 
-export const TRUSTED_ORIGIN_SUFFIXES = [
-  '.repl.co',
-  '.replit.dev',
-  '.replit.app',
-  '.flowcapture.com',
-  '.flowcapture.app'
-];
-
+// Exact-origin allowlist only — suffix matching on shared hosting is unsafe
+// (any attacker subdomain would match). Keep in sync with capture-agent.js and
+// service-worker.js.
 export const TRUSTED_EXACT_ORIGINS = [
+  'https://flow-capture-production.up.railway.app',
   'http://localhost:5000',
-  'http://0.0.0.0:5000',
-  'https://repl.co',
-  'https://replit.dev',
-  'https://replit.app',
-  'https://flowcapture.com',
-  'https://flowcapture.app'
+  'http://127.0.0.1:5000',
+  'http://0.0.0.0:5000'
 ];
 
 export function isOriginTrusted(origin) {
   if (!origin || typeof origin !== 'string') return false;
-  
-  if (TRUSTED_EXACT_ORIGINS.includes(origin)) return true;
-  
-  try {
-    const url = new URL(origin);
-    if (url.protocol === 'https:') {
-      return TRUSTED_ORIGIN_SUFFIXES.some(suffix => url.hostname.endsWith(suffix));
-    }
-    if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '0.0.0.0')) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-  
-  return false;
+  return TRUSTED_EXACT_ORIGINS.includes(origin);
 }

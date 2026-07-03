@@ -1,234 +1,71 @@
 # FlowCapture Chrome Extension
 
-A Chrome extension that captures user interactions and automatically generates step-by-step workflow documentation.
+Records browser workflows (clicks, inputs, navigation) and turns them into
+step-by-step guides in the FlowCapture web app. Manifest V3.
 
-## Features
-
-- **Click Capture**: Records all button, link, and element clicks
-- **Input Capture**: Tracks form inputs (with sensitive data masking)
-- **Screenshot Capture**: Takes screenshots after each action
-- **CSS Selector Generation**: Creates stable selectors for each element
-- **Auto-descriptions**: Generates human-readable step descriptions
-- **Backend Sync**: Uploads captured workflows to your FlowCapture dashboard
-
-## Installation (Developer Mode)
-
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode" in the top right corner
-3. Click "Load unpacked"
-4. Select the `extension` folder from this project
-
-## Usage
-
-1. Click the FlowCapture extension icon in your browser toolbar
-2. **First time only**: Click "Settings" in the footer and enter your dashboard URL
-3. Click "Start Recording" to begin capturing
-4. Perform the workflow you want to document
-5. Click "Stop Recording" when finished
-6. Select a workspace and optionally add a title
-7. Click "Sync to Dashboard" to save your guide
-
-## Configuration
-
-The extension needs to know which FlowCapture dashboard to sync with:
-
-1. Click the extension icon
-2. Click "Settings" link in the footer
-3. Enter your dashboard URL (e.g., `https://your-repl.replit.app`)
-4. Click "Save"
-
-For local development, use your Replit development URL.
-
----
-
-## Building for Chrome Web Store
-
-### Step 1: Run the Build Script
-
-```bash
-node extension/scripts/build.cjs
-```
-
-This creates a ZIP file at `extension/dist/flowcapture-extension.zip`.
-
-### Step 2: Prepare Store Listing Assets
-
-You'll need:
-- **Screenshots**: At least one 1280x800 or 640x400 screenshot
-- **Promotional images** (optional): 440x280 small tile, 920x680 large tile
-- **Privacy Policy URL**: A public webpage explaining data handling
-
-### Step 3: Create Developer Account
-
-1. Go to [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-2. Pay the one-time $5 developer registration fee
-3. Complete identity verification if required
-
-### Step 4: Submit Extension
-
-1. Click "New Item" in the Developer Dashboard
-2. Upload the ZIP file from `extension/dist/`
-3. Fill in store listing:
-   - **Name**: FlowCapture - Workflow Documentation
-   - **Description**: See suggested description below
-   - **Category**: Productivity
-   - **Language**: English (or your target language)
-4. Upload screenshots and promotional images
-5. Complete the Privacy Practices section
-6. Submit for review (typically 1-3 business days)
-
-### Suggested Store Description
+## Architecture
 
 ```
-FlowCapture automatically captures your browser workflows and creates beautiful step-by-step documentation.
-
-FEATURES:
-- One-click recording - Start capturing any workflow instantly
-- Automatic screenshots - Every click and action is documented
-- Smart descriptions - AI generates clear instructions for each step
-- Easy editing - Drag, drop, and refine your guides
-- Team sharing - Collaborate on documentation with your team
-
-PERFECT FOR:
-- Training new employees
-- Creating SOPs and process docs
-- Customer support tutorials
-- Software documentation
-- Personal workflow notes
-
-HOW IT WORKS:
-1. Click the extension icon and start recording
-2. Perform your workflow as usual
-3. Stop recording and your guide is ready
-4. Edit, share, or export your documentation
-
-FlowCapture connects to your FlowCapture dashboard where you can organize, edit, and share all your guides.
-
-Privacy: This extension captures screenshots only during active recording sessions. Data is sent securely to your FlowCapture account. No data is collected when recording is off.
+manifest.json              Manifest V3 config
+background/
+  service-worker.js        Orchestrator: capture state machine, screenshot
+                           capture + element-crop, tab injection, batch upload
+  sync-manager.js          Auth (Bearer/cookie), persistent offline upload queue
+content/
+  capture-agent.js         DOM event capture, selector generation, step metadata,
+                           overlay injection, web-app postMessage bridge
+  screenshot-agent.js      Scroll-into-view + stabilization helpers
+  side-panel.js            Sticky in-page Shadow-DOM progress panel (SPA-safe)
+  tab-bridge.js            Reconnecting port helper
+overlay/overlay.js         In-page control panel + step preview (page context)
+popup/                     Toolbar popup UI (start/stop capture)
+tab-selector/              Standalone tab-picker page
+shared/                    messages.js (message/port/state enums), storage.js,
+                           types.js (trusted origins)
+icons/
 ```
 
----
+## Capture flow
 
-## File Structure
+1. User clicks the toolbar icon then Start in the popup.
+2. Popup calls `POST /api/extension/start-capture`, receiving
+   `{ guideId, workspaceId, extensionToken }`, then shows a tab picker.
+3. The service worker injects content scripts into the chosen tab and moves to
+   the CAPTURING state.
+4. Each click/input is captured with a cropped, click-indicator-annotated
+   screenshot. Steps are held locally (local-first) during capture.
+5. On Complete, screenshots + steps are batch-uploaded through the SyncManager
+   queue (retry with backoff), then the tab is redirected to the guide editor.
 
-```
-extension/
-├── manifest.json          # Extension manifest (Manifest V3)
-├── popup/
-│   ├── popup.html        # Extension popup UI
-│   ├── popup.css         # Popup styles
-│   └── popup.js          # Popup logic
-├── src/
-│   ├── background.js     # Service worker (screenshot capture, API sync)
-│   ├── content.js        # Content script (event listeners, capture)
-│   ├── content.css       # Content script styles
-│   └── config.js         # Configuration constants
-├── scripts/
-│   └── build.cjs         # Build script for Chrome Web Store
-├── dist/                  # Build output (gitignored)
-│   └── flowcapture-extension.zip
-└── icons/
-    ├── icon16.png        # Toolbar icon
-    ├── icon48.png        # Extension management icon
-    └── icon128.png       # Chrome Web Store icon
-```
+## Backend & auth
 
-## How It Works
-
-### Recording Flow
-
-1. **Start Recording**: User clicks start → popup sends message to background → background notifies all tabs
-2. **Capture Events**: Content script listens for clicks, inputs, changes, and form submissions
-3. **Generate Step**: For each event, content script generates selector and description
-4. **Take Screenshot**: Background service worker captures visible tab
-5. **Store Locally**: Steps are stored in `chrome.storage.local`
-6. **Stop Recording**: User clicks stop → popup shows sync options
-7. **Sync**: Background uploads steps to backend API
-
-### Security
-
-- Sensitive inputs (passwords, SSN, etc.) are automatically masked
-- Screenshots are captured via Chrome's built-in API
-- All API communication uses HTTPS with credentials
-- Origin validation prevents unauthorized message handling
-
-## API Endpoints
-
-The extension communicates with these backend endpoints:
-
-- `GET /api/extension/user` - Get current user info
-- `GET /api/extension/workspaces` - List user's workspaces
-- `POST /api/extension/sync` - Upload captured workflow
-- `POST /api/capture/step` - Real-time step capture with Bearer token auth
+- Default API origin: `https://flow-capture-production.up.railway.app` (see
+  `DEFAULT_API_ORIGIN` in `background/service-worker.js`; localhost allowed for
+  dev). Only these pinned origins are trusted: a page-supplied `apiBaseUrl` is
+  validated against the allowlist before the bearer token is ever attached.
+- Auth: a Bearer `extensionToken` (preferred) or session cookie. The token is
+  revocable server-side (bumped on logout / password reset).
 
 ## Permissions
 
-- `activeTab`: Access current tab for screenshot capture
-- `storage`: Store captured steps locally
-- `tabs`: Query and message tabs
-- `scripting`: Inject content scripts dynamically
-- `<all_urls>`: Inject content script on any page (required for workflow capture)
+`activeTab`, `scripting`, `storage`, `tabs`, plus optional `<all_urls>` host
+permission requested from a user gesture at capture start.
 
-## Testing with Local Development
+## Build
 
-When testing the extension with your local FlowCapture web app:
+```
+node scripts/build.cjs
+```
 
-1. **Load the extension** in Developer Mode (see Installation above)
-2. **Configure API URL**:
-   - Click the extension icon
-   - Click "Settings" in the footer
-   - Enter your development URL: `http://localhost:5000`
-   - Click "Save"
-3. **Login to the web app** at `http://localhost:5000`
-4. **Start recording** from the extension popup
-5. **Verify capture works**:
-   - Click elements on any web page
-   - Check that steps appear in the side panel
-   - Complete recording and verify guide appears in dashboard
+Produces `dist/flowcapture-extension.zip` for the Chrome Web Store. The build
+fails if any packaged path is missing (guards against shipping a broken zip).
 
-### Capture Session Flow
+## Local development
 
-The extension uses a secure token-based system:
+1. `chrome://extensions` then enable Developer mode, Load unpacked, and select
+   this `extension/` directory.
+2. Run the web app locally on `http://localhost:5000`.
+3. Reload the extension after edits (content-script changes also need the target
+   tab reloaded).
 
-1. Web app initiates capture session via `/api/guides/:id/capture/start`
-2. Extension receives session token via `postMessage`
-3. Extension sends captured steps to `/api/capture/step` with Bearer token
-4. Steps are saved to the guide in real-time
-
-### Testing Checklist
-
-- [ ] Extension loads without errors in chrome://extensions
-- [ ] Settings panel opens and saves API URL
-- [ ] Login to web app is recognized
-- [ ] Recording starts and shows indicator on page
-- [ ] Clicks are captured with screenshots
-- [ ] Input events are captured (non-sensitive)
-- [ ] Navigation events are tracked
-- [ ] Pause/Resume works correctly
-- [ ] Cross-tab recording sync works
-- [ ] Side panel shows captured steps
-- [ ] Complete recording saves guide to dashboard
-
-## Troubleshooting
-
-**"Please log in to sync" error:**
-- Make sure you're logged into the FlowCapture web app in your browser
-- Verify the Dashboard URL in Settings matches your running app URL
-
-**Steps not capturing:**
-- Check that you're not on a chrome:// or extension page (these are restricted)
-- Try refreshing the page and starting a new recording
-
-**Sync failing:**
-- Ensure your FlowCapture web app is running
-- Check the Dashboard URL in Settings is correct (include https://)
-- Make sure you have at least one workspace created in the dashboard
-
-**Extension not appearing:**
-- Reload the extension from chrome://extensions
-- Check for console errors in the extension's service worker
-
-**Capture not working with localhost:**
-- Ensure you've set the API URL in Settings to `http://localhost:5000`
-- Check that the web app is running (visit the URL in your browser)
-- Try reloading the extension after changing settings
+See `TESTING_CHECKLIST.md` for the manual QA matrix.

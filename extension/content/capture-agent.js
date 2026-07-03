@@ -993,6 +993,28 @@
       // Wait two frames for the browser to repaint without the overlay
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
+      // Re-measure the element's rect NOW — just before the screenshot — so the
+      // crop + click indicator align with what's actually captured. Hiding the
+      // overlay or any post-click layout shift can move the element since the
+      // click-time measurement. Fall back to the original rect if the element
+      // was detached (SPA nav) or is now zero-size/off-screen.
+      if (element.isConnected) {
+        const freshRect = element.getBoundingClientRect();
+        if (freshRect.width > 0 && freshRect.height > 0 &&
+            freshRect.bottom > 0 && freshRect.right > 0 &&
+            freshRect.top < window.innerHeight && freshRect.left < window.innerWidth) {
+          elementMetadata.rect = {
+            top: Math.round(freshRect.top),
+            left: Math.round(freshRect.left),
+            width: Math.round(freshRect.width),
+            height: Math.round(freshRect.height),
+            centerX: Math.round(freshRect.left + freshRect.width / 2),
+            centerY: Math.round(freshRect.top + freshRect.height / 2),
+            devicePixelRatio: window.devicePixelRatio || 1
+          };
+        }
+      }
+
       // Mask sensitive fields (passwords, credit cards, etc.) before screenshot
       const removeMasks = maskSensitiveFields();
 

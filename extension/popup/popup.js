@@ -20,7 +20,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const apiUrlInput = document.getElementById('api-url');
   const saveSettingsBtn = document.getElementById('save-settings');
   const cancelSettingsBtn = document.getElementById('cancel-settings');
-  const elementCaptureBtn = document.getElementById('element-capture-btn');
   const borderColorInput = document.getElementById('border-color');
   const colorPresets = document.querySelectorAll('.color-preset');
   const tabSelectorModal = document.getElementById('tab-selector-modal');
@@ -437,29 +436,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateActivePreset(color);
       chrome.storage.local.set({ highlightColor: color });
     });
-  });
-
-  elementCaptureBtn.addEventListener('click', async () => {
-    const hasPermission = await checkAndRequestPermissions();
-    if (!hasPermission) {
-      alert('Permission required to capture elements.');
-      return;
-    }
-
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && !tab.url.startsWith('chrome://')) {
-      const highlightColor = borderColorInput.value;
-      
-      await chrome.runtime.sendMessage({ 
-        type: 'START_CAPTURE',
-        data: { 
-          highlightColor,
-          singleElement: true
-        }
-      });
-      
-      window.close();
-    }
   });
 
   cancelTabSelectBtn.addEventListener('click', () => {

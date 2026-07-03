@@ -7,11 +7,16 @@ const EXTENSION_DIR = path.join(__dirname, '..');
 const DIST_DIR = path.join(EXTENSION_DIR, 'dist');
 const OUTPUT_FILE = path.join(DIST_DIR, 'flowcapture-extension.zip');
 
+// Live Manifest V3 layout. Must match what manifest.json actually references.
 const FILES_TO_INCLUDE = [
   'manifest.json',
   'icons',
+  'background',
+  'content',
+  'overlay',
   'popup',
-  'src'
+  'shared',
+  'tab-selector'
 ];
 
 function ensureDistDir() {
@@ -59,15 +64,19 @@ async function createZip() {
     
     for (const item of FILES_TO_INCLUDE) {
       const fullPath = path.join(EXTENSION_DIR, item);
+      if (!fs.existsSync(fullPath)) {
+        reject(new Error(`Packaged path is missing: ${item} (build would ship a broken extension)`));
+        return;
+      }
       const stat = fs.statSync(fullPath);
-      
+
       if (stat.isDirectory()) {
         archive.directory(fullPath, item);
       } else {
         archive.file(fullPath, { name: item });
       }
     }
-    
+
     archive.finalize();
   });
 }

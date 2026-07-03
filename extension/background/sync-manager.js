@@ -193,7 +193,7 @@ class SyncManager {
       selector: step.selector || '',
       url: step.url || '',
       order: step.order,
-      tabId: step.tabId,
+      tabTitle: step.tabTitle || '',
       timestamp: step.timestamp,
       metadata: step.elementMetadata || {}
     };
@@ -284,10 +284,20 @@ class SyncManager {
     try {
       this.updateStepStatus(step, SyncStatus.UPLOADING);
 
-      // Use already-uploaded URL if available, otherwise upload the data URL
+      // Use already-uploaded URL if available, otherwise upload the data URL.
+      // If the upload fails for any non-auth reason (e.g. object storage not
+      // configured → 503), fall back to storing the screenshot inline so the
+      // step is never lost. Auth failures propagate so the queue pauses for
+      // re-authentication instead of silently inlining.
       let imageUrl = screenshotUrl || null;
       if (!imageUrl && screenshotDataUrl) {
-        imageUrl = await this.uploadScreenshot(screenshotDataUrl, stepId);
+        try {
+          imageUrl = await this.uploadScreenshot(screenshotDataUrl, stepId);
+        } catch (uploadErr) {
+          if (uploadErr.errorType === 'auth_required') throw uploadErr;
+          console.warn('[SyncManager] Screenshot upload failed, storing inline:', uploadErr.message);
+          imageUrl = await this.compressScreenshot(screenshotDataUrl).catch(() => screenshotDataUrl);
+        }
       }
 
       const payload = {
@@ -427,17 +437,16 @@ class SyncManager {
     
     const initResponse = await this.fetchWithTimeout(
       `${this.apiBaseUrl}/api/uploads/init-multipart`,
-      {
+      this.buildFetchOptions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ 
-          name: `step_${stepId}.png`, 
+        body: JSON.stringify({
+          name: `step_${stepId}.png`,
           contentType: 'image/png',
           totalChunks,
           totalSize: blob.size
         })
-      },
+      }),
       5000
     );
 
@@ -456,16 +465,15 @@ class SyncManager {
 
       const partResponse = await this.fetchWithTimeout(
         `${this.apiBaseUrl}/api/uploads/upload-part`,
-        {
+        this.buildFetchOptions({
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/octet-stream',
             'X-Upload-Id': uploadId,
             'X-Part-Number': String(i + 1)
           },
-          credentials: 'include',
           body: chunk
-        },
+        }),
         15000
       );
 
@@ -479,12 +487,11 @@ class SyncManager {
 
     const completeResponse = await this.fetchWithTimeout(
       `${this.apiBaseUrl}/api/uploads/complete-multipart`,
-      {
+      this.buildFetchOptions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ uploadId, parts })
-      },
+      }),
       5000
     );
 

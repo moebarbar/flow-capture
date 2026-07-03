@@ -849,39 +849,51 @@ async function stopCapture() {
 
   await broadcastToAllTabs(MessageTypes.STOP_CAPTURE);
 
-  // BATCH UPLOAD: now that capture is done, upload screenshots + save steps to server
+  // BATCH UPLOAD via the durable SyncManager queue: screenshots + steps are
+  // enqueued and processed with retry/backoff. Failures are persisted to the
+  // offline queue (surviving service-worker restarts) instead of being lost.
+  let saved = 0;
+  let failed = 0;
   if (steps.length > 0 && apiBaseUrl && guideId) {
-    console.log(`[FlowCapture] Batch uploading ${steps.length} steps...`);
-    let uploaded = 0;
+    console.log(`[FlowCapture] Queuing ${steps.length} steps for upload...`);
+    syncManager.configure(apiBaseUrl, guideId);
+
+    // Track per-step outcomes and broadcast progress to the editor
+    syncManager.setStatusCallback((stepOrder, status) => {
+      const step = machine.state.steps.find(s => s.order === stepOrder);
+      if (step) step.syncStatus = status;
+      if (status === SyncStatus.SAVED) saved++;
+      else if (status === SyncStatus.FAILED) failed++;
+      machine.ports.forEach(port => {
+        try {
+          port.postMessage({ type: 'UPLOAD_PROGRESS', data: { uploaded: saved, failed, total: steps.length } });
+        } catch {}
+      });
+    });
+
     for (const step of steps) {
-      try {
-        // Upload screenshot to GCS; fall back to inline data URL if upload fails
-        let imageUrl = step.screenshotUrl || null;
-        if (!imageUrl && step.screenshotDataUrl) {
-          try {
-            imageUrl = await uploadScreenshot(step.screenshotDataUrl);
-          } catch (e) {
-            console.warn('[FlowCapture] GCS upload failed, storing screenshot inline:', e.message);
-            imageUrl = step.screenshotDataUrl; // store base64 data URL directly in DB
-          }
-        }
-        // Save step to server
-        await saveStepToServer({ ...step, screenshotUrl: imageUrl });
-        uploaded++;
-        // Broadcast progress so the editor can show a progress indicator
-        machine.ports.forEach(port => {
-          try { port.postMessage({ type: 'UPLOAD_PROGRESS', data: { uploaded, total: steps.length } }); } catch {}
-        });
-      } catch (e) {
-        console.error('[FlowCapture] Failed to save step', step.order, e.message);
-      }
+      await syncManager.enqueueStep(step);
     }
-    console.log(`[FlowCapture] Batch upload complete: ${uploaded}/${steps.length} steps saved`);
+
+    const result = await syncManager.flush();
+    // Anything still pending (offline / auth-paused) will retry via periodic sync
+    const pending = result.pending;
+    console.log(`[FlowCapture] Upload finished: ${saved} saved, ${failed} failed, ${pending} pending retry`);
+
+    if (pending > 0 || failed > 0) {
+      // Keep the queue alive so pending items keep retrying in the background
+      syncManager.startPeriodicSync();
+      await broadcastToAllTabs('UPLOAD_INCOMPLETE');
+    } else {
+      syncManager.stopPeriodicSync();
+    }
+  } else {
+    syncManager.stopPeriodicSync();
   }
 
-  // Clear local pending steps now that they're on the server
+  // Clear local pending steps (the SW's own recovery cache); the SyncManager's
+  // offline queue independently persists any not-yet-saved steps.
   await clearPendingSteps();
-  syncManager.stopPeriodicSync();
   machine.transition(CaptureStates.IDLE);
 
   // Notify web app about capture completion - only to the requesting app tab (security)
@@ -1285,85 +1297,24 @@ async function createGuideOnServer() {
   return guide.id;
 }
 
-async function saveStepToServer(step) {
-  const response = await fetch(`${machine.state.apiBaseUrl}/api/guides/${machine.state.guideId}/steps`,
-    syncManager.buildFetchOptions({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: step.title,
-        description: step.description,
-        actionType: step.actionType,
-        selector: step.selector,
-        url: step.url,
-        imageUrl: step.screenshotUrl,
-        order: step.order,
-        tabTitle: step.tabTitle || '',
-        metadata: step.elementMetadata || {}
-      })
-    })
-  );
-
-  if (!response.ok) {
-    throw new Error(`Step save failed: ${response.status}`);
-  }
-
-  return await response.json();
-}
-
+// Manual "sync now" trigger (SYNC_STEPS message). Routes not-yet-saved steps
+// through the same durable SyncManager queue as the stop-time batch upload.
 async function syncStepsToServer() {
   if (!machine.state.apiBaseUrl || !machine.state.guideId) {
     return { success: false };
   }
 
-  const pendingSteps = machine.state.steps.filter(s => s.syncStatus === 'pending' || s.syncStatus === 'failed');
-  
-  for (const step of pendingSteps) {
-    try {
-      await saveStepToServer(step);
-      step.syncStatus = 'saved';
-    } catch (e) {
-      step.syncStatus = 'failed';
-      console.error('[FlowCapture] Step sync failed:', e);
-    }
-  }
-
-  return { success: true, stepCount: machine.state.steps.length };
-}
-
-async function uploadScreenshot(dataUrl) {
-  // Detect mime type from data URL (may be jpeg after crop, or png for full-page fallback)
-  const mimeMatch = dataUrl.match(/^data:([^;]+);/);
-  const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-  const ext = mimeType === 'image/png' ? 'png' : 'jpg';
-
-  const presignedResponse = await fetch(`${machine.state.apiBaseUrl}/api/uploads/request-url`,
-    syncManager.buildFetchOptions({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: `step_${Date.now()}.${ext}`, contentType: mimeType })
-    })
+  syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
+  const pendingSteps = machine.state.steps.filter(
+    s => s.syncStatus === 'pending' || s.syncStatus === 'failed' || !s.syncStatus
   );
 
-  if (!presignedResponse.ok) {
-    throw new Error('Failed to get upload URL');
+  for (const step of pendingSteps) {
+    await syncManager.enqueueStep(step);
   }
 
-  const { uploadURL, objectPath } = await presignedResponse.json();
-
-  const blob = dataUrlToBlob(dataUrl);
-  // GCS presigned PUT — no auth headers needed (the URL itself is signed)
-  const uploadResponse = await fetch(uploadURL, {
-    method: 'PUT',
-    body: blob,
-    headers: { 'Content-Type': mimeType }
-  });
-
-  if (!uploadResponse.ok) {
-    throw new Error('Upload failed');
-  }
-
-  return `/objects/${objectPath}`;
+  const result = await syncManager.flush();
+  return { success: true, stepCount: machine.state.steps.length, ...result };
 }
 
 /**

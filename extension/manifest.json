@@ -31,8 +31,7 @@
     "activeTab",
     "scripting",
     "storage",
-    "tabs",
-    "sidePanel"
+    "tabs"
   ],
 
   "optional_host_permissions": [
@@ -75,10 +74,6 @@
       "matches": ["<all_urls>"]
     }
   ],
-
-  "side_panel": {
-    "default_path": "sidepanel/sidepanel.html"
-  },
 
   "commands": {
     "_execute_action": {

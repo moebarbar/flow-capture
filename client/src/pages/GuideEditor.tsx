@@ -19,6 +19,7 @@ import { PermissionDeniedDialog } from "@/components/PermissionDeniedDialog";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { ScreenshotBeautifier } from "@/components/ScreenshotBeautifier";
 import { ElementZoomAnimation } from "@/components/ElementHighlightOverlay";
+import { StepAnnotator } from "@/components/StepAnnotator";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -746,7 +747,22 @@ export default function GuideEditor() {
   // Sort steps by order
   const sortedSteps = steps ? [...steps].sort((a, b) => a.order - b.order) : [];
   const selectedStep = sortedSteps.find(s => s.id === selectedStepId);
-  
+
+  // Annotations: stored normalized (0..1) in step.metadata.annotations
+  const [isAnnotating, setIsAnnotating] = useState(false);
+  const stepAnnotations: any[] = ((selectedStep?.metadata as any)?.annotations) || [];
+  const saveAnnotations = (annotations: any[]) => {
+    if (!selectedStep) return;
+    updateStep({
+      id: selectedStep.id,
+      guideId,
+      metadata: { ...((selectedStep.metadata as any) || {}), annotations },
+    });
+  };
+  // Leave annotation mode when switching steps
+  useEffect(() => { setIsAnnotating(false); }, [selectedStepId]);
+
+
   // Current thumbnail - use coverImageUrl or fall back to first step screenshot
   const currentThumbnail = guide?.coverImageUrl || sortedSteps[0]?.imageUrl || null;
 
@@ -1355,41 +1371,67 @@ export default function GuideEditor() {
                 
                 {selectedStep.imageUrl ? (
                   <>
-                    <img src={selectedStep.imageUrl} alt="Step preview" className="w-full h-full object-contain bg-gray-900" />
-                    
+                    <StepAnnotator
+                      key={selectedStep.id}
+                      imageUrl={selectedStep.imageUrl}
+                      annotations={stepAnnotations}
+                      editable={isAnnotating}
+                      onChange={saveAnnotations}
+                      className="w-full h-full"
+                      imgClassName="w-full h-full object-contain bg-gray-900"
+                    />
+
                     {/* Element zoom animation for element captures */}
-                    {selectedStep.metadata && (selectedStep.metadata as any).isElementCapture && (
+                    {!isAnnotating && selectedStep.metadata && (selectedStep.metadata as any).isElementCapture && (
                       <ElementZoomAnimation
                         elementBounds={(selectedStep.metadata as any).elementBounds}
                         borderColor={(selectedStep.metadata as any).borderColor || "#ef4444"}
                         isElementCapture={(selectedStep.metadata as any).isElementCapture}
                       />
                     )}
-                    
-                    <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all flex items-center justify-center invisible group-hover/img:visible z-20">
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => openBeautifier(selectedStep.imageUrl!)}
-                          data-testid="button-beautify-screenshot"
-                          disabled={imageUploading}
-                        >
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Beautify
-                        </Button>
-                        <Button 
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => fileInputRef.current?.click()}
-                          data-testid="button-replace-screenshot"
-                          disabled={imageUploading}
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          Replace
+
+                    {isAnnotating ? (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40">
+                        <Button size="sm" onClick={() => setIsAnnotating(false)} data-testid="button-done-annotating">
+                          <CheckCircle className="h-4 w-4 mr-2" /> Done
                         </Button>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-all flex items-center justify-center invisible group-hover/img:visible z-20">
+                        <div className="flex gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setIsAnnotating(true)}
+                            data-testid="button-annotate-screenshot"
+                            disabled={imageUploading}
+                          >
+                            <SlidersHorizontal className="h-4 w-4 mr-2" />
+                            Annotate
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => openBeautifier(selectedStep.imageUrl!)}
+                            data-testid="button-beautify-screenshot"
+                            disabled={imageUploading}
+                          >
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            Beautify
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => fileInputRef.current?.click()}
+                            data-testid="button-replace-screenshot"
+                            disabled={imageUploading}
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Replace
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">

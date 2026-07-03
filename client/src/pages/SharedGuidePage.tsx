@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Lock, Eye, EyeOff, AlertCircle, FileText, Loader2, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { StepAnnotator } from "@/components/StepAnnotator";
 
 type SharedGuideInfo = {
   title: string;
@@ -320,11 +321,12 @@ export default function SharedGuidePage() {
               <Card className="overflow-hidden">
                 {currentStepData.imageUrl && (
                   <div className="aspect-video bg-muted relative">
-                    <img 
-                      src={currentStepData.imageUrl} 
-                      alt={translatedStep.title || "Step screenshot"}
-                      className="w-full h-full object-contain"
-                      data-testid={`img-step-${currentStepData.id}`}
+                    <StepAnnotator
+                      key={currentStepData.id}
+                      imageUrl={currentStepData.imageUrl}
+                      annotations={(currentStepData.metadata as any)?.annotations || []}
+                      editable={false}
+                      imgClassName="w-full h-full object-contain"
                     />
                   </div>
                 )}

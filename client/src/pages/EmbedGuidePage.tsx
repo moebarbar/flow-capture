@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StepAnnotator } from "@/components/StepAnnotator";
 
 type EmbedGuideContent = {
   guide: {
@@ -85,11 +86,13 @@ export default function EmbedGuidePage() {
           <div className="h-full flex flex-col">
             {currentStepData.imageUrl && (
               <div className="flex-1 min-h-0 bg-muted/30 flex items-center justify-center p-4">
-                <img
-                  src={currentStepData.imageUrl}
-                  alt={currentStepData.title || "Step screenshot"}
-                  className="max-w-full max-h-full object-contain rounded-md"
-                  data-testid={`img-embed-step-${currentStepData.id}`}
+                <StepAnnotator
+                  key={currentStepData.id}
+                  imageUrl={currentStepData.imageUrl}
+                  annotations={(currentStepData.metadata as any)?.annotations || []}
+                  editable={false}
+                  className="w-full h-full"
+                  imgClassName="w-full h-full object-contain rounded-md"
                 />
               </div>
             )}

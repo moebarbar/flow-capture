@@ -83,11 +83,57 @@
       // Send READY_FOR_CAPTURE immediately after port connects
       // This tells the service worker to promote this tab from pending to captured
       console.log('[FlowCapture] Port connected, sending READY_FOR_CAPTURE');
-      port.postMessage({ type: MessageTypes.READY_FOR_CAPTURE, data: { ready: true } });
+      sendToBackground({ type: MessageTypes.READY_FOR_CAPTURE, data: { ready: true } });
     } catch (e) {
       console.log('[FlowCapture] Port connection failed, retrying...');
       setTimeout(connectPort, 1000);
     }
+  }
+
+  // Resilient send: prefer the persistent port, but if it's missing or
+  // disconnected (the MV3 service worker was terminated), fall back to
+  // chrome.runtime.sendMessage — which wakes the worker — so a step is never
+  // lost. Never throws.
+  function sendToBackground(message) {
+    if (port) {
+      try {
+        port.postMessage(message);
+        return;
+      } catch (e) {
+        // Port is disconnected (SW likely terminated). Drop the stale ref and
+        // fall through to sendMessage; onDisconnect will trigger a reconnect.
+        port = null;
+      }
+    }
+    try {
+      const maybePromise = chrome.runtime.sendMessage(message);
+      if (maybePromise && typeof maybePromise.catch === 'function') {
+        maybePromise.catch(() => {});
+      }
+    } catch (e) {
+      // Extension context invalidated (e.g. extension reloaded) — unrecoverable.
+    }
+  }
+
+  // Request a screenshot from the service worker, resolving null (never
+  // rejecting) on timeout or error so a dead/slow SW can't hang the capture or
+  // lose the step — the step is simply saved without a screenshot.
+  function requestScreenshotWithTimeout(timeoutMs) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (v) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
+      const timer = setTimeout(() => done(null), timeoutMs);
+      try {
+        const p = chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        if (p && typeof p.then === 'function') {
+          p.then((resp) => done(resp)).catch(() => done(null));
+        } else {
+          done(null);
+        }
+      } catch (e) {
+        done(null);
+      }
+    });
   }
 
   function handleBackgroundMessage(message) {
@@ -914,11 +960,7 @@
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (port) {
-          port.postMessage({ type: MessageTypes.READY_FOR_CAPTURE, data: { ready: true } });
-        } else {
-          chrome.runtime.sendMessage({ type: MessageTypes.READY_FOR_CAPTURE, data: { ready: true } });
-        }
+        sendToBackground({ type: MessageTypes.READY_FOR_CAPTURE, data: { ready: true } });
       });
     });
   }
@@ -983,10 +1025,14 @@
 
     let screenshotDataUrl = null;
 
+    // Declared outside the try so `finally` can always restore the UI, even if
+    // the screenshot request throws or the service worker is unresponsive.
+    const overlayEl = document.getElementById('flowcapture-overlay');
+    const panelEl = document.getElementById('flowcapture-side-panel-host');
+    let removeMasks = null;
+
     try {
       // Hide all FlowCapture UI elements so they don't appear in the screenshot
-      const overlayEl = document.getElementById('flowcapture-overlay');
-      const panelEl = document.getElementById('flowcapture-side-panel-host');
       if (overlayEl) overlayEl.style.visibility = 'hidden';
       if (panelEl) panelEl.style.visibility = 'hidden';
 
@@ -1016,22 +1062,21 @@
       }
 
       // Mask sensitive fields (passwords, credit cards, etc.) before screenshot
-      const removeMasks = maskSensitiveFields();
+      removeMasks = maskSensitiveFields();
 
-      try {
-        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
-        if (response?.dataUrl) {
-          screenshotDataUrl = response.dataUrl;
-        }
-      } finally {
-        removeMasks();
+      // Request the screenshot with a timeout so an unresponsive/terminated
+      // service worker can never hang the click (which would leave the UI hidden).
+      const response = await requestScreenshotWithTimeout(8000);
+      if (response?.dataUrl) {
+        screenshotDataUrl = response.dataUrl;
       }
-
-      // Restore FlowCapture UI
-      if (overlayEl) overlayEl.style.visibility = '';
-      if (panelEl) panelEl.style.visibility = '';
     } catch (e) {
       console.log('[FlowCapture] Screenshot capture failed:', e);
+    } finally {
+      // Always restore masks + UI, no matter how the capture ended
+      try { if (removeMasks) removeMasks(); } catch {}
+      if (overlayEl) overlayEl.style.visibility = '';
+      if (panelEl) panelEl.style.visibility = '';
     }
 
     const clientStepId = `cs-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1055,11 +1100,7 @@
       window.FlowCaptureOverlay.addCapturedStep(step);
     }
 
-    if (port) {
-      port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    } else {
-      chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
-    }
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   async function handleInput(event) {
@@ -1107,7 +1148,7 @@
 
         const removeMasks = maskSensitiveFields();
         try {
-          const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+          const response = await requestScreenshotWithTimeout(8000);
           if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
         } finally {
           removeMasks();
@@ -1143,11 +1184,7 @@
       window.FlowCaptureOverlay.addCapturedStep(step);
     }
 
-    if (port) {
-      port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    } else {
-      chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
-    }
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   async function handleKeyDown(event) {
@@ -1171,7 +1208,7 @@
       try {
         const removeMasks = maskSensitiveFields();
         try {
-          const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+          const response = await requestScreenshotWithTimeout(8000);
           if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
         } finally {
           removeMasks();
@@ -1201,8 +1238,7 @@
         window.FlowCaptureOverlay.incrementStepCount();
         window.FlowCaptureOverlay.addCapturedStep(step);
       }
-      if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-      else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+      sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
     }
 
     // Escape key = dismissing dialog/modal/dropdown
@@ -1228,8 +1264,7 @@
         timestamp: Date.now()
       };
 
-      if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-      else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+      sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
     }
   }
 
@@ -1266,8 +1301,7 @@
       timestamp: Date.now()
     };
 
-    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   /**
@@ -1345,7 +1379,7 @@
         try {
           const removeMasks = maskSensitiveFields();
           try {
-            const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+            const response = await requestScreenshotWithTimeout(8000);
             if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
           } finally {
             removeMasks();
@@ -1377,8 +1411,7 @@
           window.FlowCaptureOverlay.incrementStepCount();
           window.FlowCaptureOverlay.addCapturedStep(step);
         }
-        if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-        else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+        sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
       }, 300);
     });
 
@@ -1407,7 +1440,7 @@
     try {
       const removeMasks = maskSensitiveFields();
       try {
-        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        const response = await requestScreenshotWithTimeout(8000);
         if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
       } finally { removeMasks(); }
     } catch (_) {}
@@ -1428,8 +1461,7 @@
     };
     dragSource = null;
     if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
-    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   // ─── File Upload ──────────────────────────────────────────────────────────────
@@ -1451,7 +1483,7 @@
     try {
       const removeMasks = maskSensitiveFields();
       try {
-        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        const response = await requestScreenshotWithTimeout(8000);
         if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
       } finally { removeMasks(); }
     } catch (_) {}
@@ -1468,8 +1500,7 @@
       timestamp: Date.now()
     };
     if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
-    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   // ─── Clipboard (Copy/Paste) ───────────────────────────────────────────────────
@@ -1500,8 +1531,7 @@
       timestamp: Date.now()
     };
     if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
-    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   // ─── Right-click / Context Menu ───────────────────────────────────────────────
@@ -1528,7 +1558,7 @@
       }
       const removeMasks = maskSensitiveFields();
       try {
-        const response = await chrome.runtime.sendMessage({ type: MessageTypes.SCREENSHOT_REQUEST });
+        const response = await requestScreenshotWithTimeout(8000);
         if (response?.dataUrl) screenshotDataUrl = response.dataUrl;
       } finally { removeMasks(); }
     } catch (_) {} finally {
@@ -1548,8 +1578,7 @@
       timestamp: Date.now()
     };
     if (window.FlowCaptureOverlay) { window.FlowCaptureOverlay.incrementStepCount(); window.FlowCaptureOverlay.addCapturedStep(step); }
-    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   // ─── Focus on complex widgets (date pickers, sliders, etc.) ──────────────────
@@ -1600,8 +1629,7 @@
       elementMetadata: { ...getElementMetadata(el), widgetValue: value, pageTitle: document.title, pageUrl: window.location.href },
       timestamp: Date.now()
     };
-    if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-    else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+    sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
   }
 
   // ─── Shadow DOM support ───────────────────────────────────────────────────────
@@ -1639,8 +1667,7 @@
       // Forward iframe steps to the service worker
       const step = event.data.step;
       if (!step) return;
-      if (port) port.postMessage({ type: MessageTypes.STEP_CAPTURED, data: step });
-      else chrome.runtime.sendMessage({ type: MessageTypes.STEP_CAPTURED, data: step }).catch(() => {});
+      sendToBackground({ type: MessageTypes.STEP_CAPTURED, data: step });
     });
 
     // Also emit our own steps to parent window (if we're in an iframe)
@@ -1697,16 +1724,10 @@
 
   function reportNavigation() {
     if (isCapturing && !isPaused) {
-      const message = {
+      sendToBackground({
         type: MessageTypes.NAVIGATION,
         data: { url: window.location.href, title: document.title }
-      };
-      
-      if (port) {
-        port.postMessage(message);
-      } else {
-        chrome.runtime.sendMessage(message).catch(() => {});
-      }
+      });
     }
   }
 

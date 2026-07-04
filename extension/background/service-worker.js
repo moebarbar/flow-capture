@@ -147,13 +147,59 @@ class CaptureStateMachine {
     this.tabContexts.clear();
     this.state.captureStartedAt = null;
     this.state.pausedElapsedMs = 0;
-    
+
     if (!preserveSession) {
       this.state.guideId = null;
       this.state.workspaceId = null;
       this.state.captureToken = null;
       this.state.expiresAt = null;
+      this.state.sessionNonce = null;
+      this.state.requestingAppTabId = null;
     }
+  }
+
+  // Serialize the full session so it survives MV3 service-worker termination.
+  // Sets/Maps are converted to plain arrays for chrome.storage.
+  serialize() {
+    return {
+      status: this.state.status,
+      guideId: this.state.guideId,
+      workspaceId: this.state.workspaceId,
+      apiBaseUrl: this.state.apiBaseUrl,
+      activeTabId: this.state.activeTabId,
+      stepCounter: this.state.stepCounter,
+      captureToken: this.state.captureToken,
+      expiresAt: this.state.expiresAt,
+      sessionNonce: this.state.sessionNonce || null,
+      requestingAppTabId: this.state.requestingAppTabId || null,
+      captureStartedAt: this.state.captureStartedAt,
+      pausedElapsedMs: this.state.pausedElapsedMs,
+      panelOpen: this.state.panelOpen,
+      capturedTabs: Array.from(this.state.capturedTabs),
+      pendingTabs: Array.from(this.state.pendingTabs.entries()),
+      tabContexts: Array.from(this.tabContexts.entries()),
+    };
+  }
+
+  // Restore session state from storage after a service-worker restart.
+  hydrate(s) {
+    if (!s) return;
+    this.state.status = s.status ?? CaptureStates.IDLE;
+    this.state.guideId = s.guideId ?? null;
+    this.state.workspaceId = s.workspaceId ?? null;
+    this.state.apiBaseUrl = s.apiBaseUrl ?? '';
+    this.state.activeTabId = s.activeTabId ?? null;
+    this.state.stepCounter = s.stepCounter ?? 0;
+    this.state.captureToken = s.captureToken ?? null;
+    this.state.expiresAt = s.expiresAt ?? null;
+    this.state.sessionNonce = s.sessionNonce ?? null;
+    this.state.requestingAppTabId = s.requestingAppTabId ?? null;
+    this.state.captureStartedAt = s.captureStartedAt ?? null;
+    this.state.pausedElapsedMs = s.pausedElapsedMs ?? 0;
+    this.state.panelOpen = s.panelOpen ?? true;
+    this.state.capturedTabs = new Set(s.capturedTabs || []);
+    this.state.pendingTabs = new Map(s.pendingTabs || []);
+    this.tabContexts = new Map(s.tabContexts || []);
   }
   
   addCapturedTab(tabId, tabInfo = {}) {
@@ -186,6 +232,13 @@ class CaptureStateMachine {
 
   broadcastStateUpdate() {
     const state = this.getState();
+    // Persist the full session on every state change so an MV3 service-worker
+    // termination mid-capture never loses the session (status/tabs/ids).
+    if (this.state.status === CaptureStates.IDLE) {
+      clearSession().catch(() => {});
+    } else {
+      saveSession(this.serialize()).catch(() => {});
+    }
     this.ports.forEach((port) => {
       try {
         port.postMessage({ type: MessageTypes.STATE_UPDATE, data: state });
@@ -206,18 +259,36 @@ class CaptureStateMachine {
 
 const machine = new CaptureStateMachine();
 
-// On startup: restore auth token and any steps that survived a service worker restart.
-(async () => {
-  await syncManager.loadStoredToken();
+// On startup: restore auth token, the capture session, and any steps that
+// survived a service-worker restart. MV3 kills idle workers aggressively (~30s),
+// so this is what keeps a capture alive across the worker's death. Message
+// handlers await `hydrationPromise` before acting so a message that arrives
+// before restore completes is never dropped.
+const hydrationPromise = (async () => {
+  try {
+    await syncManager.loadStoredToken();
 
-  // Recover steps saved during a capture session that was interrupted by SW termination
-  const pending = await getPendingSteps();
-  if (pending && pending.length > 0) {
-    console.log(`[FlowCapture] Recovered ${pending.length} pending steps from storage`);
-    for (const step of pending) {
-      machine.state.steps.push(step);
-      machine.state.stepCounter = Math.max(machine.state.stepCounter, step.order || 0);
+    const [session, pending] = await Promise.all([getSession(), getPendingSteps()]);
+
+    const active = session && (session.status === CaptureStates.CAPTURING || session.status === CaptureStates.PAUSED);
+    if (active) {
+      machine.hydrate(session);
+      if (machine.state.apiBaseUrl && machine.state.guideId) {
+        syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
+      }
+      console.log('[FlowCapture] Restored capture session after SW restart:', machine.state.status);
     }
+
+    if (pending && pending.length > 0) {
+      machine.state.steps = pending;
+      machine.state.stepCounter = Math.max(
+        machine.state.stepCounter,
+        ...pending.map((s) => s.order || 0)
+      );
+      console.log(`[FlowCapture] Recovered ${pending.length} pending steps from storage`);
+    }
+  } catch (e) {
+    console.warn('[FlowCapture] Hydration failed:', e?.message);
   }
 })();
 
@@ -327,15 +398,21 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.runtime.onConnect.addListener((port) => {
   console.log('[FlowCapture] Port connected:', port.name);
   machine.ports.set(port.name + '_' + (port.sender?.tab?.id || 'popup'), port);
-  
+
   port.onMessage.addListener((message) => handlePortMessage(port, message));
   port.onDisconnect.addListener(() => {
     const key = port.name + '_' + (port.sender?.tab?.id || 'popup');
     machine.ports.delete(key);
     console.log('[FlowCapture] Port disconnected:', port.name);
   });
-  
-  port.postMessage({ type: MessageTypes.STATE_UPDATE, data: machine.getState() });
+
+  // Send the initial state AFTER hydration so a content script reconnecting to a
+  // freshly-restarted worker isn't told the capture stopped.
+  hydrationPromise.then(() => {
+    try {
+      port.postMessage({ type: MessageTypes.STATE_UPDATE, data: machine.getState() });
+    } catch { /* port already gone */ }
+  });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -364,9 +441,9 @@ async function applySessionToMachine(session) {
   machine.state.expiresAt = session.expiresAt || null;
   machine.state.apiBaseUrl = resolveApiBaseUrl(session.apiBaseUrl || machine.state.apiBaseUrl);
   machine.state.workspaceId = session.workspaceId || machine.state.workspaceId || null;
-  
-  // Persist session to storage
-  await saveSession(session);
+
+  // Persist the unified serialized session (same shape hydration reads)
+  await saveSession(machine.serialize());
   
   // Configure SyncManager so uploads work (for both initial and recovery flows)
   if (machine.state.apiBaseUrl && machine.state.guideId) {
@@ -395,7 +472,10 @@ async function applySessionToMachine(session) {
 async function handlePortMessage(port, message) {
   const { type, data, requestId } = message;
   let response;
-  
+
+  // Ensure the session is restored before handling anything (MV3 restart safety)
+  await hydrationPromise;
+
   try {
     switch (type) {
       case MessageTypes.STEP_CAPTURED:
@@ -421,6 +501,9 @@ async function handlePortMessage(port, message) {
 
 async function handleMessage(message, sender) {
   const { type, data } = message;
+
+  // Ensure the session is restored before handling anything (MV3 restart safety)
+  await hydrationPromise;
 
   switch (type) {
     case MessageTypes.START_CAPTURE:
@@ -685,6 +768,7 @@ async function handleMessage(message, sender) {
 
 async function handleExternalMessage(message, sender) {
   const { type, data } = message;
+  await hydrationPromise;
   const origin = sender.origin || (sender.url ? new URL(sender.url).origin : '');
 
   // Only the trusted app origin may drive capture from a web page. This blocks
@@ -941,11 +1025,8 @@ async function stopCapture() {
     }
   }
   
-  // Clear the requesting app tab ID
-  machine.state.requestingAppTabId = null;
-
-  return { 
-    success: true, 
+  const result = {
+    success: true,
     stepCount: steps.length,
     guideId,
     steps: steps.map((s, i) => ({
@@ -957,6 +1038,12 @@ async function stopCapture() {
       timestamp: s.timestamp
     }))
   };
+
+  // Fully reset in-memory session state now that the capture is complete
+  // (storage was already cleared above). A subsequent capture starts fresh.
+  machine.reset(false);
+
+  return result;
 }
 
 // Deduplication: track recently processed clientStepIds to reject duplicates
@@ -1173,27 +1260,60 @@ const SCREENSHOT_CONFIG = {
   timeout: 5000
 };
 
+// Chrome throttles captureVisibleTab to ~2 calls/sec per window
+// (MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND). Serialize all captures through a
+// promise chain that also enforces a minimum spacing so rapid clicks never drop
+// a screenshot to a quota error.
+const MIN_CAPTURE_INTERVAL_MS = 600;
+let _captureChain = Promise.resolve();
+let _lastCaptureAt = 0;
+function gatedCapture(fn) {
+  const run = _captureChain.then(async () => {
+    const since = Date.now() - _lastCaptureAt;
+    if (since < MIN_CAPTURE_INTERVAL_MS) {
+      await sleep(MIN_CAPTURE_INTERVAL_MS - since);
+    }
+    _lastCaptureAt = Date.now();
+    return fn();
+  });
+  // Keep the chain alive even if this capture rejects
+  _captureChain = run.catch(() => {});
+  return run;
+}
+
 async function captureScreenshot(tabId) {
   const targetTabId = tabId || machine.state.activeTabId;
   const captureTimestamp = Date.now();
-  
+
   let windowId = null;
   if (targetTabId) {
     try {
       const tab = await chrome.tabs.get(targetTabId);
       windowId = tab.windowId;
+      // captureVisibleTab captures the ACTIVE tab of the window. Screenshots are
+      // click-triggered so the target tab is normally active; if it isn't (a
+      // stale/queued capture), skip rather than capture the wrong page. We don't
+      // force-activate — that would yank the user's focus.
+      if (tab.active === false) {
+        return {
+          error: 'Target tab is not active; skipping screenshot to avoid capturing the wrong page',
+          errorType: 'permanent',
+          capturedAt: captureTimestamp,
+          tabId: targetTabId,
+        };
+      }
     } catch (e) {
       console.log('[FlowCapture] Could not get tab window:', e.message);
     }
   }
 
   let lastError = null;
-  
+
   for (let attempt = 1; attempt <= SCREENSHOT_CONFIG.maxRetries; attempt++) {
     try {
-      const dataUrl = await captureWithTimeout(windowId, SCREENSHOT_CONFIG.timeout);
-      
-      return { 
+      const dataUrl = await gatedCapture(() => captureWithTimeout(windowId, SCREENSHOT_CONFIG.timeout));
+
+      return {
         dataUrl,
         capturedAt: captureTimestamp,
         tabId: targetTabId,
@@ -1268,11 +1388,23 @@ function classifyScreenshotError(error) {
   if (message.includes('minimized') || message.includes('occluded')) {
     return 'transient';
   }
-  
+
   if (message.includes('timeout')) {
     return 'transient';
   }
-  
+
+  // captureVisibleTab rate-limit / transient tab-busy states — retry with backoff
+  if (
+    message.includes('max_capture') ||
+    message.includes('quota') ||
+    message.includes('exceeded') ||
+    message.includes('cannot be edited') ||
+    message.includes('user may be dragging') ||
+    message.includes('detached')
+  ) {
+    return 'transient';
+  }
+
   return 'unknown';
 }
 

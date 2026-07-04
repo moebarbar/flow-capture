@@ -1713,10 +1713,16 @@ async function sendToTab(tabId, type, data = {}) {
 }
 
 async function broadcastToAllTabs(type, data = {}) {
-  const tabs = await chrome.tabs.query({});
+  let tabs;
+  try {
+    tabs = await chrome.tabs.query({});
+  } catch (e) {
+    console.warn('[FlowCapture] tabs.query failed:', e?.message);
+    return;
+  }
   for (const tab of tabs) {
-    if (tab.url?.startsWith('chrome://')) continue;
-    sendToTab(tab.id, type, data);
+    if (!tab.id || tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) continue;
+    sendToTab(tab.id, type, data); // sendToTab swallows per-tab errors
   }
 }
 

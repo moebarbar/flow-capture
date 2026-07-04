@@ -270,11 +270,30 @@ const hydrationPromise = (async () => {
 
     const [session, pending] = await Promise.all([getSession(), getPendingSteps()]);
 
-    const active = session && (session.status === CaptureStates.CAPTURING || session.status === CaptureStates.PAUSED);
+    const active = session && (
+      session.status === CaptureStates.CAPTURING ||
+      session.status === CaptureStates.PAUSED ||
+      session.status === CaptureStates.SYNCING
+    );
     if (active) {
       machine.hydrate(session);
       if (machine.state.apiBaseUrl && machine.state.guideId) {
         syncManager.configure(machine.state.apiBaseUrl, machine.state.guideId);
+        // Resume any uploads that were queued when the worker was killed
+        // (e.g. an interrupted stop-time batch), so nothing is left stranded.
+        await syncManager.loadOfflineQueue();
+
+        if (session.status === CaptureStates.SYNCING) {
+          // The stop-time flush was interrupted. Finish draining the queue, then
+          // finalize the capture (transition to IDLE clears the session).
+          syncManager.flush().finally(() => {
+            clearPendingSteps().catch(() => {});
+            machine.transition(CaptureStates.IDLE);
+          });
+        } else if (syncManager.queue.length > 0) {
+          syncManager.processQueue();
+          syncManager.startPeriodicSync();
+        }
       }
       console.log('[FlowCapture] Restored capture session after SW restart:', machine.state.status);
     }

@@ -392,3 +392,42 @@ After testing:
 ---
 
 *Last updated: January 2025*
+
+---
+
+## Reliability scenarios (MV3 + capture robustness)
+
+These verify the extension survives the failure modes that used to silently
+drop steps or screenshots. Open the service-worker console via
+`chrome://extensions` → FlowCapture → "service worker" to watch logs.
+
+### Service-worker termination mid-capture (the critical one)
+1. [ ] Start a capture and take 2-3 steps.
+2. [ ] In `chrome://extensions`, click "service worker" then close its console,
+       or wait ~30s without interacting so Chrome idles the worker (the
+       "service worker" link shows "(inactive)").
+3. [ ] Click something in the captured tab again.
+4. [ ] The new step is captured (NOT dropped) — the log shows
+       "Restored capture session after SW restart". Step count keeps climbing.
+5. [ ] Stop the capture: all steps (before and after the restart) appear in the
+       editor.
+
+### Rapid clicking (screenshot rate limit)
+1. [ ] During capture, click many elements quickly (5+ in 2 seconds).
+2. [ ] Every click produces a step with a screenshot — none are missing due to
+       "MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND" quota errors (screenshots may
+       arrive slightly staggered; that's expected).
+
+### Failed/slow screenshot doesn't freeze the UI
+1. [ ] If a screenshot ever fails, the on-page overlay/side panel reappears
+       (never stays hidden) and the step is still saved (without an image).
+
+### Multi-tab + navigation
+1. [ ] Navigate within the captured tab (SPA and full page loads) — capture
+       continues.
+2. [ ] Open a link in a new tab and interact — the new tab is captured too.
+3. [ ] The click indicator (red dot) lands on the element you actually clicked.
+
+### Offline / interrupted upload
+1. [ ] Stop a capture while briefly offline (DevTools → Network → Offline).
+2. [ ] Steps are not lost; when back online they upload (the queue drains).

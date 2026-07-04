@@ -1,4 +1,6 @@
 import { anthropic } from "../lib/anthropic";
+import { parseModelJson } from "../lib/modelJson";
+import { models } from "../config";
 import { db } from "../db";
 import {
   guideTranslations,
@@ -61,7 +63,7 @@ export async function translateGuide(
     const languageName = SUPPORTED_LANGUAGES.find(l => l.code === targetLocale)?.name || targetLocale;
 
     const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: models.claudeText,
       max_tokens: 500,
       system: `You are a professional translator. Translate the following guide content to ${languageName}. Maintain the same tone and style. Return ONLY valid JSON with no extra text: { "title": "...", "description": "..." }`,
       messages: [
@@ -73,7 +75,7 @@ export async function translateGuide(
     });
 
     const content = completion.content[0].type === 'text' ? completion.content[0].text : null;
-    const translated = content ? JSON.parse(content) : { title: guide.title, description: guide.description };
+    const translated = content ? parseModelJson(content) : { title: guide.title, description: guide.description };
 
     const result = await db.update(guideTranslations)
       .set({
@@ -82,7 +84,7 @@ export async function translateGuide(
         status: 'completed',
         translatedAt: new Date(),
         sourceHash,
-        aiModel: 'claude-sonnet-4-6',
+        aiModel: models.claudeText,
         updatedAt: new Date()
       })
       .where(and(
@@ -151,7 +153,7 @@ export async function translateStep(
     const languageName = SUPPORTED_LANGUAGES.find(l => l.code === targetLocale)?.name || targetLocale;
 
     const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: models.claudeText,
       max_tokens: 300,
       system: `You are a professional translator. Translate the following step content to ${languageName}. Maintain the same tone and style. Return ONLY valid JSON with no extra text: { "title": "...", "description": "..." }`,
       messages: [
@@ -163,7 +165,7 @@ export async function translateStep(
     });
 
     const content = completion.content[0].type === 'text' ? completion.content[0].text : null;
-    const translated = content ? JSON.parse(content) : { title: step.title, description: step.description };
+    const translated = content ? parseModelJson(content) : { title: step.title, description: step.description };
 
     const result = await db.update(stepTranslations)
       .set({

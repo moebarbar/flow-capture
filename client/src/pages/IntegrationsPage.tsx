@@ -25,7 +25,6 @@ import { formatDistanceToNow } from "date-fns";
 const INTEGRATION_PROVIDERS = [
   { id: "slack", name: "Slack", icon: SiSlack, description: "Send notifications to Slack channels", category: "communication" },
   { id: "microsoft_teams", name: "Microsoft Teams", icon: MessageSquare, description: "Push updates to Teams channels", category: "communication" },
-  { id: "email", name: "Email (SendGrid)", icon: Mail, description: "Send email notifications", category: "communication" },
   { id: "jira", name: "Jira", icon: SiJira, description: "Create Jira issues from flows", category: "project" },
   { id: "trello", name: "Trello", icon: Calendar, description: "Create cards in Trello boards", category: "project" },
   { id: "asana", name: "Asana", icon: Calendar, description: "Create tasks in Asana projects", category: "project" },

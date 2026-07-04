@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { 
-  integrations, webhooks, automations, automationLogs, webhookLogs, analyticsEvents,
+import {
+  integrations, webhooks, automations, automationLogs, webhookLogs, analyticsEvents, notifications,
   type Integration, type InsertIntegration,
   type Webhook, type InsertWebhook,
   type Automation, type InsertAutomation,
@@ -10,6 +10,7 @@ import {
 import { eq, and, desc, inArray } from "drizzle-orm";
 import crypto from "crypto";
 import { safeFetch, assertSafeUrl } from "../lib/ssrf";
+import { emailService } from "./emailService";
 
 export interface AutomationAction {
   type: string;
@@ -310,9 +311,35 @@ class IntegrationsService {
     }
   }
 
+  // Replace {{workspaceId}}, {{guideId}}, {{userId}}, and {{data.*}} tokens.
+  private interpolate(template: string, context: TriggerContext): string {
+    if (!template) return template;
+    return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, path: string) => {
+      if (path.startsWith('data.')) {
+        const key = path.slice(5);
+        const val = context.data?.[key];
+        return val != null ? String(val) : '';
+      }
+      const val = (context as any)[path];
+      return val != null ? String(val) : '';
+    });
+  }
+
   private async executeEmailAction(config: Record<string, unknown>, context: TriggerContext): Promise<void> {
-    // Email sending will be handled by emailService
-    console.log('[Automation] Email action:', config, context);
+    const to = config.to as string;
+    if (!to) throw new Error('Email action requires a "to" address');
+
+    const subject = this.interpolate((config.subject as string) || 'FlowCapture notification', context);
+    const bodyRaw = this.interpolate((config.body as string) || (config.html as string) || '', context);
+    // Treat the body as HTML if it looks like markup, else wrap plain text
+    const html = /<[a-z][\s\S]*>/i.test(bodyRaw)
+      ? bodyRaw
+      : `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; line-height: 1.6;">${bodyRaw.replace(/\n/g, '<br>')}</div>`;
+
+    const sent = await emailService.sendGenericEmail({ to, subject, html });
+    if (!sent) {
+      throw new Error('Email send failed (is SendGrid configured?)');
+    }
   }
 
   private async executeWebhookAction(config: Record<string, unknown>, context: TriggerContext): Promise<void> {
@@ -327,8 +354,32 @@ class IntegrationsService {
   }
 
   private async executeNotifyAction(config: Record<string, unknown>, context: TriggerContext): Promise<void> {
-    // Internal notification will be created
-    console.log('[Automation] Notify action:', config, context);
+    // Recipient: explicit config.userId, else the user who triggered the event
+    const userId = (config.userId as string) || context.userId;
+    if (!userId) throw new Error('Notify action requires a target userId');
+
+    const title = this.interpolate((config.title as string) || 'Automation', context);
+    const message = this.interpolate((config.message as string) || '', context);
+
+    const [notification] = await db.insert(notifications).values({
+      userId,
+      type: 'automation',
+      title,
+      message,
+      workspaceId: context.workspaceId,
+      flowId: context.guideId ?? null,
+      stepId: context.stepId ?? null,
+    }).returning();
+
+    // Best-effort real-time push (SSE) if the app registered a publisher
+    try {
+      const publish = (globalThis as any).__ssePublish;
+      if (typeof publish === 'function') {
+        publish(userId, 'notification', notification);
+      }
+    } catch {
+      /* SSE is optional; the DB notification is the durable record */
+    }
   }
 
   // === TRIGGER SYSTEM ===

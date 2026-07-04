@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { models } from '../config';
 import { stepVoiceovers, steps, guides } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
@@ -88,7 +89,7 @@ export class VoiceoverService {
       const openai = this.getOpenAIClient();
       
       const response = await openai.audio.speech.create({
-        model: 'tts-1',
+        model: models.openaiTts,
         voice,
         input: text,
         response_format: 'mp3'

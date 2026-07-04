@@ -337,7 +337,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "assignment_created", "assignment_updated", "assignment_completed",
   "approval_requested", "approval_approved", "approval_rejected", "approval_revision",
   "comment_added", "comment_reply", "comment_mention",
-  "workspace_invitation", "flow_shared"
+  "workspace_invitation", "flow_shared", "automation"
 ]);
 
 // Step Assignments - Assign specific steps to team members
@@ -550,7 +550,9 @@ export const captureSessions = pgTable("capture_sessions", {
 export const integrationProviderEnum = pgEnum("integration_provider", [
   "slack", "microsoft_teams", "email", "jira", "clickup", "monday",
   "notion", "confluence", "google_drive", "dropbox",
-  "zapier", "make", "webhook", "google_analytics", "mixpanel", "amplitude"
+  "zapier", "make", "webhook", "google_analytics", "mixpanel", "amplitude",
+  // Implemented in integrationProviders.ts — added so they can be persisted
+  "trello", "asana", "hubspot"
 ]);
 
 export const integrationStatusEnum = pgEnum("integration_status", ["active", "inactive", "error"]);

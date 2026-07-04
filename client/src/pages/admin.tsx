@@ -2482,13 +2482,17 @@ export default function AdminPage() {
     return <div className="flex items-center justify-center h-full"><Skeleton className="h-32 w-32" /></div>;
   }
 
-  if (!user) {
+  if (!user || (user as any).role !== "admin") {
     return (
       <div className="flex items-center justify-center h-full">
         <Card className="max-w-md">
           <CardHeader>
             <CardTitle>Access Denied</CardTitle>
-            <CardDescription>Please log in to access the admin dashboard.</CardDescription>
+            <CardDescription>
+              {user
+                ? "You don't have permission to access the admin dashboard."
+                : "Please log in to access the admin dashboard."}
+            </CardDescription>
           </CardHeader>
         </Card>
       </div>

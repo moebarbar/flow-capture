@@ -12,7 +12,7 @@ import { analyzeStepWithVision } from "./services/visionService";
 import { runGuideIntelligence } from "./services/guideIntelligenceService";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
-import { getAppBaseUrl } from "./config";
+import { getAppBaseUrl, models } from "./config";
 import { insertBlogPostSchema, users, steps, guideVersions, SUPPORTED_LANGUAGES } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -1260,7 +1260,7 @@ export async function registerRoutes(
       if (context) groundedContext.push(`Additional context: ${context}`);
 
       const completion = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
+        model: models.claudeText,
         max_tokens: 150,
         system: `You are a technical writer for a workflow documentation tool. Your job is to write clear, accurate step descriptions.
 
@@ -1350,7 +1350,7 @@ Write a clear, accurate description for this step.`
       for (const step of stepsToProcess) {
         try {
           const completion = await anthropic.messages.create({
-            model: "claude-haiku-4-5-20251001",
+            model: models.claudeFast,
             max_tokens: 100,
             system: "You are a technical writer for workflow documentation. Write a single clear, concise step description (1-2 sentences). Start with an action verb. Only describe what you can infer from the provided data.",
             messages: [
@@ -1403,7 +1403,7 @@ Write a clear, accurate description for this step.`
       if (context) groundedInfo.push(`Context: ${context}`);
 
       const completion = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
+        model: models.claudeText,
         max_tokens: 300,
         system: `You are a technical writer analyzing screenshots for workflow documentation.
 
@@ -1483,7 +1483,7 @@ Return ONLY valid JSON with no extra text: { "title": "...", "description": "...
       }));
 
       const completion = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
+        model: models.claudeText,
         max_tokens: 1000,
         system: `You are an expert technical writer. Review this workflow guide and suggest improvements:
 1. Make titles more action-oriented and clear
@@ -1525,7 +1525,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
     res.json({
       claude: {
         configured: claudeConfigured,
-        model: "claude-sonnet-4-6",
+        model: models.claudeText,
       },
       translation: {
         enabled: claudeConfigured,
@@ -5606,8 +5606,9 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
     }
   }
 
-  // Expose publisher so other route handlers can call it
+  // Expose publisher so other route handlers and services can call it
   (app as any)._ssePublish = ssePublish;
+  (globalThis as any).__ssePublish = ssePublish;
 
   app.get('/api/events', (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });

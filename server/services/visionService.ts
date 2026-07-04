@@ -1,4 +1,5 @@
 import { anthropic } from "../lib/anthropic";
+import { models } from "../config";
 import { db } from "../db";
 import { steps, guides } from "@shared/schema";
 import { eq, asc } from "drizzle-orm";
@@ -103,7 +104,7 @@ export async function analyzeStepWithVision(
       : '';
 
     const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: models.claudeVision,
       max_tokens: 500,
       system: `You are an expert UI analyst creating workflow documentation (like Tango or Scribe).
 

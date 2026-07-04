@@ -57,6 +57,18 @@ function loadEnv() {
 
 export const env = loadEnv();
 
+/**
+ * AI model IDs, overridable via env so upgrades don't require code changes.
+ */
+export const models = {
+  claudeText: process.env.AI_MODEL_CLAUDE_TEXT || "claude-sonnet-4-6",
+  claudeVision: process.env.AI_MODEL_CLAUDE_VISION || "claude-sonnet-4-6",
+  claudeFast: process.env.AI_MODEL_CLAUDE_FAST || "claude-haiku-4-5-20251001",
+  openaiChat: process.env.AI_MODEL_OPENAI_CHAT || "gpt-5.1",
+  openaiImage: process.env.AI_MODEL_OPENAI_IMAGE || "gpt-image-1",
+  openaiTts: process.env.AI_MODEL_OPENAI_TTS || "tts-1",
+};
+
 /** Which optional feature groups are usable with the current env. */
 export const features = {
   stripe: !!env.STRIPE_SECRET_KEY,

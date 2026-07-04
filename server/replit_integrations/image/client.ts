@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
+import { models } from "../../config";
 
 export const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY || 'not-configured',
@@ -16,7 +17,7 @@ export async function generateImageBuffer(
   size: "1024x1024" | "512x512" | "256x256" = "1024x1024"
 ): Promise<Buffer> {
   const response = await openai.images.generate({
-    model: "gpt-image-1",
+    model: models.openaiImage,
     prompt,
     size,
   });
@@ -42,7 +43,7 @@ export async function editImages(
   );
 
   const response = await openai.images.edit({
-    model: "gpt-image-1",
+    model: models.openaiImage,
     image: images,
     prompt,
   });

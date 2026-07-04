@@ -1,4 +1,5 @@
 import { anthropic } from "../lib/anthropic";
+import { models } from "../config";
 import { db } from "../db";
 import { steps, guides } from "@shared/schema";
 import { eq, asc } from "drizzle-orm";
@@ -60,7 +61,7 @@ export async function runGuideIntelligence(guideId: number): Promise<void> {
     }).join('\n');
 
     const completion = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: models.claudeText,
       max_tokens: 1200,
       system: `You are an expert technical writer analyzing a captured workflow to produce intelligent documentation.
 

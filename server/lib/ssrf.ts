@@ -25,9 +25,21 @@ function isPrivateIp(ip: string): boolean {
     if (norm === "::1" || norm === "::") return true; // loopback / unspecified
     if (norm.startsWith("fe80")) return true; // link-local
     if (norm.startsWith("fc") || norm.startsWith("fd")) return true; // unique local fc00::/7
-    // IPv4-mapped IPv6 (::ffff:a.b.c.d)
-    const mapped = norm.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    if (mapped) return isPrivateIp(mapped[1]);
+    // IPv4-mapped IPv6 — the embedded IPv4 may be dotted (::ffff:10.0.0.1) OR
+    // hex after URL normalization (::ffff:a00:1). Check both forms.
+    if (norm.startsWith("::ffff:")) {
+      const rest = norm.slice("::ffff:".length);
+      if (rest.includes(".")) return isPrivateIp(rest);
+      const groups = rest.split(":");
+      if (groups.length === 2) {
+        const hi = parseInt(groups[0], 16);
+        const lo = parseInt(groups[1], 16);
+        if (!Number.isNaN(hi) && !Number.isNaN(lo)) {
+          const ipv4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+          return isPrivateIp(ipv4);
+        }
+      }
+    }
     return false;
   }
   return false;

@@ -7,6 +7,7 @@ import { models } from '../config';
 import { parseModelJson } from '../lib/modelJson';
 import { objectStorageService, isObjectStorageConfigured } from '../replit_integrations/object_storage/objectStorage';
 import { safeFetch } from '../lib/ssrf';
+import { regionToPixelRect } from '../lib/redactionGeometry';
 import crypto from 'crypto';
 
 interface DetectedRegion {
@@ -140,10 +141,9 @@ export const redactionService = {
 
     const composites: sharp.OverlayOptions[] = [];
     for (const r of regions) {
-      const left = Math.max(0, Math.min(width - 1, Math.round((r.x / 100) * width)));
-      const top = Math.max(0, Math.min(height - 1, Math.round((r.y / 100) * height)));
-      const w = Math.max(1, Math.min(width - left, Math.round((r.width / 100) * width)));
-      const h = Math.max(1, Math.min(height - top, Math.round((r.height / 100) * height)));
+      const { left, top, width: w, height: h } = regionToPixelRect(
+        { x: r.x, y: r.y, width: r.width, height: r.height }, width, height
+      );
 
       if (r.type === 'box') {
         composites.push({

@@ -373,7 +373,7 @@ function KnowledgeBaseManagerContent({
                     <SelectContent>
                       <SelectItem value="all">All Categories</SelectItem>
                       <SelectItem value="uncategorized">Uncategorized</SelectItem>
-                      {categories.map((cat) => (
+                      {categories.map((cat: any) => (
                         <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -398,8 +398,8 @@ function KnowledgeBaseManagerContent({
                   </Card>
                 ) : (
                   <div className="space-y-3">
-                    {filteredArticles.map((article) => {
-                      const category = categories.find(c => c.id === article.categoryId);
+                    {filteredArticles.map((article: any) => {
+                      const category = categories.find((c: any) => c.id === article.categoryId);
                       return (
                         <Card key={article.id} className="hover-elevate" data-testid={`card-article-${article.id}`}>
                           <CardContent className="py-4">

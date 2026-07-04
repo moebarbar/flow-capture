@@ -852,5 +852,5 @@ export const getArticleBySlug = (slug: string) => blogArticles.find(article => a
 export const getArticlesByCategory = (category: string) => 
   blogArticles.filter(article => article.category === category);
 
-export const getAllCategories = () => 
-  [...new Set(blogArticles.map(article => article.category))];
+export const getAllCategories = () =>
+  Array.from(new Set(blogArticles.map(article => article.category)));

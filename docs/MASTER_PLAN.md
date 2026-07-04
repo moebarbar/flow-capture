@@ -3,6 +3,30 @@
 Status: proposed 2026-07-01. Execute phases in order; each phase leaves the app deployable.
 Source of truth for what's broken: full-codebase audit (server, client, extension) on 2026-07-01.
 
+## Progress
+
+- **Phase 1 — billing/storage/config: DONE.** GCS off the Replit sidecar, Stripe
+  webhooks + live API + lookup-key prices, zod-validated config, health check.
+- **Security hardening pass (out-of-band): DONE.** IDOR cluster, KB stored-XSS,
+  SSRF guards, CSRF on all mutations, clickjacking headers, token logging,
+  revocable extension tokens. See `SECURITY_AUDIT.md`. (Open: rotate the GCP key,
+  pin CORS to the published extension ID.)
+- **Phase 2 — extension: DONE.** Dead v1 code + orphan side panel removed, build
+  script fixed, stop-time upload routed through the retry queue, rect re-measured
+  at capture, dead single-element buttons removed.
+- **Phase 3 — editor: DONE.** UX bug fixes, collaboration panels wired into
+  right-panel tabs, working workspace switcher, real screenshot annotations
+  (StepAnnotator, normalized coords, viewer + embed). Blog consolidation deferred.
+- **Phase 4 — hardening: DONE.** Client admin gate, automation email/notify
+  actions, provider-enum reconcile, model config, translation JSON parsing, and
+  **real redaction** (Claude vision detection + `sharp` pixel burn-in served on
+  share/embed/export). `routes.ts` split deferred (mechanical, low value).
+- **Phase 5 — quality: IN PROGRESS.** `tsc --noEmit` is clean (0 errors); docs
+  rewritten (README/CLAUDE). Tests, CI, Sentry, and perf pass still to do.
+
+Needs interactive QA in Chrome (can't verify headless): extension capture,
+editor tabs/annotations/switcher, redaction burn-in on a real share.
+
 ---
 
 ## Phase 1 — Fix production-broken systems (billing, storage, config)

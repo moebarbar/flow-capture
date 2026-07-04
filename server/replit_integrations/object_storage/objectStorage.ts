@@ -279,6 +279,16 @@ export class ObjectStorageService {
     return (await this.createUploadTarget()).uploadURL;
   }
 
+  /** Read an object (by /objects/... path or bare key) into a Buffer. */
+  async readObjectBuffer(objectPathOrKey: string): Promise<Buffer> {
+    const path = objectPathOrKey.startsWith("/objects/")
+      ? objectPathOrKey
+      : `/objects/${objectPathOrKey.replace(/^\/+/, "")}`;
+    const file = await this.getObjectEntityFile(path);
+    const [buffer] = await file.download();
+    return buffer;
+  }
+
   /** Write a buffer directly to storage. Returns the servable /objects/ path. */
   async saveObject(
     key: string,

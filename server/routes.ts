@@ -1082,7 +1082,7 @@ export async function registerRoutes(
           order: s.order,
           title: s.title,
           description: s.description,
-          imageUrl: s.imageUrl,
+          imageUrl: (s.metadata as any)?.redactedImageUrl || s.imageUrl,
           actionType: s.actionType,
           metadata: s.metadata,
         })),
@@ -1141,7 +1141,7 @@ export async function registerRoutes(
       <h2 class="step-title">${step.title || `Step ${index + 1}`}</h2>
     </div>
     ${step.description ? `<p class="step-description">${step.description}</p>` : ''}
-    ${step.imageUrl ? `<img class="step-image" src="${step.imageUrl}" alt="${step.title || 'Step screenshot'}" />` : ''}
+    ${step.imageUrl ? `<img class="step-image" src="${(step.metadata as any)?.redactedImageUrl || step.imageUrl}" alt="${step.title || 'Step screenshot'}" />` : ''}
   </div>
   `).join('')}
 </body>
@@ -1233,7 +1233,7 @@ export async function registerRoutes(
           order: s.order,
           title: s.title,
           description: s.description,
-          imageUrl: s.imageUrl,
+          imageUrl: (s.metadata as any)?.redactedImageUrl || s.imageUrl,
           actionType: s.actionType,
           metadata: s.metadata,
         })),
@@ -4759,7 +4759,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
           order: s.order,
           title: s.title,
           description: s.description,
-          imageUrl: s.imageUrl,
+          imageUrl: (s.metadata as any)?.redactedImageUrl || s.imageUrl,
           actionType: s.actionType,
           selector: s.selector
         }))
@@ -5489,7 +5489,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
         }
         if (step.imageUrl) {
           content += `<figure class="step-image">\n`;
-          content += `<img src="${step.imageUrl}" alt="${step.title || 'Step ' + (index + 1)}" />\n`;
+          content += `<img src="${(step.metadata as any)?.redactedImageUrl || step.imageUrl}" alt="${step.title || 'Step ' + (index + 1)}" />\n`;
           content += `</figure>\n`;
         }
         content += `</div>\n\n`;
@@ -5557,7 +5557,7 @@ Return ONLY valid JSON with no extra text: { "improvedTitle": "...", "steps": [{
           content += `<p>${step.description}</p>\n`;
         }
         if (step.imageUrl) {
-          content += `<img src="${step.imageUrl}" alt="${step.title || 'Step image'}" />\n`;
+          content += `<img src="${(step.metadata as any)?.redactedImageUrl || step.imageUrl}" alt="${step.title || 'Step image'}" />\n`;
         }
         content += '\n';
       });

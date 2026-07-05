@@ -1590,24 +1590,18 @@ async function injectContentScripts(tabId, options = {}) {
         return { success: false, error: 'Chrome Web Store not supported', skipped: true };
       }
 
+      // Inject all four in a single call — Chrome executes them in order,
+      // it's one round-trip instead of four, and the content scripts each
+      // guard against double-execution (window.__flowCapture* flags) so this
+      // is safe even when the manifest content_scripts already injected them.
       await chrome.scripting.executeScript({
         target: { tabId },
-        files: ['content/capture-agent.js']
-      });
-
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content/screenshot-agent.js']
-      });
-
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content/tab-bridge.js']
-      });
-
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: ['content/side-panel.js']
+        files: [
+          'content/capture-agent.js',
+          'content/screenshot-agent.js',
+          'content/tab-bridge.js',
+          'content/side-panel.js'
+        ]
       });
 
       console.log('[FlowCapture] Scripts injected into tab:', tabId, '(attempt', attempt, ')');

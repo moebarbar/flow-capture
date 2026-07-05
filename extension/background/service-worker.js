@@ -51,7 +51,6 @@ class CaptureStateMachine {
     
     this.ports = new Map();
     this.tabContexts = new Map();
-    this.pendingScreenshots = new Map();
   }
   
   addPendingTab(tabId, context = {}) {
@@ -1168,12 +1167,6 @@ async function handleStepCaptured(stepData, tabId) {
 }
 
 async function handleReadyForCapture(data, tabId) {
-  const pendingCapture = machine.pendingScreenshots.get(tabId);
-  if (pendingCapture) {
-    pendingCapture.resolve(data);
-    machine.pendingScreenshots.delete(tabId);
-  }
-  
   if (machine.state.status !== CaptureStates.CAPTURING) {
     return { success: true, message: 'Not capturing' };
   }
@@ -1672,30 +1665,6 @@ async function injectIntoAllTabs() {
     console.error('[FlowCapture] Failed to inject into all tabs:', e);
     return 0;
   }
-}
-
-async function prepareScreenshotAndCapture(tabId, selector) {
-  return new Promise(async (resolve) => {
-    const timeoutId = setTimeout(() => {
-      machine.pendingScreenshots.delete(tabId);
-      resolve({ error: 'Screenshot preparation timeout' });
-    }, 3000);
-
-    machine.pendingScreenshots.set(tabId, {
-      resolve: (result) => {
-        clearTimeout(timeoutId);
-        resolve(result);
-      }
-    });
-
-    try {
-      await sendToTab(tabId, MessageTypes.PREPARE_SCREENSHOT, { selector });
-    } catch (e) {
-      clearTimeout(timeoutId);
-      machine.pendingScreenshots.delete(tabId);
-      resolve({ error: e.message });
-    }
-  });
 }
 
 async function sendToTab(tabId, type, data = {}) {

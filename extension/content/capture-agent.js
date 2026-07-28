@@ -115,6 +115,20 @@
     }
   }
 
+  // Callback-style sendMessage that always reads chrome.runtime.lastError so it
+  // never logs "Unchecked runtime.lastError" when the service worker is briefly
+  // unavailable (e.g. mid-restart). The callback receives the response or null.
+  function safeSendMessage(message, cb) {
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        void chrome.runtime.lastError; // acknowledge to suppress the warning
+        if (cb) cb(response);
+      });
+    } catch (e) {
+      if (cb) cb(null);
+    }
+  }
+
   // Request a screenshot from the service worker, resolving null (never
   // rejecting) on timeout or error so a dead/slow SW can't hang the capture or
   // lose the step — the step is simply saved without a screenshot.
@@ -186,7 +200,7 @@
           break;
           
         case 'FLOWCAPTURE_CHECK_PERMISSIONS':
-          chrome.runtime.sendMessage({ type: MessageTypes.CHECK_PERMISSIONS }, (response) => {
+          safeSendMessage({ type: MessageTypes.CHECK_PERMISSIONS }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_PERMISSIONS_STATUS',
               hasPermission: response?.hasPermission || false
@@ -195,7 +209,7 @@
           break;
           
         case 'FLOWCAPTURE_REQUEST_PERMISSIONS':
-          chrome.runtime.sendMessage({ type: MessageTypes.REQUEST_PERMISSIONS }, (response) => {
+          safeSendMessage({ type: MessageTypes.REQUEST_PERMISSIONS }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_PERMISSIONS_RESULT',
               granted: response?.granted || false
@@ -204,7 +218,7 @@
           break;
           
         case 'FLOWCAPTURE_START_CAPTURE':
-          chrome.runtime.sendMessage({
+          safeSendMessage({
             type: MessageTypes.START_CAPTURE,
             data: event.data.data || {}
           }, (response) => {
@@ -216,7 +230,7 @@
           break;
           
         case 'FLOWCAPTURE_STOP_CAPTURE':
-          chrome.runtime.sendMessage({ type: MessageTypes.STOP_CAPTURE }, (response) => {
+          safeSendMessage({ type: MessageTypes.STOP_CAPTURE }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_SESSION_ENDED',
               success: response?.success || false,
@@ -227,7 +241,7 @@
           
         case 'FLOWCAPTURE_GET_STATUS':
         case 'FLOWCAPTURE_GET_STATE':
-          chrome.runtime.sendMessage({ type: MessageTypes.GET_STATE }, (response) => {
+          safeSendMessage({ type: MessageTypes.GET_STATE }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_STATUS',
               isCapturing: response?.isCapturing || false,
@@ -239,7 +253,7 @@
           break;
 
         case 'FLOWCAPTURE_PAUSE_CAPTURE':
-          chrome.runtime.sendMessage({ type: MessageTypes.PAUSE_CAPTURE }, (response) => {
+          safeSendMessage({ type: MessageTypes.PAUSE_CAPTURE }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_PAUSE_RESULT',
               success: response?.success || false
@@ -248,7 +262,7 @@
           break;
 
         case 'FLOWCAPTURE_RESUME_CAPTURE':
-          chrome.runtime.sendMessage({ type: MessageTypes.RESUME_CAPTURE }, (response) => {
+          safeSendMessage({ type: MessageTypes.RESUME_CAPTURE }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_RESUME_RESULT',
               success: response?.success || false
@@ -257,9 +271,9 @@
           break;
           
         case 'FLOWCAPTURE_SET_SESSION':
-          chrome.runtime.sendMessage({ 
-            type: MessageTypes.SET_SESSION, 
-            session: event.data.session 
+          safeSendMessage({
+            type: MessageTypes.SET_SESSION,
+            session: event.data.session
           }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_SESSION_SET',
@@ -273,7 +287,7 @@
           // This triggers opening the tab selector and starts the capture session flow
           // Uses external messaging to the background service worker
           const sessionData = event.data.session || {};
-          chrome.runtime.sendMessage({ 
+          safeSendMessage({
             type: 'START_CAPTURE_SESSION_VIA_CONTENT',
             data: {
               guideId: sessionData.guideId,
@@ -294,7 +308,7 @@
           break;
           
         case 'FLOWCAPTURE_CLEAR_SESSION':
-          chrome.runtime.sendMessage({ type: MessageTypes.CLEAR_SESSION }, (response) => {
+          safeSendMessage({ type: MessageTypes.CLEAR_SESSION }, (response) => {
             window.postMessage({
               type: 'FLOWCAPTURE_SESSION_CLEARED',
               success: response?.success || false
